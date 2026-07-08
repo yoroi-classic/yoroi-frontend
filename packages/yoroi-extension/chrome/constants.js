@@ -62,8 +62,6 @@ export function genCSP(request: {|
   // Bringweb3
   frameSrc.push('https://*.bringweb3.io/');
   connectSrc.push('https://*.bringweb3.io');
-  // cashback domain whitelist
-  connectSrc.push('https://raw.githubusercontent.com');
 
   // Midnight airdrop
   connectSrc.push('https://mainnet.prod.gd.midnighttge.io');
