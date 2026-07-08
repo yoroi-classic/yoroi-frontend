@@ -3,7 +3,7 @@
 // URL of Seiza for Yoroi
 const POOLS_UI_URL_FOR_YOROI /*: string */ = process.env.POOLS_UI_URL_FOR_YOROI != null
   ? process.env.POOLS_UI_URL_FOR_YOROI // suggested: 'http://localhost:3001'
-  : 'https://adapools.yoroiwallet.com';
+  : 'https://yoroi-pools.blinklabs.cloud';
 
 /**
  * POOLS_UI_URL_FOR_YOROI is the URL of the yoroi version of Seiza, that's in an <iframe>
@@ -13,7 +13,7 @@ const POOLS_UI_URL_FOR_YOROI /*: string */ = process.env.POOLS_UI_URL_FOR_YOROI 
  */
 const SEIZA_URL /*: string */ = process.env.SEIZA_URL != null
   ? process.env.SEIZA_URL // suggested: 'http://localhost:3000'
-  : 'https://adapools.yoroiwallet.com';
+  : 'https://yoroi-pools.blinklabs.cloud';
 
 const CHANGELLY_URL /*: string */ = process.env.changelly_url != null
   ? process.env.changelly_url

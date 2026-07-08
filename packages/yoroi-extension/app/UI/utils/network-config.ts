@@ -69,7 +69,7 @@ export const networkConfigs = {
     name: 'Mainnet',
     isMainnet: true,
 
-    legacyApiBaseUrl: 'https://api.yoroiwallet.com/api',
+    legacyApiBaseUrl: 'https://yoroi-api.blinklabs.cloud/api',
   },
   250: {
     network: Chain.Network.Preprod,
@@ -80,6 +80,6 @@ export const networkConfigs = {
     name: 'Preprod',
     isMainnet: false,
 
-    legacyApiBaseUrl: 'https://preprod-backend.yoroiwallet.com/api',
+    legacyApiBaseUrl: 'http://localhost:8082/api',
   },
 };

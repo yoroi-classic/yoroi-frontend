@@ -116,7 +116,7 @@
 //   const poolInfoApi = React.useMemo(
 //     () =>
 //       poolInfoApiMaker({
-//         legacyApiBaseUrl: 'https://api.yoroiwallet.com/api', //hardcoded legacy base url - add it from config later
+//         legacyApiBaseUrl: 'https://yoroi-api.blinklabs.cloud/api', // hardcoded legacy base url - add it from config later
 //         zeroApiUrl: apiUrl,
 //       }),
 //     [apiUrl]

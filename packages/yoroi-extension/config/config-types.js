@@ -9,6 +9,7 @@ export type ConfigType = {|
   fcm: FCMConfig,
   notifications: NotificationsConfigType,
   yoroiBackend: YoroiBackendType,
+  tokenMetadata: TokenMetadataType,
 |};
 
 export type YoroiBackendType = {|
@@ -16,6 +17,11 @@ export type YoroiBackendType = {|
   zeroMainnet: string,
   preprod: string,
   zeroPreprod: string,
+|};
+
+export type TokenMetadataType = {|
+  mainnet: string,
+  preprod: string,
 |};
 
 export type NotificationsConfigType = {|

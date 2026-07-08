@@ -49,6 +49,10 @@ const CONFIG: ConfigType = {
     zeroMainnet: '',
     zeroPreprod: '',
   },
+  tokenMetadata: {
+    mainnet: '',
+    preprod: '',
+  },
 };
 
 global.CONFIG = CONFIG;

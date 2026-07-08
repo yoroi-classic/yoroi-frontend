@@ -3,7 +3,7 @@
     "name": "shelley-testnet"
   },
   "poolExplorer": {
-    "simpleTemplate": "https://adapools.yoroiwallet.com/?source=$$BROWSER$$"
+    "simpleTemplate": "https://yoroi-pools.blinklabs.cloud/?source=$$BROWSER$$"
   },
   "app": {
     "walletRefreshInterval": 20000,
@@ -16,5 +16,15 @@
     "coinPriceFreshnessThreshold": 900000,
     "pubKeyData": "0e011fe7149bff8e3802168261aec6da54febee37da6a41d6179fa545868421e",
     "pubKeyMaster": "ab9e4f1c4d996a0e9cdda8546bf5ee1dd8397fd7ab287c331ff171c7e4e0e9e2"
+  },
+  "yoroiBackend": {
+    "mainnet": "https://yoroi-api.blinklabs.cloud",
+    "preprod": "https://yoroi-preprod-api.blinklabs.cloud",
+    "zeroMainnet": "https://yoroi-zero.blinklabs.cloud",
+    "zeroPreprod": "https://yoroi-preprod-zero.blinklabs.cloud"
+  },
+  "tokenMetadata": {
+    "mainnet": "https://yoroi-metadata.blinklabs.cloud",
+    "preprod": "https://yoroi-preprod-metadata.blinklabs.cloud"
   }
 }

@@ -50,8 +50,11 @@ export function genCSP(request: {|
   connectSrc.push('https://agg-api.minswap.org');
   connectSrc.push('https://daehx1qv45z7c.cloudfront.net/');
   connectSrc.push('https://api-us.dexhunterv3.app/');
-  connectSrc.push('https://mainnet.processed-media.yoroiwallet.com/');
-  connectSrc.push('https://*.yoroiwallet.com');
+  connectSrc.push('http://localhost:8082');
+  connectSrc.push('http://localhost:8083');
+  connectSrc.push('https://tokens.cardano.org');
+  connectSrc.push('https://preprod.tokens.cardano.org');
+  connectSrc.push('https://*.blinklabs.cloud');
   connectSrc.push('https://api-us.dexhunterv3.app/swap/');
 
   // Bringweb3
