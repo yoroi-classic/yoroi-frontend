@@ -45,7 +45,7 @@ export const usePortfolioImage = ({
     staleTime: Infinity,
     gcTime: Infinity, // v5: cacheTime -> gcTime
     queryFn: async () => {
-      return `https://${network}.processed-media.yoroiwallet.com/${policy}/${name}?width=${w}&height=${h}&kind=${kind}&fit=${contentFit}`;
+      return `https://yoroi-${network}-media.blinklabs.cloud/${policy}/${name}?width=${w}&height=${h}&kind=${kind}&fit=${contentFit}`;
     },
   });
 

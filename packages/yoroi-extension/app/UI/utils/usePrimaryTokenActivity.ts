@@ -7,7 +7,7 @@ import { queryInfo } from './query-client';
 
 // NOTE: this API should be moved inside portfolio token activity (support PT in the request)
 // NOTE: price API is unique for all networks
-const apiBaseUrl = 'https://api.yoroiwallet.com/api';
+const apiBaseUrl = 'https://yoroi-api.blinklabs.cloud/api';
 const ptTicker = 'ADA';
 
 type PrimaryTokenActivity = {

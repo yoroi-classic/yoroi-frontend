@@ -41,9 +41,13 @@
     "vapidPublicKey": "BKj3BumTPTjepBiiXXYVZu-W8WbofAon4GG2YMhK-QKeVtd5UQ-zB8HMckW0nw4P2PfEIcPQ-ktxefSvTyzpE9M"
   },
   "yoroiBackend": {
-    "mainnet": "https://api.yoroiwallet.com",
-    "preprod": "https://preprod-backend.yoroiwallet.com",
-    "zeroMainnet": "https://zero.yoroiwallet.com",
-    "zeroPreprod": "https://yoroi-backend-zero-preprod-prod.emurgornd.com"
+    "mainnet": "https://yoroi-api.blinklabs.cloud",
+    "preprod": "http://localhost:8082",
+    "zeroMainnet": "https://yoroi-zero.blinklabs.cloud",
+    "zeroPreprod": "http://localhost:8082"
+  },
+  "tokenMetadata": {
+    "mainnet": "https://tokens.cardano.org",
+    "preprod": "https://preprod.tokens.cardano.org"
   }
 }

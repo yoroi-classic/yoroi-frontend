@@ -8,6 +8,13 @@ import pkg from '../package.json';
 import config from 'config';
 // `config` is available only in the build script, not in the bundle
 const fcmProjectId = config.fcm?.projectId;
+const testBackendEndpoints: Array<string> = [];
+if (config.yoroiBackend?.preprod != null) {
+  testBackendEndpoints.push(config.yoroiBackend.preprod);
+}
+if (config.yoroiBackend?.zeroPreprod != null) {
+  testBackendEndpoints.push(config.yoroiBackend.zeroPreprod);
+}
 
 export default (isDebug: boolean, shouldInjectConnector: boolean): * => buildManifest({
   description: 'e2e test Cardano ADA wallet',
@@ -18,6 +25,7 @@ export default (isDebug: boolean, shouldInjectConnector: boolean): * => buildMan
       'connect-src': [
         serverToPermission(Servers.Primary),
         serverToPermission(Servers.Testnet),
+        ...testBackendEndpoints,
         speculosEndpoint,
         // Firebase cloud messaging
         `https://firebaseinstallations.googleapis.com/v1/projects/${fcmProjectId}/`,

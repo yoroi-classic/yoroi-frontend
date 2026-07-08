@@ -95,7 +95,7 @@ type State = {|
 
 const MINIMUM_BUY_ADA = new BigNumber('100');
 const MINIMUM_SELL_ADA = new BigNumber('1');
-const EXCHANGE_CALLBACK_URL = 'https://ramp-redirect.yoroiwallet.com/yoroi-extension-exchange-callback.html';
+const EXCHANGE_CALLBACK_URL = 'https://yoroi-ramp-redirect.blinklabs.cloud/yoroi-extension-exchange-callback.html';
 
 const STabItem = styled(Tab)(({ theme }) => ({
   position: 'relative',

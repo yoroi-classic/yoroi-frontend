@@ -50,15 +50,18 @@ export function genCSP(request: {|
   connectSrc.push('https://agg-api.minswap.org');
   connectSrc.push('https://daehx1qv45z7c.cloudfront.net/');
   connectSrc.push('https://api-us.dexhunterv3.app/');
-  connectSrc.push('https://mainnet.processed-media.yoroiwallet.com/');
-  connectSrc.push('https://*.yoroiwallet.com');
+  if (request.isDev) {
+    connectSrc.push('http://localhost:8082');
+    connectSrc.push('http://localhost:8083');
+  }
+  connectSrc.push('https://tokens.cardano.org');
+  connectSrc.push('https://preprod.tokens.cardano.org');
+  connectSrc.push('https://*.blinklabs.cloud');
   connectSrc.push('https://api-us.dexhunterv3.app/swap/');
 
   // Bringweb3
   frameSrc.push('https://*.bringweb3.io/');
   connectSrc.push('https://*.bringweb3.io');
-  // cashback domain whitelist
-  connectSrc.push('https://raw.githubusercontent.com');
 
   // Midnight airdrop
   connectSrc.push('https://mainnet.prod.gd.midnighttge.io');
@@ -69,16 +72,18 @@ export function genCSP(request: {|
   // FCM
   connectSrc.push('https://firebaseinstallations.googleapis.com');
 
+  const unique = (sources: Array<string>): Array<string> => Array.from(new Set(sources));
+
   // unsafe-inline is unfortunately required by style-loader (even in production builds)
   const evalStyle = "'unsafe-inline'";
   return [
-    `default-src 'self' ${defaultSrc.join(' ')};`,
-    `frame-src ${frameSrc.join(' ')};`,
+    `default-src 'self' ${unique(defaultSrc).join(' ')};`,
+    `frame-src ${unique(frameSrc).join(' ')};`,
     `script-src 'self' 'wasm-unsafe-eval';`,
-    `object-src 'self' ${objectSrc.join(' ')};`,
-    `connect-src ${connectSrc.join(' ')};`,
-    `style-src * ${evalStyle} 'self' ${styleSrc.join(' ')} blob:;`,
-    `img-src 'self' ${imgSrc.join(' ')} https: data: ;`,
+    `object-src 'self' ${unique(objectSrc).join(' ')};`,
+    `connect-src ${unique(connectSrc).join(' ')};`,
+    `style-src * ${evalStyle} 'self' ${unique(styleSrc).join(' ')} blob:;`,
+    `img-src 'self' ${unique(imgSrc).join(' ')} https: data: ;`,
   ].join(' ');
 }
 

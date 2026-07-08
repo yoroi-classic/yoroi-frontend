@@ -12,14 +12,14 @@
     "prod:build:light": "rimraf build/ && NODE_OPTIONS=--openssl-legacy-provider NODE_ENV=production babel-node scripts/build --dontInjectConnector",
     "prod:build-win": "rimraf build/ && SET NODE_ENV=production && babel-node scripts/build",
     "prod:compress": "babel-node ../../scripts/compress",
-    "prod:unsigned": "npm run prod:build -- --env ${CARDANO_NETWORK:-testnet} && npm run prod:compress -- --env ${CARDANO_NETWORK:-testnet} --app-id yoroi-${CARDANO_NETWORK:-testnet} --zip-only --codebase https://yoroiwallet.com/dw/yoroi-${CARDANO_NETWORK:-testnet}-extension.crx",
-    "prod:unsigned:light": "npm run prod:build:light -- --env ${CARDANO_NETWORK:-testnet} && npm run prod:compress -- --env ${CARDANO_NETWORK:-testnet} --app-id yoroi-${CARDANO_NETWORK:-testnet} --zip-only --codebase https://yoroiwallet.com/dw/yoroi-${CARDANO_NETWORK:-testnet}-extension.crx",
-    "prod:nightly": "npm run prod:build -- --env 'mainnet' --nightly && npm run -s prod:compress -- --env 'mainnet' --app-id 'yoroi-nightly' --zip-only --codebase 'https://yoroiwallet.com/dw/yoroi-nightly-extension.crx' --key \"'${YOROI_NIGHTLY_PEM:-./nightly-key.pem}'\"",
-    "prod:nightly:light": "npm run prod:build:light -- --env 'mainnet' --nightly && npm run -s prod:compress -- --env 'mainnet' --app-id 'yoroi-nightly' --zip-only --codebase 'https://yoroiwallet.com/dw/yoroi-nightly-extension.crx' --key \"'${YOROI_NIGHTLY_PEM:-./nightly-key.pem}'\"",
-    "prod:stable": "npm run prod:build -- --env 'mainnet' && npm run prod:compress -- --env 'mainnet' --app-id 'yoroi' --zip-only --codebase 'https://yoroiwallet.com/dw/yoroi-extension.crx' --key ./production-key.pem",
-    "prod:stable:light": "npm run prod:build:light -- --env 'mainnet' && npm run prod:compress -- --env 'mainnet' --app-id 'yoroi' --zip-only --codebase 'https://yoroiwallet.com/dw/yoroi-extension.crx' --key ./production-key.pem",
-    "prod:nightly-win": "npm run prod:build-win -- --env=mainnet --nightly && npm run -s prod:compress -- --env=mainnet --app-id=yoroi-nightly --zip-only --codebase=https://yoroiwallet.com/dw/yoroi-nightly-extension.crx --key=\"${YOROI_NIGHTLY_PEM:-./nightly-key.pem}\"",
-    "prod:stable-win": "npm run prod:build-win -- --env=mainnet && npm run prod:compress -- --env=mainnet --app-id=yoroi --zip-only --codebase=https://yoroiwallet.com/dw/yoroi-extension.crx --key=./production-key.pem",
+    "prod:unsigned": "npm run prod:build -- --env ${CARDANO_NETWORK:-testnet} && npm run prod:compress -- --env ${CARDANO_NETWORK:-testnet} --app-id yoroi-${CARDANO_NETWORK:-testnet} --zip-only --codebase https://yoroi-downloads.blinklabs.cloud/dw/yoroi-${CARDANO_NETWORK:-testnet}-extension.crx",
+    "prod:unsigned:light": "npm run prod:build:light -- --env ${CARDANO_NETWORK:-testnet} && npm run prod:compress -- --env ${CARDANO_NETWORK:-testnet} --app-id yoroi-${CARDANO_NETWORK:-testnet} --zip-only --codebase https://yoroi-downloads.blinklabs.cloud/dw/yoroi-${CARDANO_NETWORK:-testnet}-extension.crx",
+    "prod:nightly": "npm run prod:build -- --env 'mainnet' --nightly && npm run -s prod:compress -- --env 'mainnet' --app-id 'yoroi-nightly' --zip-only --codebase 'https://yoroi-downloads.blinklabs.cloud/dw/yoroi-nightly-extension.crx' --key \"'${YOROI_NIGHTLY_PEM:-./nightly-key.pem}'\"",
+    "prod:nightly:light": "npm run prod:build:light -- --env 'mainnet' --nightly && npm run -s prod:compress -- --env 'mainnet' --app-id 'yoroi-nightly' --zip-only --codebase 'https://yoroi-downloads.blinklabs.cloud/dw/yoroi-nightly-extension.crx' --key \"'${YOROI_NIGHTLY_PEM:-./nightly-key.pem}'\"",
+    "prod:stable": "npm run prod:build -- --env 'mainnet' && npm run prod:compress -- --env 'mainnet' --app-id 'yoroi' --zip-only --codebase 'https://yoroi-downloads.blinklabs.cloud/dw/yoroi-extension.crx' --key ./production-key.pem",
+    "prod:stable:light": "npm run prod:build:light -- --env 'mainnet' && npm run prod:compress -- --env 'mainnet' --app-id 'yoroi' --zip-only --codebase 'https://yoroi-downloads.blinklabs.cloud/dw/yoroi-extension.crx' --key ./production-key.pem",
+    "prod:nightly-win": "npm run prod:build-win -- --env=mainnet --nightly && npm run -s prod:compress -- --env=mainnet --app-id=yoroi-nightly --zip-only --codebase=https://yoroi-downloads.blinklabs.cloud/dw/yoroi-nightly-extension.crx --key=\"${YOROI_NIGHTLY_PEM:-./nightly-key.pem}\"",
+    "prod:stable-win": "npm run prod:build-win -- --env=mainnet && npm run prod:compress -- --env=mainnet --app-id=yoroi --zip-only --codebase=https://yoroi-downloads.blinklabs.cloud/dw/yoroi-extension.crx --key=./production-key.pem",
     "keygen": "crx keygen",
     "clean": "rimraf build/ dev/ *.zip *.crx",
     "flow": "flow --show-all-errors . && npm run tsc",
@@ -29,7 +29,7 @@
     "test-win": "SET NODE_ENV=jest && jest",
     "eslint": "npm run eslint-loud -- --quiet",
     "eslint-loud": "eslint app chrome scripts webpack/*.js",
-    "test:build": "npm run prod:build -- --env 'test' --isE2E && npm run prod:compress -- --env 'test' --app-id 'yoroi' --codebase 'https://yoroiwallet.com/dw/yoroi-test-extension.crx' --key ./e2etest-key.pem",
+    "test:build": "npm run prod:build -- --env 'test' --isE2E && npm run prod:compress -- --env 'test' --app-id 'yoroi' --codebase 'https://yoroi-downloads.blinklabs.cloud/dw/yoroi-test-extension.crx' --key ./e2etest-key.pem",
     "translations:manage": "node ./translations/translation-runner.js",
     "translations:purge": "rimraf ./translations/messages",
     "tsc": "tsc --project tsconfig.json --noEmit",
@@ -37,7 +37,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Emurgo/yoroi-frontend"
+    "url": "https://github.com/yoroi-classic/yoroi-frontend"
   },
   "keywords": [
     "yoroi",
@@ -133,7 +133,7 @@
     "webpack-dev-middleware": "4.1.0",
     "webpack-dev-server": "^4.9.3",
     "webpack-hot-middleware": "2.25.0",
-    "webpack-httpolyglot-server": "git+https://github.com/Emurgo/webpack-httpolyglot-server.git"
+    "webpack-httpolyglot-server": "git+https://github.com/yoroi-classic/webpack-httpolyglot-server.git"
   },
   "dependencies": {
     "@babel/preset-typescript": "^7.24.7",

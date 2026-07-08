@@ -22,7 +22,7 @@ export const networks = Object.freeze({
     NetworkFeatureName: 'mainnet',
     Backend: {
       BackendService: CONFIG.yoroiBackend.mainnet,
-      TokenInfoService: 'https://cdn.yoroiwallet.com',
+      TokenInfoService: CONFIG.tokenMetadata.mainnet,
       BackendServiceZero: CONFIG.yoroiBackend.zeroMainnet,
     },
     BaseConfig: ([
@@ -61,7 +61,7 @@ export const networks = Object.freeze({
     NetworkFeatureName: 'preprod',
     Backend: {
       BackendService: CONFIG.yoroiBackend.preprod,
-      TokenInfoService: 'https://stage-cdn.yoroiwallet.com',
+      TokenInfoService: CONFIG.tokenMetadata.preprod,
       BackendServiceZero: CONFIG.yoroiBackend.zeroPreprod,
     },
     BaseConfig: ([

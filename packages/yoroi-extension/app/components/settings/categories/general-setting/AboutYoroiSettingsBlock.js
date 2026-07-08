@@ -90,14 +90,14 @@ const socialMediaLinks = [
     componentId: `${basePageComponentPath}-yoroiWebsiteLink-linkButton`,
   },
   {
-    url: 'https://github.com/Emurgo/yoroi-frontend',
+    url: 'https://github.com/yoroi-classic/yoroi-frontend',
     svg: githubSvg,
     message: messages.aboutYoroiGithub,
     componentId: `${basePageComponentPath}-githubLink-linkButton`,
   },
 ];
 
-const baseGithubUrl = 'https://github.com/Emurgo/yoroi-frontend/';
+const baseGithubUrl = 'https://github.com/yoroi-classic/yoroi-frontend/';
 
 type Props = {|
   wallet: null | { isTestnet: boolean, networkId: number, ... },
