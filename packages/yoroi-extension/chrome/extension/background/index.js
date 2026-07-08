@@ -63,7 +63,7 @@ bringInitBackground({
   identifier: CONFIG.bring.identifier,
   apiEndpoint: CONFIG.bring.apiEndpoint,
   cashbackPagePath: '/main_window.html#/cashback',
-  whitelistEndpoint: 'https://yoroi-config.blinklabs.cloud/bring-cashback-redirect-whitelist.json',
+  whitelistEndpoint: 'https://raw.githubusercontent.com/Emurgo/bring-chromeExtension/refs/heads/main/bring-cashback-redirect-whitelist.json',
 });
 
 const onYoroiIconClicked = () => {

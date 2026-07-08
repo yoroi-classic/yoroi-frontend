@@ -74,6 +74,7 @@ export default ({
     ],
     host_permissions: [
       '*://connect.trezor.io/*',
+      'https://raw.githubusercontent.com/*',
     ],
     content_scripts: [
       {
