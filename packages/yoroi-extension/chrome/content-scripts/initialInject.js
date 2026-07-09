@@ -6,7 +6,7 @@
 
   var connectRequests = [];
 
-  window.addEventListener('message', function(event) {
+  window.addEventListener('message', function (event) {
     if (event.data.type === 'connector_connected') {
       if (event.data.err !== undefined) {
         connectRequests.forEach(promise => promise.reject(event.data.err));
@@ -31,7 +31,7 @@
   var cardanoRpcUid = 0;
   var cardanoRpcResolver = new Map();
 
-  window.addEventListener('message', function(event) {
+  window.addEventListener('message', function (event) {
     if (event.data.type === 'connector_rpc_response' && event.data.protocol === 'cardano') {
       console.debug(
         'page received from connector: ' +
@@ -54,7 +54,7 @@
   });
 
   function cardano_rpc_call(func, params, returnType) {
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
       window.postMessage(
         {
           type: 'connector_rpc_request',
@@ -82,7 +82,7 @@
         Migrate to some other API for authentication immediately.
       `);
     }
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
       window.postMessage(
         {
           type: 'connector_connect_request/cardano',
