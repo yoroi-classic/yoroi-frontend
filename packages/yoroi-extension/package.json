@@ -237,7 +237,7 @@
     "@babel/helpers": "7.16.0"
   },
   "engineStrict": true,
-  "engine": {
+  "engines": {
     "node": "~20.19.3",
     "npm": "~10.8.2"
   }
