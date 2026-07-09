@@ -322,6 +322,34 @@ export class MockDAppWebpage {
     return signingResult;
   }
 
+  async requestSigningTxs(txRequests) {
+    this.logger.info(`MockDApp::requestSigningTxs Requesting bulk signing for ${txRequests.length} transactions`);
+    await this.driver.executeScript(requests => {
+      window.signTxsPromise = window.api.cip103.signTxs(requests);
+    }, txRequests);
+  }
+
+  async getSigningTxsResult() {
+    this.logger.info(`MockDApp::getSigningTxsResult Getting bulk signing result`);
+    const signingResult = await this.driver.executeAsyncScript((...args) => {
+      const callback = args[args.length - 1];
+      window.signTxsPromise
+        .then(
+          onSuccess => {
+            callback({ success: true, retValue: onSuccess, errMsg: null });
+          },
+          onReject => {
+            callback({ success: false, retValue: null, errMsg: onReject });
+          }
+        )
+        .catch(err => {
+          callback({ success: false, retValue: null, errMsg: err });
+        });
+    });
+    this.logger.info(`MockDApp::getSigningTxsResult Signing result: ${JSON.stringify(signingResult, null, 2)}`);
+    return signingResult;
+  }
+
   async requestSigningData(payload) {
     this.logger.info(`MockDApp::requestSigningData Requesting signing the data: data="${payload}"`);
 
@@ -450,6 +478,24 @@ export class MockDAppWebpage {
     return submitResponse;
   }
 
+  async submitTxs(signedTxHexes) {
+    this.logger.info(`MockDApp::submitTxs Submitting ${signedTxHexes.length} transactions`);
+    const submitResponse = await this.driver.executeAsyncScript((...args) => {
+      const callback = args[args.length - 1];
+      const txs = args[0];
+      window.api.cip103
+        .submitTxs(txs)
+        .then(transactionIds => {
+          callback({ success: true, retValue: transactionIds, errMsg: null });
+        })
+        .catch(err => {
+          callback({ success: false, retValue: null, errMsg: err });
+        });
+    }, signedTxHexes);
+    this.logger.info(`MockDApp::submitTxs The response is ${JSON.stringify(submitResponse, null, 2)}`);
+    return submitResponse;
+  }
+
   async getNetworkId() {
     this.logger.info(`MockDApp::getNetworkId Getting the network Id`);
     const networkIdResponse = await this.driver.executeAsyncScript((...args) => {
@@ -558,9 +604,9 @@ export class MockDAppWebpage {
     }
     this.logger.info(`MockDApp::requestSigningDataCIP95 Payload HEX: ${payloadHex}`);
 
-    const scriptString = `window.signDataCIP95Promise = window.api.cip95.signData(${JSON.stringify(
-      address
-    )}, ${JSON.stringify(payloadHex)});`;
+    const scriptString = `window.signDataCIP95Promise = window.api.cip95.signData(${JSON.stringify(address)}, ${JSON.stringify(
+      payloadHex
+    )});`;
 
     this.driver.executeScript(scriptString);
   }

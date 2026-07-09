@@ -46,7 +46,7 @@
       CardanoAPI._cardano_rpc_call = rpcWrapper;
       CardanoAPI._disconnection = [false];
       CardanoAPI._returnType = ['cbor'];
-      window.addEventListener('yoroi_wallet_disconnected', function () {
+      window.addEventListener('yoroi_wallet_disconnected', function() {
         if (!CardanoAPI._disconnection[0]) {
           CardanoAPI._disconnection[0] = true;
           CardanoAPI._disconnection.slice(1).forEach(f => f());
@@ -69,6 +69,46 @@
 
       signData(address, payload) {
         return CardanoAPI._cardano_rpc_call('cip95_sign_data', [address, payload]);
+      },
+    });
+
+    cip103 = Object.freeze({
+      signTxs: async txs => {
+        if (!Array.isArray(txs)) {
+          throw new Error('.cip103.signTxs argument is expected to be an array!');
+        }
+
+        const witnesses = [];
+        for (let index = 0; index < txs.length; index++) {
+          try {
+            witnesses.push(
+              await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(txs[index])])
+            );
+          } catch (error) {
+            return Promise.reject({ index, error });
+          }
+        }
+        return witnesses;
+      },
+
+      submitTxs: async txs => {
+        if (!Array.isArray(txs)) {
+          throw new Error('.cip103.submitTxs argument is expected to be an array!');
+        }
+
+        const results = await Promise.all(
+          txs.map(tx =>
+            CardanoAPI._cardano_rpc_call('submit_tx', [tx]).then(
+              ok => ({ ok: true, value: ok }),
+              error => ({ ok: false, value: error })
+            )
+          )
+        );
+        const values = results.map(result => result.value);
+        if (results.some(result => !result.ok)) {
+          return Promise.reject(values);
+        }
+        return values;
       },
     });
 
@@ -110,8 +150,23 @@
       },
     });
 
+    static _normalizeCip103SignRequest(txRequest) {
+      if (txRequest == null || typeof txRequest !== 'object') {
+        throw new Error('.cip103.signTxs transaction request is expected to be an object!');
+      }
+      const tx = txRequest.cbor ?? txRequest.tx;
+      if (typeof tx !== 'string') {
+        throw new Error('.cip103.signTxs transaction request requires a cbor string!');
+      }
+      return {
+        tx,
+        partialSign: txRequest.partialSign === true,
+        returnTx: false,
+      };
+    }
+
     getExtensions() {
-      return Promise.resolve([{ cip: 95 }]);
+      return Promise.resolve([{ cip: 95 }, { cip: 103 }]);
     }
 
     getNetworkId() {
