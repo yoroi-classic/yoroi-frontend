@@ -9,7 +9,7 @@ on:
 
 jobs:
   Unit_tests:
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request && github.event.pull_request.draft == false) || (github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,17 +28,13 @@ jobs:
           corepack prepare npm@10.9.7 --activate
           npm --version
 
-      - name: Cache node modules
-        # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
+      - name: Cache npm downloads
         uses: actions/cache@v4
         env:
-          cache-name: cache-yoroi-extension-node-modules
+          cache-name: cache-npm-downloads
         with:
-          # https://github.com/actions/cache/blob/main/examples.md#node---npm
-          # It is recommended to cache the NPM cache (~/.npm) instead of node_modules.
-          # But we put node version into the cache key and cache node_modules.
-          path: packages/yoroi-extension/node_modules
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('packages/yoroi-extension/package-lock.json') }}
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('package-lock.json', 'packages/yoroi-extension/package-lock.json', 'packages/e2e-tests/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
@@ -53,7 +49,7 @@ jobs:
           npm run test
 
   Build_smoke:
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request && github.event.pull_request.draft == false) || (github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,13 +68,13 @@ jobs:
           corepack prepare npm@10.9.7 --activate
           npm --version
 
-      - name: Cache node modules
+      - name: Cache npm downloads
         uses: actions/cache@v4
         env:
-          cache-name: cache-yoroi-extension-node-modules
+          cache-name: cache-npm-downloads
         with:
-          path: packages/yoroi-extension/node_modules
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('packages/yoroi-extension/package-lock.json') }}
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('package-lock.json', 'packages/yoroi-extension/package-lock.json', 'packages/e2e-tests/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
