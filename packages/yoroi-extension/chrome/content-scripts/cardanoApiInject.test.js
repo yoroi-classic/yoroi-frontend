@@ -1,13 +1,25 @@
 describe('CardanoAPI CIP-0103 extension', () => {
+  const disconnectListeners = [];
+
   const loadApi = rpc => {
     jest.resetModules();
     delete window.CardanoAPI;
     jest.spyOn(window, 'postMessage').mockImplementation(() => {});
+    const addEventListener = window.addEventListener.bind(window);
+    jest.spyOn(window, 'addEventListener').mockImplementation((type, listener, options) => {
+      if (type === 'yoroi_wallet_disconnected') {
+        disconnectListeners.push({ listener, options });
+      }
+      return addEventListener(type, listener, options);
+    });
     require('./cardanoApiInject');
     return new window.CardanoAPI(null, rpc);
   };
 
   afterEach(() => {
+    for (const { listener, options } of disconnectListeners.splice(0)) {
+      window.removeEventListener('yoroi_wallet_disconnected', listener, options);
+    }
     jest.restoreAllMocks();
   });
 
@@ -64,7 +76,7 @@ describe('CardanoAPI CIP-0103 extension', () => {
         { cbor: 'tx-1', partialSign: false },
         { cbor: 'tx-2', partialSign: false },
       ])
-    ).rejects.toEqual({ index: 1, error: signError });
+    ).rejects.toEqual({ code: 1, info: 'invalid tx (transaction index 1)', index: 1 });
 
     expect(rpc.mock.calls).toEqual([
       ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
@@ -73,10 +85,19 @@ describe('CardanoAPI CIP-0103 extension', () => {
   });
 
   test('submitTxs returns transaction hashes in input order when all submissions pass', async () => {
-    const rpc = jest.fn((func, params) => Promise.resolve(`hash-${params[0]}`));
+    let activeSubmissions = 0;
+    let maxActiveSubmissions = 0;
+    const rpc = jest.fn(async (func, params) => {
+      activeSubmissions++;
+      maxActiveSubmissions = Math.max(maxActiveSubmissions, activeSubmissions);
+      await Promise.resolve();
+      activeSubmissions--;
+      return `hash-${params[0]}`;
+    });
     const api = loadApi(rpc);
 
     await expect(api.cip103.submitTxs(['tx-0', 'tx-1'])).resolves.toEqual(['hash-tx-0', 'hash-tx-1']);
+    expect(maxActiveSubmissions).toEqual(1);
 
     expect(rpc.mock.calls).toEqual([
       ['submit_tx', ['tx-0'], 'cbor'],

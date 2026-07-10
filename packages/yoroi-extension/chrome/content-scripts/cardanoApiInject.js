@@ -85,7 +85,7 @@
               await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(txs[index])])
             );
           } catch (error) {
-            throw { index, error };
+            throw CardanoAPI._withCip103FailureIndex(error, index);
           }
         }
         return witnesses;
@@ -96,14 +96,17 @@
           throw new Error('.cip103.submitTxs argument is expected to be an array!');
         }
 
-        const results = await Promise.all(
-          txs.map(tx =>
-            CardanoAPI._cardano_rpc_call('submit_tx', [tx]).then(
-              ok => ({ ok: true, value: ok }),
-              error => ({ ok: false, value: error })
-            )
-          )
-        );
+        const results = [];
+        for (const tx of txs) {
+          try {
+            results.push({
+              ok: true,
+              value: await CardanoAPI._cardano_rpc_call('submit_tx', [tx]),
+            });
+          } catch (error) {
+            results.push({ ok: false, value: error });
+          }
+        }
         const values = results.map(result => result.value);
         if (results.some(result => !result.ok)) {
           throw values;
@@ -111,6 +114,15 @@
         return values;
       },
     });
+
+    static _withCip103FailureIndex(error, index) {
+      const hasErrorInfo = error != null && typeof error === 'object' && typeof error.info === 'string';
+      const info = hasErrorInfo ? `${error.info} (transaction index ${index})` : `Transaction at index ${index} failed`;
+      if (error != null && typeof error === 'object') {
+        return { ...error, index, info };
+      }
+      return { index, info, error };
+    }
 
     experimental = Object.freeze({
       setReturnType: returnType => {
