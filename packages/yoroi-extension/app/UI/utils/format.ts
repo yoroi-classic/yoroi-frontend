@@ -1,4 +1,4 @@
-import AssetFingerprint from '@emurgo/cip14-js';
+import AssetFingerprint from '@yoroi-classic/cip14-js';
 import { Balance, Portfolio } from '@yoroi/types';
 import { BigNumber } from 'bignumber.js';
 

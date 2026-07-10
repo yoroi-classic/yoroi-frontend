@@ -9,7 +9,7 @@ import { ReactComponent as TrezorIcon } from '../../assets/images/wallet-nav/tre
 import { ReactComponent as LedgerIcon } from '../../assets/images/wallet-nav/ledger-wallet.inline.svg';
 import { Typography, Tooltip } from '@mui/material';
 import { truncateLongName, maxNameLengthBeforeTruncation } from '../../utils/formatters';
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import type { $npm$ReactIntl$MessageDescriptor } from 'react-intl';
 import globalMessages from '../../i18n/global-messages';
 import type { WalletType } from '../../../chrome/extension/background/types';

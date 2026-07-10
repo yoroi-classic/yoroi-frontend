@@ -3,7 +3,7 @@
 import type { TokenInfoMap } from '../toplevel/TokenInfoStore';
 import type { TokenLookupKey, TokenEntry } from '../../api/common/lib/MultiToken';
 import type { TokenRow, TokenMetadata } from '../../api/ada/lib/storage/database/primitives/tables';
-import AssetFingerprint from '@emurgo/cip14-js';
+import AssetFingerprint from '@yoroi-classic/cip14-js';
 import { AssetNameUtils } from '@emurgo/yoroi-lib/dist/internals/utils/assets';
 import type { RemoteTokenInfo } from '../../api/ada/lib/state-fetch/types';
 import { isHex } from '@emurgo/yoroi-lib/dist/internals/utils/index';

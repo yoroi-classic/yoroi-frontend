@@ -6,7 +6,7 @@ import { Component } from 'react';
 import { IntlContext } from 'react-intl';
 import { truncateLongName } from '../../utils/formatters';
 
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import { Box, IconButton, Typography, styled } from '@mui/material';
 import { MultiToken } from '../../api/common/lib/MultiToken';
 import { ReactComponent as IconEyeClosed } from '../../assets/images/my-wallets/icon_eye_closed_revamp.inline.svg';

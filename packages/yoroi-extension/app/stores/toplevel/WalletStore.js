@@ -8,7 +8,7 @@ import config from '../../config';
 import globalMessages from '../../i18n/global-messages';
 import type { Notification } from '../../types/notification.types';
 import type { IGetLastSyncInfoResponse } from '../../api/ada/lib/storage/models/PublicDeriver/interfaces';
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import { createDebugWalletDialog } from '../../containers/wallet/dialogs/DebugWalletDialogContainer';
 import { createProblematicWalletDialog } from '../../containers/wallet/dialogs/ProblematicWalletDialogContainer';
 import type { StoresMap } from '../index';

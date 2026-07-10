@@ -19,7 +19,7 @@ import WalletCard from './WalletCard';
 import globalMessages from '../../i18n/global-messages';
 import AmountDisplay from '../common/AmountDisplay';
 import type { WalletType } from '../../../chrome/extension/background/types';
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import { Typography, styled } from '@mui/material';
 
 const messages = defineMessages({

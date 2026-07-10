@@ -1,6 +1,6 @@
 // @flow
 
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import { PublicDeriver } from '../../../app/api/ada/lib/storage/models/PublicDeriver/index';
 import { MultiToken } from '../../../app/api/common/lib/MultiToken';
 import type { IGetAllUtxosResponse } from '../../../app/api/ada/lib/storage/models/PublicDeriver/interfaces';
