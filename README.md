@@ -26,6 +26,8 @@ nvm use
 
 **If you don't have `nvm`** you can download `node` manually from [here](https://nodejs.org) but you need to be careful the version matches the one specified in our `.nvmrc` file.
 
+The supported npm version is declared in the root `package.json` `packageManager` field and should match the npm version bundled with the Node version from `.nvmrc`.
+
 Next, install project-independent dependencies with
 ```
 npm install
