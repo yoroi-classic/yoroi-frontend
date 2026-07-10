@@ -3,7 +3,7 @@ name: Tests
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted]
 
@@ -22,6 +22,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
 
       - name: Cache node modules
         # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
@@ -39,10 +44,56 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
-      - name: npm install
+      - name: Install packages
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
 
       - name: tests
         run: |
           npm run test
+
+  Build_smoke:
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request && github.event.pull_request.draft == false) || (github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read .nvmrc
+        id: nvm
+        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '${{ steps.nvm.outputs.NVMRC }}'
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-yoroi-extension-node-modules
+        with:
+          path: packages/yoroi-extension/node_modules
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('packages/yoroi-extension/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Install packages
+        run: |
+          ./ci-install-all.sh
+
+      - name: Build extension
+        working-directory: ./packages/yoroi-extension
+        run: |
+          npm run prod:build -- --env test --isE2E
+
+      - name: Check build output
+        working-directory: ./packages/yoroi-extension/build/js
+        run: |
+          test -f inject.js

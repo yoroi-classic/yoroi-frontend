@@ -3,7 +3,7 @@ name: Linters
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted]
 
@@ -26,6 +26,11 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
       - name: Cache node modules
         uses: actions/cache@v4
         id: node-modules-cache
@@ -37,10 +42,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-${{ steps.nvm.outputs.NVMRC }}-modules-
             ${{ runner.os }}-node-modules-
-      - name: npm install
+      - name: Install packages
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
       - name: ${{ matrix.suite }}
         run: |
           npm run ${{ matrix.suite }}

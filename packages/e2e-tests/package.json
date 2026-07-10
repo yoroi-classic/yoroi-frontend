@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Selenium + Mocha e2e tests for the extension",
   "type": "module",
+  "packageManager": "npm@10.9.7",
   "main": "index.js",
   "config": {
     "hooks": "./utils/hooks.mjs",
@@ -59,7 +60,7 @@
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
     "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one"
   },
-  "author": "Denis Nebytov (denis@emurgo.io)",
+  "author": "Yoroi Classic Contributors",
   "license": "ISC",
   "devDependencies": {
     "@emurgo/cardano-serialization-lib-nodejs": "13.2.1",
@@ -103,5 +104,9 @@
     "wrappy": "^1.0.2",
     "ws": "^8.14.2"
   },
-  "keywords": []
+  "keywords": [],
+  "engines": {
+    "node": ">=22.22.2 <23",
+    "npm": "10.9.7"
+  }
 }
