@@ -85,7 +85,7 @@
               await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(txs[index])])
             );
           } catch (error) {
-            return Promise.reject({ index, error });
+            throw { index, error };
           }
         }
         return witnesses;
@@ -106,7 +106,7 @@
         );
         const values = results.map(result => result.value);
         if (results.some(result => !result.ok)) {
-          return Promise.reject(values);
+          throw values;
         }
         return values;
       },
@@ -156,7 +156,7 @@
       }
       const tx = txRequest.cbor ?? txRequest.tx;
       if (typeof tx !== 'string') {
-        throw new Error('.cip103.signTxs transaction request requires a cbor string!');
+        throw new Error('.cip103.signTxs transaction request requires a cbor or tx string!');
       }
       return {
         tx,

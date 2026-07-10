@@ -336,14 +336,14 @@ export class MockDAppWebpage {
       window.signTxsPromise
         .then(
           onSuccess => {
-            callback({ success: true, retValue: onSuccess, errMsg: null });
+            return callback({ success: true, retValue: onSuccess, errMsg: null });
           },
           onReject => {
-            callback({ success: false, retValue: null, errMsg: onReject });
+            return callback({ success: false, retValue: null, errMsg: onReject });
           }
         )
         .catch(err => {
-          callback({ success: false, retValue: null, errMsg: err });
+          return callback({ success: false, retValue: null, errMsg: err });
         });
     });
     this.logger.info(`MockDApp::getSigningTxsResult Signing result: ${JSON.stringify(signingResult, null, 2)}`);
