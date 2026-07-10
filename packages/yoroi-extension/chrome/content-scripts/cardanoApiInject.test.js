@@ -84,6 +84,17 @@ describe('CardanoAPI CIP-0103 extension', () => {
     ]);
   });
 
+  test('signTxs preserves request validation messages with the failing transaction index', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+
+    await expect(api.cip103.signTxs([{ partialSign: false }])).rejects.toEqual({
+      index: 0,
+      info: '.cip103.signTxs transaction request requires a cbor or tx string! (transaction index 0)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('submitTxs returns transaction hashes in input order when all submissions pass', async () => {
     let activeSubmissions = 0;
     let maxActiveSubmissions = 0;

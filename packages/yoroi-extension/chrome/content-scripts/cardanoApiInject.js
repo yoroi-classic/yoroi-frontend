@@ -117,7 +117,13 @@
 
     static _withCip103FailureIndex(error, index) {
       const hasErrorInfo = error != null && typeof error === 'object' && typeof error.info === 'string';
-      const info = hasErrorInfo ? `${error.info} (transaction index ${index})` : `Transaction at index ${index} failed`;
+      const hasErrorMessage = error != null && typeof error === 'object' && typeof error.message === 'string';
+      let info = `Transaction at index ${index} failed`;
+      if (hasErrorInfo) {
+        info = `${error.info} (transaction index ${index})`;
+      } else if (hasErrorMessage) {
+        info = `${error.message} (transaction index ${index})`;
+      }
       if (error != null && typeof error === 'object') {
         return { ...error, index, info };
       }
