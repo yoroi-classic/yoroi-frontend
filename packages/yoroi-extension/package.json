@@ -230,7 +230,7 @@
     "tinycolor2": "1.4.2",
     "trezor-connect-flow": "github:yoroi-classic/trezor-connect-flow#77286052a184810bcfbcc103fe7a06bc34ec7e42",
     "typescript": "^5.4.5",
-    "ua-parser-js": "1.0.37",
+    "ua-parser-js": "2.0.10",
     "url": "0.11.3",
     "util": "0.12.5"
   },
