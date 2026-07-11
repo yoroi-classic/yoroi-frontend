@@ -1,6 +1,7 @@
 {
   "name": "root",
   "private": true,
+  "packageManager": "npm@10.9.7",
   "scripts": {
     "eslint": "lerna run eslint --stream",
     "flow": "lerna run flow --stream",
@@ -21,5 +22,9 @@
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "webpack-cli": "^5.1.4"
+  },
+  "engines": {
+    "node": ">=22.22.2 <23",
+    "npm": "10.9.7"
   }
 }

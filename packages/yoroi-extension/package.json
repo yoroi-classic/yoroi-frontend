@@ -2,6 +2,7 @@
   "name": "yoroi",
   "version": "5.23.200",
   "description": "Cardano ADA wallet",
+  "packageManager": "npm@10.9.7",
   "scripts": {
     "dev:main": "NODE_OPTIONS=--openssl-legacy-provider babel-node scripts/dev main --env mainnet",
     "dev:background": "NODE_OPTIONS=--openssl-legacy-provider babel-node scripts/dev background  --env mainnet",
@@ -47,7 +48,7 @@
     "ADA",
     "chrome"
   ],
-  "author": "IOHK & EMURGO",
+  "author": "Yoroi Classic Contributors",
   "license": "MIT",
   "devDependencies": {
     "@amplitude/ampli": "^1.32.0",
@@ -238,7 +239,7 @@
   },
   "engineStrict": true,
   "engines": {
-    "node": "~20.19.3",
-    "npm": "~10.8.2"
+    "node": ">=22.22.2 <23",
+    "npm": "10.9.7"
   }
 }

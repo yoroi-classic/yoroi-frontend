@@ -2,9 +2,12 @@ name: Check formatting
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted]
+
+permissions:
+  contents: read
 
 jobs:
   Prettier:
@@ -21,6 +24,11 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
 
       - name: Cache node modules
         uses: actions/cache@v4
@@ -37,7 +45,7 @@ jobs:
       - name: Install packages
         if: steps.node-cache.outputs.cache-hit != 'true'
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
 
       - name: Check code standards
         run: npm run fmt:check
