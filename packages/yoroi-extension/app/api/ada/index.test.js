@@ -9,7 +9,7 @@ import { HARD_DERIVATION_START, WalletTypePurpose, CoinTypes } from '../../confi
 import { silenceLogsForTesting } from '../../utils/logging';
 
 import { loadLovefieldDB } from './lib/storage/database/index';
-import { legacyWalletChecksum } from '@emurgo/cip4-js';
+import { legacyWalletChecksum } from '@yoroi-classic/cip4-js';
 import { asGetPublicKey } from './lib/storage/models/PublicDeriver/traits';
 import { networks } from './lib/storage/database/prepackaged/networks';
 import BigNumber from 'bignumber.js';

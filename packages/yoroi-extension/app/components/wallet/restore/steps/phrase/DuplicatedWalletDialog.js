@@ -9,7 +9,7 @@ import React from 'react';
 import { genLookupOrFail } from '../../../../../stores/stateless/tokenHelpers';
 import WalletInfo from '../../../../common/walletInfo/WalletInfo';
 import { ReactComponent as CrossIcon } from '../../../../../assets/images/revamp/icons/cross.inline.svg';
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import type { MultiToken } from '../../../../../api/common/lib/MultiToken';
 import type { TokenInfoMap } from '../../../../../stores/toplevel/TokenInfoStore';
 

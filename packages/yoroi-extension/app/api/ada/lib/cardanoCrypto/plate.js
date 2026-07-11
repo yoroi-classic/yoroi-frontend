@@ -9,8 +9,8 @@ import {
   STAKING_KEY_INDEX,
   WalletTypePurpose,
 } from '../../../../config/numbersConfig';
-import type { WalletChecksum } from '@emurgo/cip4-js';
-import { walletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
+import { walletChecksum } from '@yoroi-classic/cip4-js';
 import { bytesToHex } from '../../../../coreUtils';
 
 export type PlateResponse = {|
