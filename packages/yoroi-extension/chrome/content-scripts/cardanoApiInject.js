@@ -1,4 +1,6 @@
 (() => {
+  const MAX_CIP103_TXS = 20;
+
   class CardanoAuth {
     constructor(auth, rpc) {
       this._auth = auth;
@@ -46,7 +48,7 @@
       CardanoAPI._cardano_rpc_call = rpcWrapper;
       CardanoAPI._disconnection = [false];
       CardanoAPI._returnType = ['cbor'];
-      window.addEventListener('yoroi_wallet_disconnected', function () {
+      window.addEventListener('yoroi_wallet_disconnected', function() {
         if (!CardanoAPI._disconnection[0]) {
           CardanoAPI._disconnection[0] = true;
           CardanoAPI._disconnection.slice(1).forEach(f => f());
@@ -77,6 +79,7 @@
         if (!Array.isArray(txs)) {
           throw new Error('.cip103.signTxs argument is expected to be an array!');
         }
+        CardanoAPI._assertCip103BatchSize(txs, 'signTxs');
 
         const witnesses = [];
         for (let index = 0; index < txs.length; index++) {
@@ -95,6 +98,7 @@
         if (!Array.isArray(txs)) {
           throw new Error('.cip103.submitTxs argument is expected to be an array!');
         }
+        CardanoAPI._assertCip103BatchSize(txs, 'submitTxs');
 
         const results = [];
         for (const tx of txs) {
@@ -109,11 +113,18 @@
         }
         const values = results.map(result => result.value);
         if (results.some(result => !result.ok)) {
+          // CIP-0103 throws the mixed result array; successful hashes in it may already be on-chain.
           throw values;
         }
         return values;
       },
     });
+
+    static _assertCip103BatchSize(txs, methodName) {
+      if (txs.length > MAX_CIP103_TXS) {
+        throw new Error(`.cip103.${methodName} supports at most ${MAX_CIP103_TXS} transactions per request!`);
+      }
+    }
 
     static _withCip103FailureIndex(error, index) {
       const hasErrorInfo = error != null && typeof error === 'object' && typeof error.info === 'string';
@@ -172,9 +183,9 @@
       if (txRequest == null || typeof txRequest !== 'object') {
         throw new Error('.cip103.signTxs transaction request is expected to be an object!');
       }
-      const tx = txRequest.cbor ?? txRequest.tx;
+      const tx = txRequest.cbor;
       if (typeof tx !== 'string') {
-        throw new Error('.cip103.signTxs transaction request requires a cbor or tx string!');
+        throw new Error('.cip103.signTxs transaction request requires a cbor string!');
       }
       return {
         tx,

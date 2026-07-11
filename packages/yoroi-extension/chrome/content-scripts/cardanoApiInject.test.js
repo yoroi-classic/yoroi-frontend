@@ -1,5 +1,6 @@
 describe('CardanoAPI CIP-0103 extension', () => {
   const disconnectListeners = [];
+  const maxCip103Txs = 20;
 
   const loadApi = rpc => {
     jest.resetModules();
@@ -90,8 +91,30 @@ describe('CardanoAPI CIP-0103 extension', () => {
 
     await expect(api.cip103.signTxs([{ partialSign: false }])).rejects.toEqual({
       index: 0,
-      info: '.cip103.signTxs transaction request requires a cbor or tx string! (transaction index 0)',
+      info: '.cip103.signTxs transaction request requires a cbor string! (transaction index 0)',
     });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('signTxs rejects non-spec tx requests', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+
+    await expect(api.cip103.signTxs([{ tx: 'tx-0' }])).rejects.toEqual({
+      index: 0,
+      info: '.cip103.signTxs transaction request requires a cbor string! (transaction index 0)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('signTxs rejects batches above the CIP-0103 transaction limit', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = Array.from({ length: maxCip103Txs + 1 }, (_, index) => ({ cbor: `tx-${index}` }));
+
+    await expect(api.cip103.signTxs(txs)).rejects.toThrow(
+      `.cip103.signTxs supports at most ${maxCip103Txs} transactions per request!`
+    );
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -133,5 +156,16 @@ describe('CardanoAPI CIP-0103 extension', () => {
       ['submit_tx', ['tx-1'], 'cbor'],
       ['submit_tx', ['tx-2'], 'cbor'],
     ]);
+  });
+
+  test('submitTxs rejects batches above the CIP-0103 transaction limit', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = Array.from({ length: maxCip103Txs + 1 }, (_, index) => `tx-${index}`);
+
+    await expect(api.cip103.submitTxs(txs)).rejects.toThrow(
+      `.cip103.submitTxs supports at most ${maxCip103Txs} transactions per request!`
+    );
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
