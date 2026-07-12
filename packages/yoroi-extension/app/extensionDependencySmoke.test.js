@@ -267,7 +267,7 @@ describe('extension dependency smoke', () => {
 
     api.experimental.setReturnType('json');
 
-    await expect(api.getExtensions()).resolves.toEqual([{ cip: 95 }]);
+    await expect(api.getExtensions()).resolves.toEqual([{ cip: 95 }, { cip: 103 }]);
     await api.getNetworkId();
     await api.getBalance();
     await api.getUsedAddresses({ page: 0, limit: 2 });
