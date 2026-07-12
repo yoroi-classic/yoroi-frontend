@@ -22,7 +22,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
 
       - name: Run Flow
         run: |
@@ -83,8 +83,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config --global user.name "emurgo-rnd"
-          git config --global user.email "rnd@emurgo.io"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Commit and push
         if: github.ref_protected == false
