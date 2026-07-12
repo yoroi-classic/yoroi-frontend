@@ -116,6 +116,22 @@ describe('CardanoAPI CIP-0103 extension', () => {
     ]);
   });
 
+  test('signTxs preserves the transaction index when request snapshotting fails', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const brokenRequest = {
+      get cbor() {
+        throw new Error('getter failed');
+      },
+    };
+
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, brokenRequest])).rejects.toEqual({
+      index: 1,
+      info: 'getter failed (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('signTxs rejects with the failing transaction index', async () => {
     const signError = { code: 1, info: 'invalid tx' };
     const rpc = jest.fn((func, params) => {

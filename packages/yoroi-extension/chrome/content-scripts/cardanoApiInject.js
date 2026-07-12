@@ -81,7 +81,13 @@
         }
         const batch = txs.slice();
         CardanoAPI._assertCip103BatchSize(batch, 'signTxs');
-        const requests = batch.map(CardanoAPI._snapshotCip103SignRequest);
+        const requests = batch.map((txRequest, index) => {
+          try {
+            return CardanoAPI._snapshotCip103SignRequest(txRequest);
+          } catch (error) {
+            throw CardanoAPI._withCip103FailureIndex(error, index);
+          }
+        });
 
         const witnesses = [];
         for (let index = 0; index < requests.length; index++) {
