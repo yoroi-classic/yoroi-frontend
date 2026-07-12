@@ -61,6 +61,33 @@ describe('CardanoAPI CIP-0103 extension', () => {
     ]);
   });
 
+  test('signTxs snapshots the batch before signing', async () => {
+    let resolveFirstSignature;
+    const rpc = jest.fn((func, params) => {
+      if (params[0].tx === 'tx-0') {
+        return new Promise(resolve => {
+          resolveFirstSignature = resolve;
+        });
+      }
+      return Promise.resolve(`witness-${params[0].tx}`);
+    });
+    const api = loadApi(rpc);
+    const txs = [
+      { cbor: 'tx-0', partialSign: false },
+      { cbor: 'tx-1', partialSign: false },
+    ];
+
+    const signing = api.cip103.signTxs(txs);
+    txs.push({ cbor: 'tx-2', partialSign: false });
+    resolveFirstSignature('witness-tx-0');
+
+    await expect(signing).resolves.toEqual(['witness-tx-0', 'witness-tx-1']);
+    expect(rpc.mock.calls).toEqual([
+      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
+      ['sign_tx/cardano', [{ tx: 'tx-1', partialSign: false, returnTx: false }], 'cbor'],
+    ]);
+  });
+
   test('signTxs rejects with the failing transaction index', async () => {
     const signError = { code: 1, info: 'invalid tx' };
     const rpc = jest.fn((func, params) => {
@@ -133,6 +160,30 @@ describe('CardanoAPI CIP-0103 extension', () => {
     await expect(api.cip103.submitTxs(['tx-0', 'tx-1'])).resolves.toEqual(['hash-tx-0', 'hash-tx-1']);
     expect(maxActiveSubmissions).toEqual(1);
 
+    expect(rpc.mock.calls).toEqual([
+      ['submit_tx', ['tx-0'], 'cbor'],
+      ['submit_tx', ['tx-1'], 'cbor'],
+    ]);
+  });
+
+  test('submitTxs snapshots the batch before submitting', async () => {
+    let resolveFirstSubmission;
+    const rpc = jest.fn((func, params) => {
+      if (params[0] === 'tx-0') {
+        return new Promise(resolve => {
+          resolveFirstSubmission = resolve;
+        });
+      }
+      return Promise.resolve(`hash-${params[0]}`);
+    });
+    const api = loadApi(rpc);
+    const txs = ['tx-0', 'tx-1'];
+
+    const submitting = api.cip103.submitTxs(txs);
+    txs.push('tx-2');
+    resolveFirstSubmission('hash-tx-0');
+
+    await expect(submitting).resolves.toEqual(['hash-tx-0', 'hash-tx-1']);
     expect(rpc.mock.calls).toEqual([
       ['submit_tx', ['tx-0'], 'cbor'],
       ['submit_tx', ['tx-1'], 'cbor'],

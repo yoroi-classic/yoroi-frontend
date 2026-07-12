@@ -79,13 +79,14 @@
         if (!Array.isArray(txs)) {
           throw new Error('.cip103.signTxs argument is expected to be an array!');
         }
-        CardanoAPI._assertCip103BatchSize(txs, 'signTxs');
+        const batch = txs.slice();
+        CardanoAPI._assertCip103BatchSize(batch, 'signTxs');
 
         const witnesses = [];
-        for (let index = 0; index < txs.length; index++) {
+        for (let index = 0; index < batch.length; index++) {
           try {
             witnesses.push(
-              await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(txs[index])])
+              await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(batch[index])])
             );
           } catch (error) {
             throw CardanoAPI._withCip103FailureIndex(error, index);
@@ -98,10 +99,11 @@
         if (!Array.isArray(txs)) {
           throw new Error('.cip103.submitTxs argument is expected to be an array!');
         }
-        CardanoAPI._assertCip103BatchSize(txs, 'submitTxs');
+        const batch = txs.slice();
+        CardanoAPI._assertCip103BatchSize(batch, 'submitTxs');
 
         const results = [];
-        for (const tx of txs) {
+        for (const tx of batch) {
           try {
             results.push({
               ok: true,
