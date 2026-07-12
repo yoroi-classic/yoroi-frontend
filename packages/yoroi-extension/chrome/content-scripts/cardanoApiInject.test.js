@@ -88,6 +88,34 @@ describe('CardanoAPI CIP-0103 extension', () => {
     ]);
   });
 
+  test('signTxs snapshots transaction request fields before signing', async () => {
+    let resolveFirstSignature;
+    const rpc = jest.fn((func, params) => {
+      if (params[0].tx === 'tx-0') {
+        return new Promise(resolve => {
+          resolveFirstSignature = resolve;
+        });
+      }
+      return Promise.resolve(`witness-${params[0].tx}`);
+    });
+    const api = loadApi(rpc);
+    const txs = [
+      { cbor: 'tx-0', partialSign: false },
+      { cbor: 'tx-1', partialSign: false },
+    ];
+
+    const signing = api.cip103.signTxs(txs);
+    txs[1].cbor = 'tx-mutated';
+    txs[1].partialSign = true;
+    resolveFirstSignature('witness-tx-0');
+
+    await expect(signing).resolves.toEqual(['witness-tx-0', 'witness-tx-1']);
+    expect(rpc.mock.calls).toEqual([
+      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
+      ['sign_tx/cardano', [{ tx: 'tx-1', partialSign: false, returnTx: false }], 'cbor'],
+    ]);
+  });
+
   test('signTxs rejects with the failing transaction index', async () => {
     const signError = { code: 1, info: 'invalid tx' };
     const rpc = jest.fn((func, params) => {

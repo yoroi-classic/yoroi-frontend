@@ -81,12 +81,13 @@
         }
         const batch = txs.slice();
         CardanoAPI._assertCip103BatchSize(batch, 'signTxs');
+        const requests = batch.map(CardanoAPI._snapshotCip103SignRequest);
 
         const witnesses = [];
-        for (let index = 0; index < batch.length; index++) {
+        for (let index = 0; index < requests.length; index++) {
           try {
             witnesses.push(
-              await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(batch[index])])
+              await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(requests[index])])
             );
           } catch (error) {
             throw CardanoAPI._withCip103FailureIndex(error, index);
@@ -126,6 +127,16 @@
       if (txs.length > MAX_CIP103_TXS) {
         throw new Error(`.cip103.${methodName} supports at most ${MAX_CIP103_TXS} transactions per request!`);
       }
+    }
+
+    static _snapshotCip103SignRequest(txRequest) {
+      if (txRequest == null || typeof txRequest !== 'object') {
+        return txRequest;
+      }
+      return {
+        cbor: txRequest.cbor,
+        partialSign: txRequest.partialSign,
+      };
     }
 
     static _withCip103FailureIndex(error, index) {
