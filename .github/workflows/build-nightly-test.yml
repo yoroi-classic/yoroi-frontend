@@ -22,7 +22,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
 
       - name: Build Nightly app
         working-directory: ./packages/yoroi-extension
