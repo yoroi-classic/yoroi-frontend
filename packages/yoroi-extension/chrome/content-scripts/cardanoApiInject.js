@@ -83,7 +83,7 @@
         CardanoAPI._assertCip103BatchSize(batch, 'signTxs');
         const requests = batch.map((txRequest, index) => {
           try {
-            return CardanoAPI._snapshotCip103SignRequest(txRequest);
+            return CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(txRequest));
           } catch (error) {
             throw CardanoAPI._withCip103FailureIndex(error, index);
           }
@@ -92,9 +92,7 @@
         const witnesses = [];
         for (let index = 0; index < requests.length; index++) {
           try {
-            witnesses.push(
-              await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [CardanoAPI._normalizeCip103SignRequest(requests[index])])
-            );
+            witnesses.push(await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [requests[index]]));
           } catch (error) {
             throw CardanoAPI._withCip103FailureIndex(error, index);
           }

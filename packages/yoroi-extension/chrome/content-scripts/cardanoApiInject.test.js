@@ -160,9 +160,9 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
 
-    await expect(api.cip103.signTxs([{ partialSign: false }])).rejects.toEqual({
-      index: 0,
-      info: '.cip103.signTxs transaction request requires a cbor string! (transaction index 0)',
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, { partialSign: false }])).rejects.toEqual({
+      index: 1,
+      info: '.cip103.signTxs transaction request requires a cbor string! (transaction index 1)',
     });
     expect(rpc).not.toHaveBeenCalled();
   });
