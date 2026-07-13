@@ -66,10 +66,7 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const api = loadApi(rpc);
 
     await expect(
-      api.cip103.signTxs([
-        { cbor: 'tx-0' },
-        { cbor: 'tx-1', partialSign: true, tx: 'legacy-tx-field', returnTx: true },
-      ])
+      api.cip103.signTxs([{ cbor: 'tx-0' }, { cbor: 'tx-1', partialSign: true, tx: 'legacy-tx-field', returnTx: true }])
     ).resolves.toEqual(['witness-tx-0', 'witness-tx-1']);
 
     expect(rpc.mock.calls).toEqual([
