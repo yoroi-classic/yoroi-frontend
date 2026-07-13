@@ -87,6 +87,11 @@ jobs:
         run: |
           ./ci-install-all.sh
 
+      - name: Check e2e smoke specs
+        working-directory: ./packages/e2e-tests
+        run: |
+          npm run test:ext:smoke:dry-run
+
       - name: Build extension
         working-directory: ./packages/yoroi-extension
         run: |
