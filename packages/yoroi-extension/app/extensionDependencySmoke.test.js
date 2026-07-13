@@ -38,6 +38,21 @@ const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
   'packages/yoroi-extension:devDependencies:@emurgo/cross-csl-nodejs',
 ];
 
+const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cardano-serialization-lib-browser',
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-browser',
+  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
+  'packages/yoroi-extension:node_modules/@yoroi/staking:dependencies:@emurgo/cip14-js',
+  'packages/yoroi-extension:node_modules/legacySwap/node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
+  'packages/yoroi-extension:node_modules/legacySwap:dependencies:@emurgo/cip14-js',
+];
+
 const CARDANO_MAINNET = networks.CardanoMainnet;
 const DEFAULT_TOKEN = defaultAssets.find(asset => asset.NetworkId === CARDANO_MAINNET.NetworkId);
 if (DEFAULT_TOKEN == null) throw new Error('Missing Cardano mainnet default token fixture');
@@ -90,6 +105,10 @@ function readPackageJson(packagePath) {
   return JSON.parse(fs.readFileSync(path.join(WORKSPACE_ROOT, packagePath, 'package.json'), 'utf8'));
 }
 
+function readPackageLock(packagePath) {
+  return JSON.parse(fs.readFileSync(path.join(WORKSPACE_ROOT, packagePath, 'package-lock.json'), 'utf8'));
+}
+
 function directEmurgoDependencies(packagePath) {
   const packageJson = readPackageJson(packagePath);
   const dependencyFields = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
@@ -99,6 +118,18 @@ function directEmurgoDependencies(packagePath) {
       .filter(dependencyName => dependencyName.startsWith('@emurgo/'))
       .map(dependencyName => `${packagePath}:${field}:${dependencyName}`)
   );
+}
+
+function transitiveEmurgoDependencyEdges(packagePath) {
+  const packageLock = readPackageLock(packagePath);
+
+  return Object.entries(packageLock.packages || {}).flatMap(([packageEntry, packageMetadata]) => {
+    if (packageEntry === '') return [];
+
+    return Object.keys((packageMetadata && packageMetadata.dependencies) || {})
+      .filter(dependencyName => dependencyName.startsWith('@emurgo/'))
+      .map(dependencyName => `${packagePath}:${packageEntry}:dependencies:${dependencyName}`);
+  });
 }
 
 const originalFetch = (global: any).fetch;
@@ -126,6 +157,15 @@ describe('extension dependency smoke', () => {
     ].sort();
 
     expect(directDependencies).toEqual(EXPECTED_DIRECT_EMURGO_DEPENDENCIES);
+  });
+
+  test('keeps transitive EMURGO lockfile edges inside the migration inventory', () => {
+    const transitiveDependencies = [
+      ...transitiveEmurgoDependencyEdges('packages/yoroi-extension'),
+      ...transitiveEmurgoDependencyEdges('packages/e2e-tests'),
+    ].sort();
+
+    expect(transitiveDependencies).toEqual(EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES);
   });
 
   test('initializes restore and sync-facing stores', () => {
@@ -291,7 +331,10 @@ describe('extension dependency smoke', () => {
       undefined
     );
     const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx.body().fee().to_str();
+    const signedFee = signedTx
+      .body()
+      .fee()
+      .to_str();
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
     expect(new BigNumber(signedFee).gt(0)).toEqual(true);
