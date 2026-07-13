@@ -29,7 +29,7 @@ jobs:
       (github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
@@ -91,7 +91,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
     continue-on-error: true
     strategy:
@@ -168,7 +168,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
 
     steps:
@@ -241,7 +241,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
 
     steps:
@@ -318,7 +318,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
     steps:
       - name: Pull Speculos Docker image
