@@ -127,7 +127,8 @@ function transitiveEmurgoDependencyEdges(packagePath) {
   return Object.entries(packageLockEntries).flatMap(([packageEntry, packageMetadata]) => {
     if (packageEntry === '') return [];
 
-    const dependencies: { [string]: any } = (packageMetadata && packageMetadata.dependencies) || {};
+    const packageMetadataObject: any = packageMetadata;
+    const dependencies: { [string]: any } = (packageMetadataObject && packageMetadataObject.dependencies) || {};
 
     return Object.keys(dependencies)
       .filter(dependencyName => dependencyName.startsWith('@emurgo/'))
@@ -334,10 +335,7 @@ describe('extension dependency smoke', () => {
       undefined
     );
     const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx
-      .body()
-      .fee()
-      .to_str();
+    const signedFee = signedTx.body().fee().to_str();
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
     expect(new BigNumber(signedFee).gt(0)).toEqual(true);
