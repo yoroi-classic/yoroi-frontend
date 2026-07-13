@@ -1,6 +1,8 @@
 // @flow
 import './api/ada/lib/test-config.forTests';
 
+import fs from 'fs';
+import path from 'path';
 import BigNumber from 'bignumber.js';
 import WalletRestoreStore, { RestoreSteps } from './stores/toplevel/WalletRestoreStore';
 import AdaStateFetchStore from './stores/ada/AdaStateFetchStore';
@@ -18,6 +20,23 @@ import developmentConfig from '../config/development.json';
 import testConfig from '../config/test.json';
 
 const SMOKE_MNEMONIC = 'prevent company field green slot measure chief hero apple task eagle sunset endorse dress seed';
+
+const PACKAGE_ROOT = path.resolve(__dirname, '..');
+const WORKSPACE_ROOT = path.resolve(PACKAGE_ROOT, '..', '..');
+
+const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
+  'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
+  'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
+  'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
+  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-browser',
+  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:dependencies:@emurgo/yoroi-eutxo-txs',
+  'packages/yoroi-extension:dependencies:@emurgo/yoroi-lib',
+  'packages/yoroi-extension:devDependencies:@emurgo/cardano-message-signing-nodejs',
+  'packages/yoroi-extension:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:devDependencies:@emurgo/cross-csl-nodejs',
+];
 
 const CARDANO_MAINNET = networks.CardanoMainnet;
 const DEFAULT_TOKEN = defaultAssets.find(asset => asset.NetworkId === CARDANO_MAINNET.NetworkId);
@@ -67,6 +86,21 @@ function installCardanoApiForTest() {
   return (window: any).CardanoAPI;
 }
 
+function readPackageJson(packagePath) {
+  return JSON.parse(fs.readFileSync(path.join(WORKSPACE_ROOT, packagePath, 'package.json'), 'utf8'));
+}
+
+function directEmurgoDependencies(packagePath) {
+  const packageJson = readPackageJson(packagePath);
+  const dependencyFields = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+
+  return dependencyFields.flatMap(field =>
+    Object.keys(packageJson[field] || {})
+      .filter(dependencyName => dependencyName.startsWith('@emurgo/'))
+      .map(dependencyName => `${packagePath}:${field}:${dependencyName}`)
+  );
+}
+
 const originalFetch = (global: any).fetch;
 const originalAbortSignalTimeout = (AbortSignal: any).timeout;
 
@@ -83,6 +117,15 @@ afterEach(() => {
 describe('extension dependency smoke', () => {
   beforeAll(async () => {
     await RustModule.load();
+  });
+
+  test('keeps direct EMURGO package dependencies inside the migration inventory', () => {
+    const directDependencies = [
+      ...directEmurgoDependencies('packages/yoroi-extension'),
+      ...directEmurgoDependencies('packages/e2e-tests'),
+    ].sort();
+
+    expect(directDependencies).toEqual(EXPECTED_DIRECT_EMURGO_DEPENDENCIES);
   });
 
   test('initializes restore and sync-facing stores', () => {
