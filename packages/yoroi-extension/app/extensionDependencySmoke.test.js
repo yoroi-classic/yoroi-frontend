@@ -122,11 +122,14 @@ function directEmurgoDependencies(packagePath) {
 
 function transitiveEmurgoDependencyEdges(packagePath) {
   const packageLock = readPackageLock(packagePath);
+  const packageLockEntries: { [string]: any } = packageLock.packages || {};
 
-  return Object.entries(packageLock.packages || {}).flatMap(([packageEntry, packageMetadata]) => {
+  return Object.entries(packageLockEntries).flatMap(([packageEntry, packageMetadata]) => {
     if (packageEntry === '') return [];
 
-    return Object.keys((packageMetadata && packageMetadata.dependencies) || {})
+    const dependencies: { [string]: any } = (packageMetadata && packageMetadata.dependencies) || {};
+
+    return Object.keys(dependencies)
       .filter(dependencyName => dependencyName.startsWith('@emurgo/'))
       .map(dependencyName => `${packagePath}:${packageEntry}:dependencies:${dependencyName}`);
   });
