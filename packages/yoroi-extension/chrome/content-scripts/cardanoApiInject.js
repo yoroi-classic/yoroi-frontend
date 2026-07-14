@@ -52,7 +52,7 @@
       CardanoAPI._cardano_rpc_cbor_call = cborRpcWrapper;
       CardanoAPI._disconnection = [false];
       CardanoAPI._returnType = ['cbor'];
-      window.addEventListener('yoroi_wallet_disconnected', function() {
+      window.addEventListener('yoroi_wallet_disconnected', function () {
         if (!CardanoAPI._disconnection[0]) {
           CardanoAPI._disconnection[0] = true;
           CardanoAPI._disconnection.slice(1).forEach(f => f());
