@@ -10,7 +10,14 @@ const path = require('path');
 const WORKSPACE_ROOT = path.resolve(__dirname, '..', '..', '..');
 const PACKAGE_PATHS = ['packages/yoroi-extension', 'packages/e2e-tests'];
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
-const FORBIDDEN_SOURCE_PATTERNS = [/github\.com[:/]Emurgo/i, /emurgornd\.com/i];
+const FORBIDDEN_SOURCE_PATTERNS = [/github(?::|\.com[:/])Emurgo\//i, /emurgornd\.com/i];
+const FORBIDDEN_SOURCE_FIXTURES = [
+  'github:Emurgo/yoroi-lib#1.0.0',
+  'https://github.com/Emurgo/yoroi-lib#1.0.0',
+  'git+https://github.com/Emurgo/yoroi-lib.git#1.0.0',
+  'git+ssh://git@github.com:Emurgo/yoroi-lib.git#1.0.0',
+  'https://prod.emurgornd.com/service',
+];
 
 const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
   'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
@@ -62,6 +69,16 @@ function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(WORKSPACE_ROOT, relativePath), 'utf8'));
 }
 
+function isForbiddenDependencySource(dependencySpec) {
+  return FORBIDDEN_SOURCE_PATTERNS.some(pattern => pattern.test(String(dependencySpec)));
+}
+
+function assertForbiddenSourcePatternCoverage() {
+  return FORBIDDEN_SOURCE_FIXTURES.filter(dependencySpec => !isForbiddenDependencySource(dependencySpec)).map(
+    dependencySpec => `  missing fixture coverage: ${dependencySpec}`
+  );
+}
+
 function packageNameFromLockfileEntry(packageEntry) {
   const nodeModulesSegments = packageEntry.split('node_modules/');
   const packagePath = nodeModulesSegments[nodeModulesSegments.length - 1];
@@ -106,13 +123,13 @@ function forbiddenDependencySources(packagePath) {
   const packageJson = readJson(path.join(packagePath, 'package.json'));
   const packageJsonFindings = DEPENDENCY_FIELDS.flatMap(field =>
     Object.entries(packageJson[field] || {})
-      .filter(([, dependencySpec]) => FORBIDDEN_SOURCE_PATTERNS.some(pattern => pattern.test(String(dependencySpec))))
+      .filter(([, dependencySpec]) => isForbiddenDependencySource(dependencySpec))
       .map(([dependencyName, dependencySpec]) => `${packagePath}:package.json:${field}:${dependencyName}:${dependencySpec}`)
   );
 
   const packageLockFindings = Object.entries(lockfilePackages(packagePath)).flatMap(([packageEntry, packageMetadata]) => {
     const resolved = packageMetadata && packageMetadata.resolved;
-    if (!FORBIDDEN_SOURCE_PATTERNS.some(pattern => pattern.test(String(resolved || '')))) return [];
+    if (!isForbiddenDependencySource(resolved || '')) return [];
     return [`${packagePath}:package-lock.json:${packageEntry}:resolved:${resolved}`];
   });
 
@@ -148,6 +165,7 @@ function assertInventory(name, actualValues, expectedValues) {
 }
 
 const failures = [
+  ...assertForbiddenSourcePatternCoverage(),
   ...assertInventory(
     'Direct EMURGO dependency',
     PACKAGE_PATHS.flatMap(directEmurgoDependencies),
