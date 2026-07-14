@@ -44,8 +44,12 @@
       function rpcWrapper(func, params) {
         return rpc(func, params, CardanoAPI._returnType[0]);
       }
+      function cborRpcWrapper(func, params) {
+        return rpc(func, params, 'cbor');
+      }
       CardanoAPI._auth = new CardanoAuth(auth, rpcWrapper);
       CardanoAPI._cardano_rpc_call = rpcWrapper;
+      CardanoAPI._cardano_rpc_cbor_call = cborRpcWrapper;
       CardanoAPI._disconnection = [false];
       CardanoAPI._returnType = ['cbor'];
       window.addEventListener('yoroi_wallet_disconnected', function () {
@@ -92,7 +96,7 @@
         const witnesses = [];
         for (let index = 0; index < requests.length; index++) {
           try {
-            witnesses.push(await CardanoAPI._cardano_rpc_call('sign_tx/cardano', [requests[index]]));
+            witnesses.push(await CardanoAPI._cardano_rpc_cbor_call('sign_tx/cardano', [requests[index]]));
           } catch (error) {
             throw CardanoAPI._withCip103FailureIndex(error, index);
           }
@@ -112,7 +116,7 @@
           try {
             results.push({
               ok: true,
-              value: await CardanoAPI._cardano_rpc_call('submit_tx', [tx]),
+              value: await CardanoAPI._cardano_rpc_cbor_call('submit_tx', [tx]),
             });
           } catch (error) {
             results.push({ ok: false, value: error });
