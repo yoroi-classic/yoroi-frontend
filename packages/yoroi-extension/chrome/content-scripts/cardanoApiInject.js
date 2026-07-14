@@ -216,7 +216,11 @@
     }
 
     getExtensions() {
-      return Promise.resolve([{ cip: 95 }, { cip: 103 }]);
+      const extensions = [{ cip: 95 }];
+      if (this.cip103 != null && typeof this.cip103.signTxs === 'function' && typeof this.cip103.submitTxs === 'function') {
+        extensions.push({ cip: 103 });
+      }
+      return Promise.resolve(extensions);
     }
 
     getNetworkId() {
