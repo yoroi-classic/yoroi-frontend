@@ -75,6 +75,25 @@ describe('CardanoAPI CIP-0103 extension', () => {
     ]);
   });
 
+  test('CIP-0103 calls keep CBOR return type after the experimental return type changes', async () => {
+    const rpc = jest.fn((func, params) =>
+      Promise.resolve(func === 'submit_tx' ? `hash-${params[0]}` : `witness-${params[0].tx}`)
+    );
+    const api = loadApi(rpc);
+
+    api.experimental.setReturnType('json');
+
+    await expect(api.signTx('legacy-tx')).resolves.toEqual('witness-legacy-tx');
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }])).resolves.toEqual(['witness-tx-0']);
+    await expect(api.cip103.submitTxs(['tx-1'])).resolves.toEqual(['hash-tx-1']);
+
+    expect(rpc.mock.calls).toEqual([
+      ['sign_tx/cardano', [{ tx: 'legacy-tx', partialSign: false, returnTx: false }], 'json'],
+      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
+      ['submit_tx', ['tx-1'], 'cbor'],
+    ]);
+  });
+
   test('signTxs snapshots the batch before signing', async () => {
     let resolveFirstSignature;
     const rpc = jest.fn((func, params) => {

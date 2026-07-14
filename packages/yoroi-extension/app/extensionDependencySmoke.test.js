@@ -335,7 +335,10 @@ describe('extension dependency smoke', () => {
       undefined
     );
     const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx.body().fee().to_str();
+    const signedFee = signedTx
+      .body()
+      .fee()
+      .to_str();
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
     expect(new BigNumber(signedFee).gt(0)).toEqual(true);
@@ -372,6 +375,8 @@ describe('extension dependency smoke', () => {
     await expect(api.cip95.getRegisteredPubStakeKeys()).resolves.toEqual(['stake-key']);
     await expect(api.cip95.getUnregisteredPubStakeKeys()).resolves.toEqual([]);
     await api.cip95.signData('addr-hex', 'payload-hex');
+    await api.cip103.signTxs([{ cbor: 'bulk-body-hex' }]);
+    await api.cip103.submitTxs(['bulk-tx-hex']);
 
     expect(() => api.signTx(null)).toThrow('.signTx argument cannot be null!');
     expect(() => api.experimental.setReturnType('hex')).toThrow('Possible return type values are: "cbor" or "json"');
@@ -393,6 +398,8 @@ describe('extension dependency smoke', () => {
       ['get_stake_key', [], 'json'],
       ['get_stake_key', [], 'json'],
       ['cip95_sign_data', ['addr-hex', 'payload-hex'], 'json'],
+      ['sign_tx/cardano', [{ tx: 'bulk-body-hex', partialSign: false, returnTx: false }], 'cbor'],
+      ['submit_tx', ['bulk-tx-hex'], 'cbor'],
     ]);
   });
 
