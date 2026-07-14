@@ -20,6 +20,12 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
 
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
       - name: Install Dependencies
         run: |
           ./ci-install-all.sh
