@@ -34,6 +34,8 @@ jobs:
           corepack enable npm
           corepack prepare npm@10.9.7 --activate
           npm --version
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
       - name: Cache node modules
         uses: actions/cache@v4
         id: node-modules-cache
