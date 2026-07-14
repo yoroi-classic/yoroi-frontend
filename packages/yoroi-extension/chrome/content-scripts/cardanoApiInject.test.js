@@ -34,6 +34,14 @@ describe('CardanoAPI CIP-0103 extension', () => {
     });
   });
 
+  test('does not advertise CIP-0103 when the bulk transaction API is incomplete', async () => {
+    const api = loadApi(jest.fn());
+
+    api.cip103 = Object.freeze({ signTxs: api.cip103.signTxs });
+
+    await expect(api.getExtensions()).resolves.toEqual([{ cip: 95 }]);
+  });
+
   test('initial injector advertises CIP-0103 as a supported extension', () => {
     jest.resetModules();
     delete window.cardano;
