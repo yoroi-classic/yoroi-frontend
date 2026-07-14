@@ -31,6 +31,11 @@ jobs:
           corepack prepare npm@10.9.7 --activate
           npm --version
 
+      - name: Check EMURGO dependency inventory
+        working-directory: ./packages/yoroi-extension
+        run: |
+          npm run check:emurgo-dependencies
+
       - name: Cache npm downloads
         uses: actions/cache@v4
         env:
