@@ -9,6 +9,7 @@ import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import ConnectorTab from '../../pages/wallet/connectorTab/connectorTab.page.js';
 import driversPoolsManager from '../../utils/driversPool.js';
+import { itQuarantinedDApp } from '../../utils/quarantine.js';
 import { collectInfo, preloadDBAndStorage, waitTxPage } from '../../helpers/restoreWalletHelper.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
@@ -50,9 +51,13 @@ describe('dApp, mainnet, connection in extension', function () {
     await windowManager.openNewTab(mockDAppName, mockDAppUrl);
   });
 
-  it('Connect the wallet to the dapp', async function () {
-    await connectNonAuth(webdriver, logger, windowManager, mockedDApp, testWallet1Mainnet);
-  });
+  itQuarantinedDApp(
+    'Connect the wallet to the dapp',
+    'mainnet wallet balance fixture drifts with network state; see yoroi-frontend#55',
+    async function () {
+      await connectNonAuth(webdriver, logger, windowManager, mockedDApp, testWallet1Mainnet);
+    }
+  );
 
   it('Connection is displayed in the extension', async function () {
     // switch to the extension

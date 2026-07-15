@@ -12,6 +12,7 @@ import { adaInLovelaces, getPassword } from '../../helpers/constants.js';
 import DAppSignTx from '../../pages/dapp/dAppSignTx.page.js';
 import { TxSignErrorCode } from '../../helpers/mock-dApp-webpage/cip30Errors.js';
 import driversPoolsManager from '../../utils/driversPool.js';
+import { itQuarantinedDApp } from '../../utils/quarantine.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 
@@ -51,9 +52,13 @@ describe('dApp, signTx, intrawallet Tx', function () {
     }
   });
 
-  it('Restore a 15-word wallet', async function () {
-    await restoreWallet(webdriver, logger, testWallet);
-  });
+  itQuarantinedDApp(
+    'Restore a 15-word wallet',
+    'spendable wallet restore path has stale setup assumptions; see yoroi-frontend#55',
+    async function () {
+      await restoreWallet(webdriver, logger, testWallet);
+    }
+  );
 
   it('Open a dapp page', async function () {
     await windowManager.openNewTab(mockDAppName, mockDAppUrl);

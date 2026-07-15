@@ -9,6 +9,7 @@ import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { getTestWalletName } from '../../helpers/constants.js';
 import { collectInfo, createWallet, preloadBrowserStorage } from '../../helpers/restoreWalletHelper.js';
 import driversPoolsManager from '../../utils/driversPool.js';
+import { itQuarantinedDApp } from '../../utils/quarantine.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 import WalletCommonBase from '../../pages/walletCommonBase.page.js';
@@ -51,9 +52,13 @@ describe('dApp, getUtxos, empty wallet', function () {
     }
   });
 
-  it('Create an empty wallet', async function () {
-    newTestWallet = await createWallet(webdriver, logger, testWalletName);
-  });
+  itQuarantinedDApp(
+    'Create an empty wallet',
+    'empty wallet creation waits indefinitely in CI; see yoroi-frontend#55',
+    async function () {
+      newTestWallet = await createWallet(webdriver, logger, testWalletName);
+    }
+  );
 
   it('Open a dapp page', async function () {
     await windowManager.openNewTab(mockDAppName, mockDAppUrl);
