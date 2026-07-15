@@ -13,11 +13,13 @@ import DAppSignTx from '../../pages/dapp/dAppSignTx.page.js';
 import { signTxWithCSL } from '../../helpers/mock-dApp-webpage/dAppTxHelper.js';
 import { ApiErrorCode, TxSendErrorCode } from '../../helpers/mock-dApp-webpage/cip30Errors.js';
 import driversPoolsManager from '../../utils/driversPool.js';
-import { itQuarantinedDApp } from '../../utils/quarantine.js';
+import { beforeQuarantinedDApp } from '../../utils/quarantine.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 
 describe('dApp, submitTx', function () {
+  beforeQuarantinedDApp('spendable wallet restore path has stale setup assumptions; see yoroi-frontend#55');
+
   this.timeout(2 * oneMinute);
   /** @type {WebDriver} */
   let webdriver = null;
@@ -52,13 +54,9 @@ describe('dApp, submitTx', function () {
     }
   });
 
-  itQuarantinedDApp(
-    'Restore a 15-word wallet',
-    'spendable wallet restore path has stale setup assumptions; see yoroi-frontend#55',
-    async function () {
-      await restoreWallet(webdriver, logger, testWallet);
-    }
-  );
+  it('Restore a 15-word wallet', async function () {
+    await restoreWallet(webdriver, logger, testWallet);
+  });
 
   it('Open a dapp page', async function () {
     await windowManager.openNewTab(mockDAppName, mockDAppUrl);
