@@ -1,7 +1,7 @@
 import React from 'react';
 import { WalletStateType } from '../types';
 import { Box, Typography } from '@mui/material';
-import { WalletChecksum } from '@emurgo/cip4-js';
+import { WalletChecksum } from '@yoroi-classic/cip4-js';
 import WalletAccountIcon from '../../../../components/topbar/WalletAccountIcon';
 
 function constructPlate(plate: WalletChecksum, saturationFactor: number): [string, React.ReactElement] {

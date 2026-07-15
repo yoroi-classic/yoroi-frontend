@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-nightly:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Code
@@ -20,9 +20,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
 
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
       - name: Install Dependencies
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
 
       - name: Build Nightly app
         working-directory: ./packages/yoroi-extension

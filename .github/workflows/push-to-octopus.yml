@@ -5,7 +5,7 @@ on:
 
 jobs:
   push-to-octopus:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout main repo
         uses: actions/checkout@v4

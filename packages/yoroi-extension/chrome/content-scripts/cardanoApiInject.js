@@ -1,4 +1,6 @@
 (() => {
+  const MAX_CIP103_TXS = 20;
+
   class CardanoAuth {
     constructor(auth, rpc) {
       this._auth = auth;
@@ -42,8 +44,12 @@
       function rpcWrapper(func, params) {
         return rpc(func, params, CardanoAPI._returnType[0]);
       }
+      function cborRpcWrapper(func, params) {
+        return rpc(func, params, 'cbor');
+      }
       CardanoAPI._auth = new CardanoAuth(auth, rpcWrapper);
       CardanoAPI._cardano_rpc_call = rpcWrapper;
+      CardanoAPI._cardano_rpc_cbor_call = cborRpcWrapper;
       CardanoAPI._disconnection = [false];
       CardanoAPI._returnType = ['cbor'];
       window.addEventListener('yoroi_wallet_disconnected', function () {
@@ -71,6 +77,90 @@
         return CardanoAPI._cardano_rpc_call('cip95_sign_data', [address, payload]);
       },
     });
+
+    cip103 = Object.freeze({
+      signTxs: async txs => {
+        if (!Array.isArray(txs)) {
+          throw new Error('.cip103.signTxs argument is expected to be an array!');
+        }
+        const batch = txs.slice();
+        CardanoAPI._assertCip103BatchSize(batch, 'signTxs');
+        const requests = batch.map((txRequest, index) => {
+          try {
+            return CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(txRequest));
+          } catch (error) {
+            throw CardanoAPI._withCip103FailureIndex(error, index);
+          }
+        });
+
+        const witnesses = [];
+        for (let index = 0; index < requests.length; index++) {
+          try {
+            witnesses.push(await CardanoAPI._cardano_rpc_cbor_call('sign_tx/cardano', [requests[index]]));
+          } catch (error) {
+            throw CardanoAPI._withCip103FailureIndex(error, index);
+          }
+        }
+        return witnesses;
+      },
+
+      submitTxs: async txs => {
+        if (!Array.isArray(txs)) {
+          throw new Error('.cip103.submitTxs argument is expected to be an array!');
+        }
+        const batch = txs.slice();
+        CardanoAPI._assertCip103BatchSize(batch, 'submitTxs');
+
+        const results = [];
+        for (const tx of batch) {
+          try {
+            results.push({
+              ok: true,
+              value: await CardanoAPI._cardano_rpc_cbor_call('submit_tx', [tx]),
+            });
+          } catch (error) {
+            results.push({ ok: false, value: error });
+          }
+        }
+        const values = results.map(result => result.value);
+        if (results.some(result => !result.ok)) {
+          // CIP-0103 throws the mixed result array; successful hashes in it may already be on-chain.
+          throw values;
+        }
+        return values;
+      },
+    });
+
+    static _assertCip103BatchSize(txs, methodName) {
+      if (txs.length > MAX_CIP103_TXS) {
+        throw new Error(`.cip103.${methodName} supports at most ${MAX_CIP103_TXS} transactions per request!`);
+      }
+    }
+
+    static _snapshotCip103SignRequest(txRequest) {
+      if (txRequest == null || typeof txRequest !== 'object') {
+        return txRequest;
+      }
+      return {
+        cbor: txRequest.cbor,
+        partialSign: txRequest.partialSign,
+      };
+    }
+
+    static _withCip103FailureIndex(error, index) {
+      const hasErrorInfo = error != null && typeof error === 'object' && typeof error.info === 'string';
+      const hasErrorMessage = error != null && typeof error === 'object' && typeof error.message === 'string';
+      let info = `Transaction at index ${index} failed`;
+      if (hasErrorInfo) {
+        info = `${error.info} (transaction index ${index})`;
+      } else if (hasErrorMessage) {
+        info = `${error.message} (transaction index ${index})`;
+      }
+      if (error != null && typeof error === 'object') {
+        return { ...error, index, info };
+      }
+      return { index, info, error };
+    }
 
     experimental = Object.freeze({
       setReturnType: returnType => {
@@ -110,8 +200,27 @@
       },
     });
 
+    static _normalizeCip103SignRequest(txRequest) {
+      if (txRequest == null || typeof txRequest !== 'object') {
+        throw new Error('.cip103.signTxs transaction request is expected to be an object!');
+      }
+      const tx = txRequest.cbor;
+      if (typeof tx !== 'string') {
+        throw new Error('.cip103.signTxs transaction request requires a cbor string!');
+      }
+      return {
+        tx,
+        partialSign: txRequest.partialSign === true,
+        returnTx: false,
+      };
+    }
+
     getExtensions() {
-      return Promise.resolve([{ cip: 95 }]);
+      const extensions = [{ cip: 95 }];
+      if (this.cip103 != null && typeof this.cip103.signTxs === 'function' && typeof this.cip103.submitTxs === 'function') {
+        extensions.push({ cip: 103 });
+      }
+      return Promise.resolve(extensions);
     }
 
     getNetworkId() {

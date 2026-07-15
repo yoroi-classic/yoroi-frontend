@@ -15,7 +15,7 @@ import VerticalFlexContainer from '../../../layout/VerticalFlexContainer';
 import LoadingSpinner from '../../../widgets/LoadingSpinner';
 import globalMessages from '../../../../i18n/global-messages';
 import WalletAccountIcon from '../../../topbar/WalletAccountIcon';
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import { RevampSwitch } from '../../../widgets/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
 
