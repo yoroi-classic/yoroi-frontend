@@ -281,6 +281,86 @@ describe('extension dependency smoke', () => {
     expect(history[0].outputs[0].address).not.toEqual(bech32Address);
   });
 
+  test('keeps the legacy best block endpoint by default', async () => {
+    const fetchFixture = {
+      height: 3500000,
+      epoch: 199,
+      slot: 86400123,
+      hash: 'aa11bb22',
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse(fetchFixture));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    const fetcher = new AdaRemoteFetcher(
+      () => '5.23.200',
+      () => 'en-US',
+      () => 'chrome'
+    );
+    const bestBlock = await fetcher.getBestBlock({
+      network: backendNetwork(),
+    });
+
+    expect((global: any).fetch).toHaveBeenCalledWith(
+      'http://localhost:18082/api/v2/bestblock',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'yoroi-version': '5.23.200',
+          'yoroi-locale': 'en-US',
+        },
+      })
+    );
+    expect(bestBlock).toEqual(fetchFixture);
+  });
+
+  test('maps the opt-in cardano-wallet-backend chain tip to best block', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3010/',
+    };
+    const fetchFixture = {
+      block: 3500000,
+      epoch: 199,
+      slot: 86400123,
+      hash: 'aa11bb22',
+      blockTime: 1700000000,
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse(fetchFixture));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      const bestBlock = await fetcher.getBestBlock({
+        network: backendNetwork(),
+      });
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/chain/tip',
+        expect.objectContaining({
+          method: 'GET',
+          headers: {
+            'yoroi-version': '5.23.200',
+            'yoroi-locale': 'en-US',
+          },
+        })
+      );
+      expect(bestBlock).toEqual({
+        height: 3500000,
+        epoch: 199,
+        slot: 86400123,
+        hash: 'aa11bb22',
+      });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
   test('builds and signs a local Cardano transaction fixture', async () => {
     const senderAddress = byronAddrToHex('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4');
     const senderUtxo = {
