@@ -120,7 +120,7 @@
       isEnabled: cardano_check_read_access,
       apiVersion: API_VERSION,
       name: WALLET_NAME,
-      supportedExtensions: Object.freeze([{ cip: 95 }]),
+      supportedExtensions: Object.freeze([{ cip: 95 }, { cip: 103 }]),
     }),
   };
 

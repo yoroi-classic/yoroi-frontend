@@ -3,46 +3,112 @@ name: Tests
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted]
 
+permissions:
+  contents: read
+
 jobs:
   Unit_tests:
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request && github.event.pull_request.draft == false) || (github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
-    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Read .nvmrc
         id: nvm
         run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
 
-      - name: Cache node modules
-        # https://docs.github.com/en/actions/guides/caching-dependencies-to-speed-up-workflows
-        uses: actions/cache@v4
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
+
+      - name: Check EMURGO dependency inventory
+        working-directory: ./packages/yoroi-extension
+        run: |
+          npm run check:emurgo-dependencies
+
+      - name: Cache npm downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         env:
-          cache-name: cache-yoroi-extension-node-modules
+          cache-name: cache-npm-downloads
         with:
-          # https://github.com/actions/cache/blob/main/examples.md#node---npm
-          # It is recommended to cache the NPM cache (~/.npm) instead of node_modules.
-          # But we put node version into the cache key and cache node_modules.
-          path: packages/yoroi-extension/node_modules
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('packages/yoroi-extension/package-lock.json') }}
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('package-lock.json', 'packages/yoroi-extension/package-lock.json', 'packages/e2e-tests/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
-      - name: npm install
+      - name: Install packages
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
 
       - name: tests
         run: |
           npm run test
+
+  Build_smoke:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Read .nvmrc
+        id: nvm
+        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+
+      - name: Setup node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '${{ steps.nvm.outputs.NVMRC }}'
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
+
+      - name: Cache npm downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        env:
+          cache-name: cache-npm-downloads
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-node-${{ steps.nvm.outputs.NVMRC }}-${{ hashFiles('package-lock.json', 'packages/yoroi-extension/package-lock.json', 'packages/e2e-tests/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Install packages
+        run: |
+          ./ci-install-all.sh
+
+      - name: Check e2e smoke specs
+        working-directory: ./packages/e2e-tests
+        run: |
+          npm run test:ext:smoke:dry-run
+
+      - name: Build extension
+        working-directory: ./packages/yoroi-extension
+        run: |
+          npm run prod:build -- --env test --isE2E
+
+      - name: Check build output
+        working-directory: ./packages/yoroi-extension/build/js
+        run: |
+          test -f inject.js

@@ -6,7 +6,7 @@ import { NUMBER_OF_VERIFIED_ADDRESSES } from '../../../stores/toplevel/WalletRes
 import { networks } from '../../../api/ada/lib/storage/database/prepackaged/networks';
 import { useMemo } from 'react';
 import type { NetworkRow } from '../../../api/ada/lib/storage/database/primitives/tables';
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 
 export function usePlate(recoveryPhrase: Array<string>, selectedNetwork: $ReadOnly<NetworkRow>): WalletChecksum {
   return useMemo(() => {

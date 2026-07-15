@@ -1,8 +1,8 @@
 // @flow
 
 import { asGetPublicKey } from '../ada/lib/storage/models/PublicDeriver/traits';
-import type { WalletChecksum } from '@emurgo/cip4-js';
-import { walletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
+import { walletChecksum } from '@yoroi-classic/cip4-js';
 
 /**
  * Make browser to download the specified blob of bytes as a file with the specified name

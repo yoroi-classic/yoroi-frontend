@@ -1,6 +1,8 @@
 // @flow
 import './api/ada/lib/test-config.forTests';
 
+import fs from 'fs';
+import path from 'path';
 import BigNumber from 'bignumber.js';
 import WalletRestoreStore, { RestoreSteps } from './stores/toplevel/WalletRestoreStore';
 import AdaStateFetchStore from './stores/ada/AdaStateFetchStore';
@@ -18,6 +20,38 @@ import developmentConfig from '../config/development.json';
 import testConfig from '../config/test.json';
 
 const SMOKE_MNEMONIC = 'prevent company field green slot measure chief hero apple task eagle sunset endorse dress seed';
+
+const PACKAGE_ROOT = path.resolve(__dirname, '..');
+const WORKSPACE_ROOT = path.resolve(PACKAGE_ROOT, '..', '..');
+
+const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
+  'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
+  'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
+  'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
+  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-browser',
+  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:dependencies:@emurgo/yoroi-eutxo-txs',
+  'packages/yoroi-extension:dependencies:@emurgo/yoroi-lib',
+  'packages/yoroi-extension:devDependencies:@emurgo/cardano-message-signing-nodejs',
+  'packages/yoroi-extension:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:devDependencies:@emurgo/cross-csl-nodejs',
+];
+
+const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cardano-serialization-lib-browser',
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib:dependencies:@emurgo/cross-csl-core',
+  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-browser',
+  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
+  'packages/yoroi-extension:node_modules/@yoroi/staking:dependencies:@emurgo/cip14-js',
+  'packages/yoroi-extension:node_modules/legacySwap/node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
+  'packages/yoroi-extension:node_modules/legacySwap:dependencies:@emurgo/cip14-js',
+];
 
 const CARDANO_MAINNET = networks.CardanoMainnet;
 const DEFAULT_TOKEN = defaultAssets.find(asset => asset.NetworkId === CARDANO_MAINNET.NetworkId);
@@ -67,6 +101,41 @@ function installCardanoApiForTest() {
   return (window: any).CardanoAPI;
 }
 
+function readPackageJson(packagePath) {
+  return JSON.parse(fs.readFileSync(path.join(WORKSPACE_ROOT, packagePath, 'package.json'), 'utf8'));
+}
+
+function readPackageLock(packagePath) {
+  return JSON.parse(fs.readFileSync(path.join(WORKSPACE_ROOT, packagePath, 'package-lock.json'), 'utf8'));
+}
+
+function directEmurgoDependencies(packagePath) {
+  const packageJson = readPackageJson(packagePath);
+  const dependencyFields = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+
+  return dependencyFields.flatMap(field =>
+    Object.keys(packageJson[field] || {})
+      .filter(dependencyName => dependencyName.startsWith('@emurgo/'))
+      .map(dependencyName => `${packagePath}:${field}:${dependencyName}`)
+  );
+}
+
+function transitiveEmurgoDependencyEdges(packagePath) {
+  const packageLock = readPackageLock(packagePath);
+  const packageLockEntries: { [string]: any } = packageLock.packages || {};
+
+  return Object.entries(packageLockEntries).flatMap(([packageEntry, packageMetadata]) => {
+    if (packageEntry === '') return [];
+
+    const packageMetadataObject: any = packageMetadata;
+    const dependencies: { [string]: any } = (packageMetadataObject && packageMetadataObject.dependencies) || {};
+
+    return Object.keys(dependencies)
+      .filter(dependencyName => dependencyName.startsWith('@emurgo/'))
+      .map(dependencyName => `${packagePath}:${packageEntry}:dependencies:${dependencyName}`);
+  });
+}
+
 const originalFetch = (global: any).fetch;
 const originalAbortSignalTimeout = (AbortSignal: any).timeout;
 
@@ -83,6 +152,24 @@ afterEach(() => {
 describe('extension dependency smoke', () => {
   beforeAll(async () => {
     await RustModule.load();
+  });
+
+  test('keeps direct EMURGO package dependencies inside the migration inventory', () => {
+    const directDependencies = [
+      ...directEmurgoDependencies('packages/yoroi-extension'),
+      ...directEmurgoDependencies('packages/e2e-tests'),
+    ].sort();
+
+    expect(directDependencies).toEqual(EXPECTED_DIRECT_EMURGO_DEPENDENCIES);
+  });
+
+  test('keeps transitive EMURGO lockfile edges inside the migration inventory', () => {
+    const transitiveDependencies = [
+      ...transitiveEmurgoDependencyEdges('packages/yoroi-extension'),
+      ...transitiveEmurgoDependencyEdges('packages/e2e-tests'),
+    ].sort();
+
+    expect(transitiveDependencies).toEqual(EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES);
   });
 
   test('initializes restore and sync-facing stores', () => {
@@ -267,7 +354,7 @@ describe('extension dependency smoke', () => {
 
     api.experimental.setReturnType('json');
 
-    await expect(api.getExtensions()).resolves.toEqual([{ cip: 95 }]);
+    await expect(api.getExtensions()).resolves.toEqual([{ cip: 95 }, { cip: 103 }]);
     await api.getNetworkId();
     await api.getBalance();
     await api.getUsedAddresses({ page: 0, limit: 2 });
@@ -285,6 +372,8 @@ describe('extension dependency smoke', () => {
     await expect(api.cip95.getRegisteredPubStakeKeys()).resolves.toEqual(['stake-key']);
     await expect(api.cip95.getUnregisteredPubStakeKeys()).resolves.toEqual([]);
     await api.cip95.signData('addr-hex', 'payload-hex');
+    await api.cip103.signTxs([{ cbor: 'bulk-body-hex' }]);
+    await api.cip103.submitTxs(['bulk-tx-hex']);
 
     expect(() => api.signTx(null)).toThrow('.signTx argument cannot be null!');
     expect(() => api.experimental.setReturnType('hex')).toThrow('Possible return type values are: "cbor" or "json"');
@@ -306,6 +395,8 @@ describe('extension dependency smoke', () => {
       ['get_stake_key', [], 'json'],
       ['get_stake_key', [], 'json'],
       ['cip95_sign_data', ['addr-hex', 'payload-hex'], 'json'],
+      ['sign_tx/cardano', [{ tx: 'bulk-body-hex', partialSign: false, returnTx: false }], 'cbor'],
+      ['submit_tx', ['bulk-tx-hex'], 'cbor'],
     ]);
   });
 

@@ -6,7 +6,7 @@ import { defineMessages, IntlContext } from 'react-intl';
 import WalletAccountIcon from './WalletAccountIcon';
 import type { TokenLookupKey } from '../../api/common/lib/MultiToken';
 import { MultiToken } from '../../api/common/lib/MultiToken';
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import type { TokenRow } from '../../api/ada/lib/storage/database/primitives/tables';
 import { ReactComponent as DragIcon } from '../../assets/images/add-wallet/wallet-list/drag.inline.svg';
 import { Draggable } from 'react-beautiful-dnd';
