@@ -42,6 +42,7 @@ Before running the e2e tests, ensure you have completed the following setup:
    - `SECOND_STATIC_TEST_WALLET`
    - `SECOND_SMOKE_TEST_WALLET`
    - `SECOND_SMOKE_TEST_WALLET_FF`
+   - `RUN_QUARANTINED_DAPP_TESTS=true` (optional, runs quarantined dApp cases)
    - `CHROME_PATH` (optional, defaults to system Chrome)
 
 6. **Hardware Wallet Emulators** (for hardware wallet tests):
@@ -193,6 +194,9 @@ npm run test:ledger:one "YOUR_TEST_NAME_HERE"
 ### Running dApp Tests
 ```bash
 npm run test:dapp
+
+# Include quarantined dApp tests that depend on stale fixtures
+RUN_QUARANTINED_DAPP_TESTS=true npm run test:dapp
 
 # Run a single dApp test
 npm run test:dapp:one "YOUR_TEST_NAME_HERE"
