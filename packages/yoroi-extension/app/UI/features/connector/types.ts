@@ -1,4 +1,4 @@
-import type { WalletChecksum } from '@emurgo/cip4-js';
+import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import type { MultiToken } from '../../../api/common/lib/MultiToken';
 import type {
   IGetAllUtxosResponse,

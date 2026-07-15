@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Selenium + Mocha e2e tests for the extension",
   "type": "module",
+  "packageManager": "npm@10.9.7",
   "main": "index.js",
   "config": {
     "hooks": "./utils/hooks.mjs",
@@ -52,6 +53,7 @@
     "test:ext:transactions": "env HEADLESS=true npm run test:ext:transactions:base",
     "test:ext:one": "npm run test:base:one",
     "test:ext:smoke": "env HEADLESS=true npm run test:ext:base:tag \"_smoke_\"",
+    "test:ext:smoke:dry-run": "mocha --dry-run --require $npm_package_config_hooks $npm_package_config_extAll -g \"_smoke_\" --reporter dot",
     "test:dapp": "env ISDAPP=true npm run test:dapp:base:sequintel",
     "test:dapp:one": "npm run test:dapp:base:one",
     "test:ledger": "npm run test:ledger:base:sequintel",
@@ -59,7 +61,7 @@
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
     "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one"
   },
-  "author": "Denis Nebytov (denis@emurgo.io)",
+  "author": "Yoroi Classic Contributors",
   "license": "ISC",
   "devDependencies": {
     "@emurgo/cardano-serialization-lib-nodejs": "13.2.1",
@@ -103,5 +105,9 @@
     "wrappy": "^1.0.2",
     "ws": "^8.14.2"
   },
-  "keywords": []
+  "keywords": [],
+  "engines": {
+    "node": ">=22.22.2 <23",
+    "npm": "10.9.7"
+  }
 }
