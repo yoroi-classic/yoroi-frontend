@@ -29,7 +29,7 @@ jobs:
       (github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +59,7 @@ jobs:
       - name: Install packages
         if: steps.node-cache.outputs.cache-hit != 'true'
         run: |
-          . install-all.sh
+          ./ci-install-all.sh
 
       - name: Build the test mainnet version
         working-directory: ./packages/yoroi-extension
@@ -91,7 +91,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
     continue-on-error: true
     strategy:
@@ -131,7 +131,7 @@ jobs:
       - name: Install packages
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
-        run: npm install
+        run: npm ci
 
       - name: Download app
         uses: actions/download-artifact@v4
@@ -168,7 +168,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
 
     steps:
@@ -204,7 +204,7 @@ jobs:
       - name: Install packages
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
-        run: npm install
+        run: npm ci
 
       - name: Download app
         uses: actions/download-artifact@v4
@@ -241,7 +241,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
 
     steps:
@@ -286,7 +286,7 @@ jobs:
       - name: Install packages
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
-        run: npm install
+        run: npm ci
 
       - name: Download app
         uses: actions/download-artifact@v4
@@ -318,7 +318,7 @@ jobs:
       github.event.review.state == 'approved' ||
       contains(github.event.review.body, '/check')
       ))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [Build-Extension]
     steps:
       - name: Pull Speculos Docker image
@@ -356,7 +356,7 @@ jobs:
       - name: Install packages
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
-        run: npm install
+        run: npm ci
 
       - name: Download app
         uses: actions/download-artifact@v4

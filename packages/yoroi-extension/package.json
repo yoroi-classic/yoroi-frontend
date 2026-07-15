@@ -4,6 +4,7 @@
   "description": "Cardano ADA wallet",
   "packageManager": "npm@10.9.7",
   "scripts": {
+    "check:emurgo-dependencies": "node scripts/check-emurgo-dependency-inventory.js",
     "dev:main": "NODE_OPTIONS=--openssl-legacy-provider babel-node scripts/dev main --env mainnet",
     "dev:background": "NODE_OPTIONS=--openssl-legacy-provider babel-node scripts/dev background  --env mainnet",
     "dev:bring": "NODE_OPTIONS=--openssl-legacy-provider babel-node scripts/dev bring  --env mainnet",
