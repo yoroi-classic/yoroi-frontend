@@ -86,9 +86,12 @@ function backendNetwork() {
   };
 }
 
-function successfulJsonResponse(body) {
+function successfulJsonResponse(body, headers = {}) {
   return Promise.resolve({
     ok: true,
+    headers: {
+      get: name => headers[name.toLowerCase()] ?? null,
+    },
     json: () => Promise.resolve(body),
   });
 }
@@ -371,15 +374,19 @@ describe('extension dependency smoke', () => {
       mainnet: 'http://localhost:3010/',
       preprod: 'http://localhost:3011/',
     };
+    const serverTime = Date.parse('2026-07-16T14:30:00.000Z');
     (global: any).fetch = jest.fn(() =>
-      successfulJsonResponse({
-        version: '0.5.0',
-        network: 'mainnet',
-        provider: 'koios',
-        chain: 'stale',
-        behindSeconds: 600,
-        tip: null,
-      })
+      successfulJsonResponse(
+        {
+          version: '0.5.0',
+          network: 'preprod',
+          provider: 'koios',
+          chain: 'stale',
+          behindSeconds: 600,
+          tip: null,
+        },
+        { date: new Date(serverTime).toUTCString() }
+      )
     );
     (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
@@ -402,8 +409,55 @@ describe('extension dependency smoke', () => {
       expect(status).toEqual({
         isServerOk: true,
         isMaintenance: true,
-        serverTime: expect.any(Number),
+        serverTime,
       });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('rejects a cardano-wallet-backend deployment serving the wrong network', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    (global: any).fetch = jest.fn(() =>
+      successfulJsonResponse(
+        {
+          version: '0.5.0',
+          network: 'mainnet',
+          provider: 'koios',
+          chain: 'ok',
+          behindSeconds: 0,
+          tip: {
+            block: 3500000,
+            slot: 42000000,
+            epoch: 165,
+            hash: 'aa11bb22',
+            blockTime: 1784212200,
+          },
+        },
+        { date: 'Thu, 16 Jul 2026 14:30:00 GMT' }
+      )
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+
+      await expect(
+        fetcher.checkServerStatus({
+          backend: networks.CardanoPreprodTestnet.Backend.BackendService,
+          networkId: networks.CardanoPreprodTestnet.NetworkId,
+        })
+      ).rejects.toThrow();
     } finally {
       (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
     }
@@ -523,6 +577,8 @@ describe('extension dependency smoke', () => {
 
   test('enables local development without pointing CI or production at an unverified deployment', () => {
     expect(developmentConfig.cardanoWalletBackend.enabled).toEqual(true);
+    expect(developmentConfig.cardanoWalletBackend.mainnet).toEqual('');
+    expect(developmentConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:3010');
     expect(testConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);

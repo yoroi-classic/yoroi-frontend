@@ -77,6 +77,7 @@ export class RemoteFetcher implements IFetcher {
   checkServerStatus: ServerStatusRequest => Promise<ServerStatusResponse> = param => {
     const cardanoWalletBackend = getCardanoWalletBackendEndpoint(param.networkId);
     if (cardanoWalletBackend != null) {
+      const expectedNetwork = getNetworkById(param.networkId).NetworkFeatureName;
       return fetchAndEnsureSuccess(`${cardanoWalletBackend}/v1/status`, {
         method: 'GET',
         signal: makeTimeoutAbortSignal(CONFIG.app.walletRefreshInterval),
@@ -85,12 +86,29 @@ export class RemoteFetcher implements IFetcher {
           'yoroi-locale': this.getCurrentLocale(),
         },
       })
-        .then(response => response.json())
-        .then(status => ({
-          isServerOk: true,
-          isMaintenance: status.chain !== 'ok',
-          serverTime: Date.now(),
-        }))
+        .then(async response => {
+          const status = await response.json();
+          if (status.network !== expectedNetwork) {
+            throw new Error(`cardano-wallet-backend serves ${String(status.network)}, expected ${expectedNetwork}`);
+          }
+
+          const dateHeader = response.headers.get('date');
+          const headerTime = dateHeader == null ? Number.NaN : Date.parse(dateHeader);
+          const derivedTime =
+            status.tip?.blockTime != null && Number.isFinite(status.behindSeconds)
+              ? (status.tip.blockTime + status.behindSeconds) * 1000
+              : Number.NaN;
+          const serverTime = Number.isFinite(headerTime) ? headerTime : derivedTime;
+          if (!Number.isFinite(serverTime)) {
+            throw new Error('cardano-wallet-backend status has no usable server time');
+          }
+
+          return {
+            isServerOk: true,
+            isMaintenance: status.chain !== 'ok',
+            serverTime,
+          };
+        })
         .catch(error => {
           Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.checkServerStatus)} v1 error: ` + stringifyError(error));
           throw new ServerStatusError();

@@ -48,7 +48,7 @@
   },
   "cardanoWalletBackend": {
     "enabled": true,
-    "mainnet": "http://localhost:3010",
+    "mainnet": "",
     "preprod": "http://localhost:3010"
   },
   "tokenMetadata": {
