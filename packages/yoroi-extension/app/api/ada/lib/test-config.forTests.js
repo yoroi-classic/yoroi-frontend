@@ -49,6 +49,11 @@ const CONFIG: ConfigType = {
     zeroMainnet: '',
     zeroPreprod: '',
   },
+  cardanoWalletBackend: {
+    enabled: false,
+    mainnet: '',
+    preprod: '',
+  },
   tokenMetadata: {
     mainnet: '',
     preprod: '',

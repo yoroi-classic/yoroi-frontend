@@ -41,6 +41,7 @@ import type {
 } from './types';
 
 import type { IFetcher } from './IFetcher.types';
+import type { NetworkRow } from '../storage/database/primitives/tables';
 
 import { Logger, stringifyError } from '../../../../utils/logging';
 import {
@@ -66,6 +67,35 @@ import { makeTimeoutAbortSignal, fetchAndEnsureSuccess, type ServerError } from 
 
 // populated by ConfigWebpackPlugin
 declare var CONFIG: ConfigType;
+
+type CardanoWalletBackendTipResponse = {|
+  block: number,
+  slot: number,
+  epoch: number,
+  hash: string,
+  blockTime: number,
+|};
+
+export const cardanoWalletTipToBestBlock = (tip: CardanoWalletBackendTipResponse): BestBlockResponse => ({
+  height: tip.block,
+  epoch: tip.epoch,
+  slot: tip.slot,
+  hash: tip.hash,
+});
+
+const withoutTrailingSlash = (url: string): string => url.replace(/\/+$/, '');
+
+const getCardanoWalletBackendService = (network: $ReadOnly<NetworkRow>): null | string => {
+  if (!CONFIG.cardanoWalletBackend.enabled) return null;
+  let backendService = '';
+  if (network.NetworkFeatureName === 'mainnet') {
+    backendService = CONFIG.cardanoWalletBackend.mainnet;
+  } else if (network.NetworkFeatureName === 'preprod') {
+    backendService = CONFIG.cardanoWalletBackend.preprod;
+  }
+  if (backendService === '') return null;
+  return backendService;
+};
 
 export const sendTx: ({|
   body: SignedRequest | SignedBatchRequest,
@@ -335,6 +365,24 @@ export class RemoteFetcher implements IFetcher {
   };
 
   getBestBlock: BestBlockRequest => Promise<BestBlockResponse> = body => {
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService != null) {
+      return fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/chain/tip`, {
+        method: 'GET',
+        signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+        headers: {
+          'yoroi-version': this.getLastLaunchVersion(),
+          'yoroi-locale': this.getCurrentLocale(),
+        },
+      })
+        .then(response => response.json())
+        .then(cardanoWalletTipToBestBlock)
+        .catch(error => {
+          Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getBestBlock)} v1 error: ` + stringifyError(error));
+          throw new GetBestBlockError();
+        });
+    }
+
     const { BackendService } = body.network.Backend;
     if (BackendService == null) throw new Error(`${nameof(this.getBestBlock)} missing backend url`);
     return fetchAndEnsureSuccess(`${BackendService}/api/v2/bestblock`, {

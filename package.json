@@ -4,6 +4,7 @@
   "packageManager": "npm@10.9.7",
   "scripts": {
     "check:toolchain": "node scripts/check-toolchain.js",
+    "test:toolchain": "node --test scripts/check-toolchain.test.js",
     "eslint": "lerna run eslint --stream",
     "flow": "lerna run flow --stream",
     "tsc": "lerna run tsc --stream",
