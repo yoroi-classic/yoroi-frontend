@@ -78,9 +78,6 @@ export class RemoteFetcher implements IFetcher {
     const cardanoWalletBackend = getCardanoWalletBackendEndpoint(param.networkId);
     if (cardanoWalletBackend != null) {
       const expectedNetwork = getNetworkById(param.networkId).NetworkFeatureName;
-      if (expectedNetwork !== 'mainnet' && expectedNetwork !== 'preprod') {
-        throw new Error(`unsupported cardano-wallet-backend network ${String(expectedNetwork)}`);
-      }
       return fetchAndEnsureSuccess(`${cardanoWalletBackend}/v1/status`, {
         method: 'GET',
         signal: makeTimeoutAbortSignal(CONFIG.app.walletRefreshInterval),

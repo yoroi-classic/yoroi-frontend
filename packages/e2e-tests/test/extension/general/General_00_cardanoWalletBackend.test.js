@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import driversPoolsManager from '../../../utils/driversPool.js';
 
 const backendUrl = process.env.CARDANO_WALLET_BACKEND_URL;
+const expectedNetwork = process.env.CARDANO_NETWORK || 'preprod';
 
 describe('Cardano wallet backend integration _smoke_', function () {
   this.timeout(60_000);
@@ -40,7 +41,7 @@ describe('Cardano wallet backend integration _smoke_', function () {
       expect(response.status).to.equal(200);
       expect(response.ok).to.equal(true);
       if (endpoint === '/v1/status') {
-        expect(response.body.network).to.equal('preprod');
+        expect(response.body.network).to.equal(expectedNetwork);
         expect(response.body.chain).to.equal('ok');
         expect(response.body.tip.block).to.be.a('number').and.greaterThan(0);
       } else {
