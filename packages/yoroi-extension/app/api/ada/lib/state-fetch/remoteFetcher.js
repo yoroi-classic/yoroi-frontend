@@ -106,6 +106,23 @@ export const sendTx: ({|
   // $FlowIgnore[prop-missing]
   const txs: Array<{| encodedTx: Uint8Array, id: string |}> = body.txs ?? [body];
   if (txs.length === 0) throw new Error('At least one transaction is required for submit');
+  const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+  if (cardanoWalletBackendService != null && txs.length === 1) {
+    return fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/tx/submit`, {
+      method: 'POST',
+      signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+      body: JSON.stringify({ cbor: bytesToHex(txs[0].encodedTx) }),
+      headers: {
+        'content-type': 'application/json',
+        'yoroi-version': lastLaunchVersion,
+        'yoroi-locale': currentLocale,
+      },
+    })
+      .then(response => response.json())
+      .then(data => ({ txId: data.txHash }))
+      .catch(error => handleSendTxError(error, errorHandler));
+  }
+
   const signedTx64: Array<string> = txs.map(t => bytesToBase64(t.encodedTx));
   const { BackendService } = body.network.Backend;
   if (BackendService == null) throw new Error(`${nameof(sendTx)} missing backend url`);
@@ -122,20 +139,22 @@ export const sendTx: ({|
     .then(() => ({
       txId: forceNonNull(last(txs)).id,
     }))
-    .catch(error => {
-      if (errorHandler != null) {
-        errorHandler(error);
-      }
-      const err = {
-        msg: error.message,
-        res: error.response?.data || null,
-      };
-      Logger.error(`${nameof(RemoteFetcher)}::${nameof(sendTx)} error: ${stringifyError(err)}`);
-      if (JSON.stringify(error.response?.data ?? '').includes('InvalidWitnessesUTXOW')) {
-        throw new InvalidWitnessError();
-      }
-      throw new SendTransactionApiError();
-    });
+    .catch(error => handleSendTxError(error, errorHandler));
+};
+
+const handleSendTxError = (error: ServerError, errorHandler?: ServerError => void): Promise<SignedResponse> => {
+  if (errorHandler != null) {
+    errorHandler(error);
+  }
+  const err = {
+    msg: error.message,
+    res: error.response?.data || null,
+  };
+  Logger.error(`${nameof(RemoteFetcher)}::${nameof(sendTx)} error: ${stringifyError(err)}`);
+  if (JSON.stringify(error.response?.data ?? '').includes('InvalidWitnessesUTXOW')) {
+    throw new InvalidWitnessError();
+  }
+  throw new SendTransactionApiError();
 };
 
 export class RemoteFetcher implements IFetcher {

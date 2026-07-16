@@ -47,7 +47,7 @@
     "zeroPreprod": "http://localhost:8082"
   },
   "cardanoWalletBackend": {
-    "enabled": false,
+    "enabled": true,
     "mainnet": "http://localhost:3010",
     "preprod": "http://localhost:3010"
   },

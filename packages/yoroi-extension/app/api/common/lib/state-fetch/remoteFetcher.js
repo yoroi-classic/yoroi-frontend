@@ -40,6 +40,18 @@ function getEndpoint(networkId: number): string {
   return endpoint;
 }
 
+function getCardanoWalletBackendEndpoint(networkId: number): null | string {
+  if (!CONFIG.cardanoWalletBackend.enabled) return null;
+  const network = getNetworkById(networkId);
+  const endpoint =
+    network.NetworkFeatureName === 'mainnet'
+      ? CONFIG.cardanoWalletBackend.mainnet
+      : network.NetworkFeatureName === 'preprod'
+        ? CONFIG.cardanoWalletBackend.preprod
+        : '';
+  return endpoint === '' ? null : endpoint.replace(/\/+$/, '');
+}
+
 /**
  * Makes calls to Yoroi backend service
  * https://github.com/Emurgo/yoroi-backend-service/
@@ -63,6 +75,28 @@ export class RemoteFetcher implements IFetcher {
   }
 
   checkServerStatus: ServerStatusRequest => Promise<ServerStatusResponse> = param => {
+    const cardanoWalletBackend = getCardanoWalletBackendEndpoint(this.getCurrentNetworkId());
+    if (cardanoWalletBackend != null) {
+      return fetchAndEnsureSuccess(`${cardanoWalletBackend}/v1/status`, {
+        method: 'GET',
+        signal: makeTimeoutAbortSignal(CONFIG.app.walletRefreshInterval),
+        headers: {
+          'yoroi-version': `${this.getPlatform()} / ${this.getLastLaunchVersion()}`,
+          'yoroi-locale': this.getCurrentLocale(),
+        },
+      })
+        .then(response => response.json())
+        .then(status => ({
+          isServerOk: true,
+          isMaintenance: status.chain !== 'ok',
+          serverTime: Date.now(),
+        }))
+        .catch(error => {
+          Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.checkServerStatus)} v1 error: ` + stringifyError(error));
+          throw new ServerStatusError();
+        });
+    }
+
     const backendUrl = param.backend || getEndpoint(this.getCurrentNetworkId());
     return fetchAndEnsureSuccess(`${backendUrl}/api/status`, {
       method: 'GET',
