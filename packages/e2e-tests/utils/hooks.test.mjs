@@ -27,9 +27,9 @@ const runFixture = async fixture => {
 
 const assertSummary = (result, { exitCode, passing = 0, pending = 0, failing = 0 }) => {
   assert.equal(result.exitCode, exitCode, result.stderr);
-  assert.match(result.stdout, new RegExp(`${passing} passing`));
-  if (pending > 0) assert.match(result.stdout, new RegExp(`${pending} pending`));
-  if (failing > 0) assert.match(result.stdout, new RegExp(`${failing} failing`));
+  assert.match(result.stdout, new RegExp(`\\b${passing} passing\\b`));
+  if (pending > 0) assert.match(result.stdout, new RegExp(`\\b${pending} pending\\b`));
+  if (failing > 0) assert.match(result.stdout, new RegExp(`\\b${failing} failing\\b`));
 };
 
 test('a declaration-time it.skip does not hide a live sibling', async () => {
