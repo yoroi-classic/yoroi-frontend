@@ -43,7 +43,7 @@ const getChromeBuilder = () => {
     })
     .addArguments('disable-infobars')
     .addArguments('--enable-clipboard');
-  if (chromeBin) {
+  if (chromeBin && !process.env.SELENIUM_REMOTE_URL) {
     chromeOpts.setChromeBinaryPath(chromeBin);
   }
   if (isHeadless()) {
