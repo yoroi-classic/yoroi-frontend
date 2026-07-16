@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { YoroiRemoteConfig } from '../../types/yoroi';
 import { YOROI_DEV_REMOTE_CONFIG_URL, YOROI_PROD_REMOTE_CONFIG_URL } from '../constants';
 import { environment } from '../../../environment';
-import { getYoroiRemoteConfigUrl } from './yoroiRemoteConfigUrl';
+import { getYoroiRemoteConfigUrl } from '../../../utils/yoroiRemoteConfigUrl';
 
 declare const CONFIG: {
   cardanoWalletBackend: {

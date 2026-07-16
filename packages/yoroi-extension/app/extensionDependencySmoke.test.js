@@ -14,7 +14,7 @@ import { MultiToken } from './api/common/lib/MultiToken';
 import { byronAddrToHex } from './api/ada/lib/storage/bridge/utils';
 import { Bip44DerivationLevels } from './api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { newAdaUnsignedTx, signTransaction } from './api/ada/transactions/shelley/transactions';
-import { getYoroiRemoteConfigUrl } from './UI/common/hooks/yoroiRemoteConfigUrl';
+import { getYoroiRemoteConfigUrl } from './utils/yoroiRemoteConfigUrl';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
