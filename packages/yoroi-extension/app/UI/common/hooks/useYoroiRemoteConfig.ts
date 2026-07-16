@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { YoroiRemoteConfig } from '../../types/yoroi';
 import { YOROI_DEV_REMOTE_CONFIG_URL, YOROI_PROD_REMOTE_CONFIG_URL } from '../constants';
 import { environment } from '../../../environment';
+import { getYoroiRemoteConfigUrl } from './yoroiRemoteConfigUrl';
 
 declare const CONFIG: {
   cardanoWalletBackend: {
@@ -11,19 +12,14 @@ declare const CONFIG: {
   };
 };
 
-type CardanoWalletBackendConfig = typeof CONFIG.cardanoWalletBackend;
-
-export const getYoroiRemoteConfigUrl = (isDev: boolean, cardanoWalletBackend: CardanoWalletBackendConfig) => {
-  const backend = isDev ? cardanoWalletBackend.preprod : cardanoWalletBackend.mainnet;
-  if (cardanoWalletBackend.enabled && backend !== '') {
-    return `${backend.replace(/\/+$/, '')}/v1/config`;
-  }
-  return isDev ? YOROI_DEV_REMOTE_CONFIG_URL : YOROI_PROD_REMOTE_CONFIG_URL;
-};
-
 export const useYoroiRemoteConfig = () => {
   const isDev = environment.isDev();
-  const remoteConfigUrl = getYoroiRemoteConfigUrl(isDev, CONFIG.cardanoWalletBackend);
+  const remoteConfigUrl = getYoroiRemoteConfigUrl(
+    isDev,
+    CONFIG.cardanoWalletBackend,
+    YOROI_DEV_REMOTE_CONFIG_URL,
+    YOROI_PROD_REMOTE_CONFIG_URL
+  );
 
   return useQuery<YoroiRemoteConfig>({
     queryKey: ['yoroiRemoteConfig', remoteConfigUrl],

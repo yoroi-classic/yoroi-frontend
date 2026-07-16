@@ -14,7 +14,7 @@ import { MultiToken } from './api/common/lib/MultiToken';
 import { byronAddrToHex } from './api/ada/lib/storage/bridge/utils';
 import { Bip44DerivationLevels } from './api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { newAdaUnsignedTx, signTransaction } from './api/ada/transactions/shelley/transactions';
-import { getYoroiRemoteConfigUrl } from './UI/common/hooks/useYoroiRemoteConfig';
+import { getYoroiRemoteConfigUrl } from './UI/common/hooks/yoroiRemoteConfigUrl';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
@@ -480,19 +480,41 @@ describe('extension dependency smoke', () => {
 
   test('routes remote config through the selected cardano-wallet-backend deployment', () => {
     expect(
-      getYoroiRemoteConfigUrl(true, {
-        enabled: true,
-        mainnet: 'https://mainnet.example',
-        preprod: 'https://preprod.example/',
-      })
+      getYoroiRemoteConfigUrl(
+        true,
+        {
+          enabled: true,
+          mainnet: 'https://mainnet.example',
+          preprod: 'https://preprod.example/',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
     ).toEqual('https://preprod.example/v1/config');
     expect(
-      getYoroiRemoteConfigUrl(false, {
-        enabled: true,
-        mainnet: 'https://mainnet.example/',
-        preprod: 'https://preprod.example',
-      })
+      getYoroiRemoteConfigUrl(
+        false,
+        {
+          enabled: true,
+          mainnet: 'https://mainnet.example/',
+          preprod: 'https://preprod.example',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
     ).toEqual('https://mainnet.example/v1/config');
+    expect(
+      getYoroiRemoteConfigUrl(
+        false,
+        {
+          enabled: false,
+          mainnet: 'https://mainnet.example/',
+          preprod: 'https://preprod.example',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
+    ).toEqual('https://legacy.example/prod.json');
   });
 
   test('enables local development without pointing CI or production at an unverified deployment', () => {
