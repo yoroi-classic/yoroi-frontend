@@ -14,6 +14,11 @@ on:
           - dapp
           - trezor
           - ledger
+      run_quarantined_dapp_tests:
+        description: 'Run quarantined DApp cases that depend on stale fixtures'
+        required: false
+        default: false
+        type: boolean
   pull_request_review:
     types: [submitted]
 
@@ -252,6 +257,7 @@ jobs:
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
+          RUN_QUARANTINED_DAPP_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_quarantined_dapp_tests == 'true' }}
         run: xvfb-run -a -e /dev/stdout -s "-screen 0 1600x900x24" npm run test:dapp
 
       - name: Archive tests screenshots and logs
