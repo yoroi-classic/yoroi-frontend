@@ -28,10 +28,18 @@ const runBeforeEach = async ({ parentTests, grandParentTests = [] }) => {
 
 test('does not skip a live sibling after an intentionally pending test', async () => {
   const result = await runBeforeEach({
-    parentTests: [{ state: 'pending' }, { state: undefined }],
+    parentTests: [{ state: 'pending', fn: undefined }, { state: undefined }],
   });
 
   assert.deepEqual(result, { completed: true, skipped: false });
+});
+
+test('skips subsequent tests after a runtime precondition skip', async () => {
+  const result = await runBeforeEach({
+    parentTests: [{ state: 'pending', fn() {} }, { state: undefined }],
+  });
+
+  assert.deepEqual(result, { completed: true, skipped: true });
 });
 
 test('still skips subsequent tests after a failed sibling', async () => {

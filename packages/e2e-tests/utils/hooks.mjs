@@ -2,6 +2,8 @@ import driversPoolsManager from './driversPool.js';
 import { oneMinute } from '../helpers/timeConstants.js';
 import { DRIVERS_AMOUNT } from '../helpers/constants.js';
 
+const blocksFollowingTests = test => test.state === 'failed' || (test.state === 'pending' && test.fn != null);
+
 export const mochaHooks = {
   async beforeAll() {
     let attempts = 0;
@@ -32,11 +34,11 @@ export const mochaHooks = {
   async beforeEach(done) {
     // Check for nested descibe sections in case if any tests failed in a main describe
     const grandParent = this.currentTest.parent.parent;
-    if (grandParent?.tests.some(test => test.state === 'failed')) {
+    if (grandParent?.tests.some(blocksFollowingTests)) {
       this.skip();
     }
     // Skip subsequent tests if the describe block failed
-    if (this.currentTest.parent.tests.some(test => test.state === 'failed')) {
+    if (this.currentTest.parent.tests.some(blocksFollowingTests)) {
       this.skip();
     }
     done();
