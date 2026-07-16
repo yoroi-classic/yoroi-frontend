@@ -89,7 +89,7 @@ export class RemoteFetcher implements IFetcher {
         .then(async response => {
           const status = await response.json();
           if (status.network !== expectedNetwork) {
-            throw new Error(`cardano-wallet-backend serves ${String(status.network)}, expected ${expectedNetwork}`);
+            throw new Error(`cardano-wallet-backend serves ${String(status.network)}, expected ${String(expectedNetwork)}`);
           }
 
           const dateHeader = response.headers.get('date');
