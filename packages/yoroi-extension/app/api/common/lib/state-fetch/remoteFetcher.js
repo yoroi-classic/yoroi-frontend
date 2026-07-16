@@ -75,7 +75,7 @@ export class RemoteFetcher implements IFetcher {
   }
 
   checkServerStatus: ServerStatusRequest => Promise<ServerStatusResponse> = param => {
-    const cardanoWalletBackend = getCardanoWalletBackendEndpoint(this.getCurrentNetworkId());
+    const cardanoWalletBackend = getCardanoWalletBackendEndpoint(param.networkId);
     if (cardanoWalletBackend != null) {
       return fetchAndEnsureSuccess(`${cardanoWalletBackend}/v1/status`, {
         method: 'GET',

@@ -20,6 +20,7 @@ import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
 import developmentConfig from '../config/development.json';
 import testConfig from '../config/test.json';
+import extensionPackage from '../package.json';
 
 const SMOKE_MNEMONIC = 'prevent company field green slot measure chief hero apple task eagle sunset endorse dress seed';
 
@@ -320,7 +321,7 @@ describe('extension dependency smoke', () => {
     (global: any).CONFIG.cardanoWalletBackend = {
       enabled: true,
       mainnet: 'http://localhost:3010/',
-      preprod: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
     };
     const fetchFixture = {
       block: 3500000,
@@ -368,7 +369,7 @@ describe('extension dependency smoke', () => {
     (global: any).CONFIG.cardanoWalletBackend = {
       enabled: true,
       mainnet: 'http://localhost:3010/',
-      preprod: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
     };
     (global: any).fetch = jest.fn(() =>
       successfulJsonResponse({
@@ -389,10 +390,13 @@ describe('extension dependency smoke', () => {
         () => 'chrome',
         () => CARDANO_MAINNET.NetworkId
       );
-      const status = await fetcher.checkServerStatus({ backend: 'http://localhost:18082' });
+      const status = await fetcher.checkServerStatus({
+        backend: networks.CardanoPreprodTestnet.Backend.BackendService,
+        networkId: networks.CardanoPreprodTestnet.NetworkId,
+      });
 
       expect((global: any).fetch).toHaveBeenCalledWith(
-        'http://localhost:3010/v1/status',
+        'http://localhost:3011/v1/status',
         expect.objectContaining({ method: 'GET' })
       );
       expect(status).toEqual({
@@ -522,6 +526,8 @@ describe('extension dependency smoke', () => {
     expect(testConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(extensionPackage.scripts['dev:wallet-backend']).toEqual('CARDANO_NETWORK=development npm run dev:stable');
+    expect(extensionPackage.scripts['dev:main']).toMatch(/CARDANO_NETWORK.*mainnet/);
   });
 
   test('builds and signs a local Cardano transaction fixture', async () => {
