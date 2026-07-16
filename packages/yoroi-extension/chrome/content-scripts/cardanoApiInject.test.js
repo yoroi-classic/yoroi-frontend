@@ -208,6 +208,17 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  test('signTxs rejects a non-boolean partialSign before prompting for any transaction', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, { cbor: 'tx-1', partialSign: 'true' }])).rejects.toEqual({
+      index: 1,
+      info: '.cip103.signTxs transaction request partialSign must be a boolean! (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('signTxs rejects non-spec tx requests', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);

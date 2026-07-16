@@ -208,6 +208,9 @@
       if (typeof tx !== 'string') {
         throw new Error('.cip103.signTxs transaction request requires a cbor string!');
       }
+      if (txRequest.partialSign !== undefined && typeof txRequest.partialSign !== 'boolean') {
+        throw new Error('.cip103.signTxs transaction request partialSign must be a boolean!');
+      }
       return {
         tx,
         partialSign: txRequest.partialSign === true,
