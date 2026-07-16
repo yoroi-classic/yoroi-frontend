@@ -1,60 +1,58 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import test from 'node:test';
-import { mochaHooks } from './hooks.mjs';
 
-const runBeforeEach = async ({ parentTests, grandParentTests = [] }) => {
-  let skipped = false;
-  let completed = false;
-  const context = {
-    currentTest: {
-      parent: {
-        tests: parentTests,
-        parent: {
-          tests: grandParentTests,
-        },
-      },
-    },
-    skip() {
-      skipped = true;
-    },
-  };
+const execFileAsync = promisify(execFile);
+const mochaBin = new URL('../node_modules/mocha/bin/mocha.js', import.meta.url);
+const rootHooks = new URL('./fixtures/hooks/root-hooks.mjs', import.meta.url);
+const fixtures = new URL('./fixtures/hooks/', import.meta.url);
 
-  await mochaHooks.beforeEach.call(context, () => {
-    completed = true;
-  });
-
-  return { completed, skipped };
+const runFixture = async fixture => {
+  try {
+    const result = await execFileAsync(
+      process.execPath,
+      [mochaBin.pathname, '--require', rootHooks.pathname, new URL(fixture, fixtures).pathname, '--reporter', 'dot'],
+      { encoding: 'utf8' }
+    );
+    return { ...result, exitCode: 0 };
+  } catch (error) {
+    return {
+      exitCode: error.code,
+      stderr: error.stderr,
+      stdout: error.stdout,
+    };
+  }
 };
 
-test('does not skip a live sibling after an intentionally pending test', async () => {
-  const result = await runBeforeEach({
-    parentTests: [{ state: 'pending', fn: undefined }, { state: undefined }],
-  });
+const assertSummary = (result, { exitCode, passing = 0, pending = 0, failing = 0 }) => {
+  assert.equal(result.exitCode, exitCode, result.stderr);
+  assert.match(result.stdout, new RegExp(`${passing} passing`));
+  if (pending > 0) assert.match(result.stdout, new RegExp(`${pending} pending`));
+  if (failing > 0) assert.match(result.stdout, new RegExp(`${failing} failing`));
+};
 
-  assert.deepEqual(result, { completed: true, skipped: false });
+test('a declaration-time it.skip does not hide a live sibling', async () => {
+  const result = await runFixture('declaration-skip.mjs');
+  assertSummary(result, { exitCode: 0, passing: 1, pending: 1 });
 });
 
-test('skips subsequent tests after a runtime precondition skip', async () => {
-  const result = await runBeforeEach({
-    parentTests: [{ state: 'pending', fn() {} }, { state: undefined }],
-  });
-
-  assert.deepEqual(result, { completed: true, skipped: true });
+test('a runtime this.skip still blocks following siblings', async () => {
+  const result = await runFixture('runtime-skip.mjs');
+  assertSummary(result, { exitCode: 0, pending: 2 });
 });
 
-test('still skips subsequent tests after a failed sibling', async () => {
-  const result = await runBeforeEach({
-    parentTests: [{ state: 'failed' }, { state: undefined }],
-  });
-
-  assert.deepEqual(result, { completed: true, skipped: true });
+test('a beforeEach precondition skip still blocks following siblings', async () => {
+  const result = await runFixture('before-each-skip.mjs');
+  assertSummary(result, { exitCode: 0, pending: 2 });
 });
 
-test('still skips nested tests after a failed parent test', async () => {
-  const result = await runBeforeEach({
-    parentTests: [{ state: undefined }],
-    grandParentTests: [{ state: 'failed' }],
-  });
+test('a failed sibling still blocks following siblings', async () => {
+  const result = await runFixture('failed-sibling.mjs');
+  assertSummary(result, { exitCode: 1, pending: 1, failing: 1 });
+});
 
-  assert.deepEqual(result, { completed: true, skipped: true });
+test('a failed parent test still blocks nested tests', async () => {
+  const result = await runFixture('failed-parent.mjs');
+  assertSummary(result, { exitCode: 1, pending: 1, failing: 1 });
 });
