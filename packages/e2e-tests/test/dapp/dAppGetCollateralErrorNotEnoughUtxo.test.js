@@ -80,7 +80,11 @@ describe('dApp, getCollateral, error, empty wallet', function () {
   });
 
   after(async function () {
-    await walletCommonPage.closeBrowser();
-    mockServer.close();
+    if (walletCommonPage) {
+      await walletCommonPage.closeBrowser();
+    }
+    if (mockServer) {
+      mockServer.close();
+    }
   });
 });

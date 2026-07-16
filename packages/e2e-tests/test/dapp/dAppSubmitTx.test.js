@@ -166,7 +166,11 @@ describe('dApp, submitTx', function () {
   });
 
   after(async function () {
-    await dappSingTxPage.closeBrowser();
-    mockServer.close();
+    if (dappSingTxPage) {
+      await dappSingTxPage.closeBrowser();
+    }
+    if (mockServer) {
+      mockServer.close();
+    }
   });
 });

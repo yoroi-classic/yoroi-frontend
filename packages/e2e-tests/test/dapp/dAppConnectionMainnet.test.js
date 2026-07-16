@@ -85,7 +85,11 @@ describe('dApp, mainnet, connection in extension', function () {
   });
 
   after(async function () {
-    await connectorTabPage.closeBrowser();
-    mockServer.close();
+    if (connectorTabPage) {
+      await connectorTabPage.closeBrowser();
+    }
+    if (mockServer) {
+      mockServer.close();
+    }
   });
 });
