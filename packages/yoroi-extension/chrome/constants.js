@@ -10,13 +10,13 @@ export function getCardanoWalletBackendOrigins(
 ): Array<string> {
   if (cardanoWalletBackend?.enabled !== true) return [];
 
-  return Array.from(
-    new Set(
-      [cardanoWalletBackend.mainnet, cardanoWalletBackend.preprod]
-        .filter(endpoint => endpoint != null && endpoint !== '')
-        .map(endpoint => new URL(endpoint).origin)
-    )
-  );
+  const origins = new Set();
+  for (const endpoint of [cardanoWalletBackend.mainnet, cardanoWalletBackend.preprod]) {
+    if (endpoint != null && endpoint !== '') {
+      origins.add(new URL(endpoint).origin);
+    }
+  }
+  return Array.from(origins);
 }
 
 export function genCSP(request: {|
