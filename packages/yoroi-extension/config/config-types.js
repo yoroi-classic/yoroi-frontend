@@ -9,6 +9,7 @@ export type ConfigType = {|
   fcm: FCMConfig,
   notifications: NotificationsConfigType,
   yoroiBackend: YoroiBackendType,
+  cardanoWalletBackend: CardanoWalletBackendType,
   tokenMetadata: TokenMetadataType,
 |};
 
@@ -17,6 +18,12 @@ export type YoroiBackendType = {|
   zeroMainnet: string,
   preprod: string,
   zeroPreprod: string,
+|};
+
+export type CardanoWalletBackendType = {|
+  enabled: boolean,
+  mainnet: string,
+  preprod: string,
 |};
 
 export type TokenMetadataType = {|
