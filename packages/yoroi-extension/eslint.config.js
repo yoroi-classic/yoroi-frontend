@@ -226,7 +226,9 @@ module.exports = defineConfig([
         ecmaFeatures: {
           jsx: true,
         },
+        project: './tsconfig.json',
         sourceType: 'module',
+        tsconfigRootDir: __dirname,
       },
     },
     plugins: {
@@ -241,8 +243,8 @@ module.exports = defineConfig([
       'no-unused-vars': 'off',
       'no-dupe-class-members': 'off',
       'no-redeclare': 'off',
-      // Several TypeScript islands are outside tsconfig today. Issue #83
-      // tracks bringing them under typed linting and enabling this rule.
+      // Issue #83 tracks enabling the TypeScript recommended rules after the
+      // existing unused-symbol baseline is cleaned up.
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },
