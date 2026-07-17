@@ -213,6 +213,7 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const api = loadApi(rpc);
 
     await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, { cbor: 'tx-1', partialSign: 'true' }])).rejects.toEqual({
+      code: -1,
       index: 1,
       info: '.cip103.signTxs transaction request partialSign must be a boolean! (transaction index 1)',
     });

@@ -1,5 +1,6 @@
 (() => {
   const MAX_CIP103_TXS = 20;
+  const API_INVALID_REQUEST = -1;
 
   class CardanoAuth {
     constructor(auth, rpc) {
@@ -209,13 +210,17 @@
         throw new Error('.cip103.signTxs transaction request requires a cbor string!');
       }
       if (txRequest.partialSign !== undefined && typeof txRequest.partialSign !== 'boolean') {
-        throw new Error('.cip103.signTxs transaction request partialSign must be a boolean!');
+        throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs transaction request partialSign must be a boolean!');
       }
       return {
         tx,
         partialSign: txRequest.partialSign === true,
         returnTx: false,
       };
+    }
+
+    static _cip103InvalidRequest(info) {
+      return { code: API_INVALID_REQUEST, info };
     }
 
     getExtensions() {
