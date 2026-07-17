@@ -15,6 +15,7 @@ import { byronAddrToHex } from './api/ada/lib/storage/bridge/utils';
 import { Bip44DerivationLevels } from './api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { newAdaUnsignedTx, signTransaction } from './api/ada/transactions/shelley/transactions';
 import { getYoroiRemoteConfigUrl } from './utils/yoroiRemoteConfigUrl';
+import { SendTransactionApiError } from './api/common/errors';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
@@ -499,14 +500,14 @@ describe('extension dependency smoke', () => {
     }
   });
 
-  test('keeps batch submission on the atomic legacy endpoint', async () => {
+  test('fails closed without a configured cardano-wallet-backend', async () => {
     const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
     (global: any).CONFIG.cardanoWalletBackend = {
-      enabled: true,
+      enabled: false,
       mainnet: 'http://localhost:3010/',
       preprod: 'http://localhost:3010/',
     };
-    (global: any).fetch = jest.fn(() => successfulJsonResponse({}));
+    (global: any).fetch = jest.fn();
     (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
     try {
@@ -515,22 +516,14 @@ describe('extension dependency smoke', () => {
         () => 'en-US',
         () => 'chrome'
       );
-      const result = await fetcher.sendTx({
-        network: backendNetwork(),
-        txs: [
-          { id: 'first', encodedTx: new Uint8Array([0x84, 0x01]) },
-          { id: 'second', encodedTx: new Uint8Array([0x84, 0x02]) },
-        ],
-      });
-
-      expect((global: any).fetch).toHaveBeenCalledWith(
-        'http://localhost:18082/api/txs/signed',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ signedTx: ['hAE=', 'hAI='] }),
+      await expect(
+        fetcher.sendTx({
+          network: backendNetwork(),
+          id: 'tx-id',
+          encodedTx: new Uint8Array([0x84, 0x01]),
         })
-      );
-      expect(result).toEqual({ txId: 'second' });
+      ).rejects.toBeInstanceOf(SendTransactionApiError);
+      expect((global: any).fetch).not.toHaveBeenCalled();
     } finally {
       (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
     }
