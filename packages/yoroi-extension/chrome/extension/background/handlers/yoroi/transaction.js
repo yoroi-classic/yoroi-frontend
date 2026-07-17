@@ -108,12 +108,8 @@ export const SignAndBroadcastTransaction: HandlerType<
 
 export type BroadcastTransactionRequestType = {|
   publicDeriverId: number,
-  ...({|
-    signedTxHexArray: Array<string>,
-  |} | {|
-    addressedUtxos?: Array<CardanoAddressedUtxo>,
-    signedTxHex: string,
-  |}),
+  addressedUtxos?: Array<CardanoAddressedUtxo>,
+  signedTxHex: string,
   networkId?: number,
 |};
 
@@ -125,22 +121,11 @@ export const BroadcastTransaction: HandlerType<
 
   handle: async (request) => {
     const publicDeriver = await getPublicDeriverById(request.publicDeriverId);
-    let txs;
-    let addressedUtxoArray;
-    if (request.signedTxHexArray) {
-      txs = request.signedTxHexArray.map(txHex => ({
-        id: transactionHexToHash(txHex),
-        encodedTx: hexToBytes(txHex),
-      }));
-      addressedUtxoArray = [];
-    } else {
-      const { signedTxHex, addressedUtxos } = request;
-      if (typeof signedTxHex !== 'string') {
-        throw new Error('unexpected missing `signedTxHex` in request');
-      }
-      txs = [{ id: transactionHexToHash(signedTxHex), encodedTx: hexToBytes(signedTxHex) }];
-      addressedUtxoArray = [addressedUtxos];
+    const { signedTxHex, addressedUtxos } = request;
+    if (typeof signedTxHex !== 'string') {
+      throw new Error('unexpected missing `signedTxHex` in request');
     }
+    const tx = { id: transactionHexToHash(signedTxHex), encodedTx: hexToBytes(signedTxHex) };
 
     const walletNetwork = publicDeriver.getParent().getNetworkInfo();
 
@@ -148,20 +133,14 @@ export const BroadcastTransaction: HandlerType<
     try {
       await stateFetcher.sendTx({
         network: typeof request.networkId === 'number' ? getNetworkById(request.networkId) : walletNetwork,
-        txs,
+        ...tx,
       });
       if (typeof request.networkId === 'number' && walletNetwork.NetworkId !== request.networkId) {
         // this is Ledger wallet Byron balance transfer
         return null;
       }
       try {
-        for (let i = 0; i < txs.length; i++) {
-          await connectorRecordSubmittedCardanoTransaction(
-            publicDeriver,
-            bytesToHex(txs[i].encodedTx),
-            addressedUtxoArray[i]
-          );
-        }
+        await connectorRecordSubmittedCardanoTransaction(publicDeriver, bytesToHex(tx.encodedTx), addressedUtxos);
       } catch (_error) {
         // ignore
       }

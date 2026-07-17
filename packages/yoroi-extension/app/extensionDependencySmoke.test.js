@@ -529,6 +529,17 @@ describe('extension dependency smoke', () => {
     }
   });
 
+  test('keeps legacy batch transaction submission retired', () => {
+    const remoteFetcherSource = fs.readFileSync(path.join(PACKAGE_ROOT, 'app/api/ada/lib/state-fetch/remoteFetcher.js'), 'utf8');
+    const transactionHandlerSource = fs.readFileSync(
+      path.join(PACKAGE_ROOT, 'chrome/extension/background/handlers/yoroi/transaction.js'),
+      'utf8'
+    );
+
+    expect(remoteFetcherSource).not.toContain('/api/txs/signed');
+    expect(transactionHandlerSource).not.toContain('signedTxHexArray');
+  });
+
   test('routes remote config through the selected cardano-wallet-backend deployment', () => {
     expect(
       getYoroiRemoteConfigUrl(
