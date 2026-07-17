@@ -32,9 +32,7 @@ import type {
   RemoteTransaction,
   RewardHistoryRequest,
   RewardHistoryResponse,
-  SignedBatchRequest,
   SignedRequest,
-  SignedRequestInternal,
   SignedResponse,
   TokenInfoRequest,
   TokenInfoResponse,
@@ -62,7 +60,7 @@ import {
 import type { ConfigType } from '../../../../../config/config-types';
 import { bech32 } from 'bech32';
 import { addressBech32ToHex } from '../cardanoCrypto/utils';
-import { bytesToBase64, bytesToHex, forceNonNull, last } from '../../../../coreUtils';
+import { bytesToHex } from '../../../../coreUtils';
 import { makeTimeoutAbortSignal, fetchAndEnsureSuccess, type ServerError } from '../../../utils';
 
 // populated by ConfigWebpackPlugin
@@ -98,44 +96,43 @@ const getCardanoWalletBackendService = (network: $ReadOnly<NetworkRow>): null | 
 };
 
 export const sendTx: ({|
-  body: SignedRequest | SignedBatchRequest,
+  body: SignedRequest,
   lastLaunchVersion: string,
   currentLocale: string,
   errorHandler?: ServerError => void,
 |}) => Promise<SignedResponse> = ({ body, lastLaunchVersion, currentLocale, errorHandler }) => {
-  // $FlowIgnore[prop-missing]
-  const txs: Array<{| encodedTx: Uint8Array, id: string |}> = body.txs ?? [body];
-  if (txs.length === 0) throw new Error('At least one transaction is required for submit');
-  const signedTx64: Array<string> = txs.map(t => bytesToBase64(t.encodedTx));
-  const { BackendService } = body.network.Backend;
-  if (BackendService == null) throw new Error(`${nameof(sendTx)} missing backend url`);
-  return fetchAndEnsureSuccess(`${BackendService}/api/txs/signed`, {
+  const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+  if (cardanoWalletBackendService == null) {
+    return Promise.reject(new SendTransactionApiError());
+  }
+  return fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/tx/submit`, {
     method: 'POST',
     signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-    body: JSON.stringify(({ signedTx: signedTx64 }: SignedRequestInternal)),
+    body: JSON.stringify({ cbor: bytesToHex(body.encodedTx) }),
     headers: {
       'content-type': 'application/json',
       'yoroi-version': lastLaunchVersion,
       'yoroi-locale': currentLocale,
     },
   })
-    .then(() => ({
-      txId: forceNonNull(last(txs)).id,
-    }))
-    .catch(error => {
-      if (errorHandler != null) {
-        errorHandler(error);
-      }
-      const err = {
-        msg: error.message,
-        res: error.response?.data || null,
-      };
-      Logger.error(`${nameof(RemoteFetcher)}::${nameof(sendTx)} error: ${stringifyError(err)}`);
-      if (JSON.stringify(error.response?.data ?? '').includes('InvalidWitnessesUTXOW')) {
-        throw new InvalidWitnessError();
-      }
-      throw new SendTransactionApiError();
-    });
+    .then(response => response.json())
+    .then(data => ({ txId: data.txHash }))
+    .catch(error => handleSendTxError(error, errorHandler));
+};
+
+const handleSendTxError = (error: ServerError, errorHandler?: ServerError => void): Promise<SignedResponse> => {
+  if (errorHandler != null) {
+    errorHandler(error);
+  }
+  const err = {
+    msg: error.message,
+    res: error.response?.data || null,
+  };
+  Logger.error(`${nameof(RemoteFetcher)}::${nameof(sendTx)} error: ${stringifyError(err)}`);
+  if (JSON.stringify(error.response?.data ?? '').includes('InvalidWitnessesUTXOW')) {
+    throw new InvalidWitnessError();
+  }
+  throw new SendTransactionApiError();
 };
 
 export class RemoteFetcher implements IFetcher {
@@ -400,7 +397,7 @@ export class RemoteFetcher implements IFetcher {
       });
   };
 
-  sendTx: (SignedRequest | SignedBatchRequest) => Promise<SignedResponse> = body => {
+  sendTx: SignedRequest => Promise<SignedResponse> = body => {
     return sendTx({
       body,
       lastLaunchVersion: this.getLastLaunchVersion(),

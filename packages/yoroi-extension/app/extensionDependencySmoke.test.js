@@ -7,17 +7,21 @@ import BigNumber from 'bignumber.js';
 import WalletRestoreStore, { RestoreSteps } from './stores/toplevel/WalletRestoreStore';
 import AdaStateFetchStore from './stores/ada/AdaStateFetchStore';
 import { RemoteFetcher as AdaRemoteFetcher } from './api/ada/lib/state-fetch/remoteFetcher';
+import { RemoteFetcher as CommonRemoteFetcher } from './api/common/lib/state-fetch/remoteFetcher';
 import { defaultAssets, networks } from './api/ada/lib/storage/database/prepackaged/networks';
 import { RustModule } from './api/ada/lib/cardanoCrypto/rustLoader';
 import { MultiToken } from './api/common/lib/MultiToken';
 import { byronAddrToHex } from './api/ada/lib/storage/bridge/utils';
 import { Bip44DerivationLevels } from './api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { newAdaUnsignedTx, signTransaction } from './api/ada/transactions/shelley/transactions';
+import { getYoroiRemoteConfigUrl } from './utils/yoroiRemoteConfigUrl';
+import { SendTransactionApiError } from './api/common/errors';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
 import developmentConfig from '../config/development.json';
 import testConfig from '../config/test.json';
+import extensionPackage from '../package.json';
 
 const SMOKE_MNEMONIC = 'prevent company field green slot measure chief hero apple task eagle sunset endorse dress seed';
 
@@ -83,9 +87,12 @@ function backendNetwork() {
   };
 }
 
-function successfulJsonResponse(body) {
+function successfulJsonResponse(body, headers = {}) {
   return Promise.resolve({
     ok: true,
+    headers: {
+      get: name => headers[name.toLowerCase()] ?? null,
+    },
     json: () => Promise.resolve(body),
   });
 }
@@ -318,7 +325,7 @@ describe('extension dependency smoke', () => {
     (global: any).CONFIG.cardanoWalletBackend = {
       enabled: true,
       mainnet: 'http://localhost:3010/',
-      preprod: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
     };
     const fetchFixture = {
       block: 3500000,
@@ -359,6 +366,228 @@ describe('extension dependency smoke', () => {
     } finally {
       (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
     }
+  });
+
+  test('maps cardano-wallet-backend status without treating maintenance as a network failure', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    const serverTime = Date.parse('2026-07-16T14:30:00.000Z');
+    (global: any).fetch = jest.fn(() =>
+      successfulJsonResponse(
+        {
+          version: '0.5.0',
+          network: 'preprod',
+          provider: 'koios',
+          chain: 'stale',
+          behindSeconds: 600,
+          tip: null,
+        },
+        { date: new Date(serverTime).toUTCString() }
+      )
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+      const status = await fetcher.checkServerStatus({
+        backend: networks.CardanoPreprodTestnet.Backend.BackendService,
+        networkId: networks.CardanoPreprodTestnet.NetworkId,
+      });
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3011/v1/status',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(status).toEqual({
+        isServerOk: true,
+        isMaintenance: true,
+        serverTime,
+      });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('rejects a cardano-wallet-backend deployment serving the wrong network', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    (global: any).fetch = jest.fn(() =>
+      successfulJsonResponse(
+        {
+          version: '0.5.0',
+          network: 'mainnet',
+          provider: 'koios',
+          chain: 'ok',
+          behindSeconds: 0,
+          tip: {
+            block: 3500000,
+            slot: 42000000,
+            epoch: 165,
+            hash: 'aa11bb22',
+            blockTime: 1784212200,
+          },
+        },
+        { date: 'Thu, 16 Jul 2026 14:30:00 GMT' }
+      )
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+
+      await expect(
+        fetcher.checkServerStatus({
+          backend: networks.CardanoPreprodTestnet.Backend.BackendService,
+          networkId: networks.CardanoPreprodTestnet.NetworkId,
+        })
+      ).rejects.toThrow();
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('submits a single transaction as CBOR hex through cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3010/',
+    };
+    const txHash = 'ab'.repeat(32);
+    (global: any).fetch = jest.fn(() => successfulJsonResponse({ txHash }));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      const result = await fetcher.sendTx({
+        network: backendNetwork(),
+        id: txHash,
+        encodedTx: new Uint8Array([0x84, 0x01, 0xab]),
+      });
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/tx/submit',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ cbor: '8401ab' }),
+        })
+      );
+      expect(result).toEqual({ txId: txHash });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('fails closed without a configured cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: false,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3010/',
+    };
+    (global: any).fetch = jest.fn();
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(
+        fetcher.sendTx({
+          network: backendNetwork(),
+          id: 'tx-id',
+          encodedTx: new Uint8Array([0x84, 0x01]),
+        })
+      ).rejects.toBeInstanceOf(SendTransactionApiError);
+      expect((global: any).fetch).not.toHaveBeenCalled();
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('keeps legacy batch transaction submission retired', () => {
+    const remoteFetcherSource = fs.readFileSync(path.join(PACKAGE_ROOT, 'app/api/ada/lib/state-fetch/remoteFetcher.js'), 'utf8');
+    const transactionHandlerSource = fs.readFileSync(
+      path.join(PACKAGE_ROOT, 'chrome/extension/background/handlers/yoroi/transaction.js'),
+      'utf8'
+    );
+
+    expect(remoteFetcherSource).not.toContain('/api/txs/signed');
+    expect(transactionHandlerSource).not.toContain('signedTxHexArray');
+  });
+
+  test('routes remote config through the selected cardano-wallet-backend deployment', () => {
+    expect(
+      getYoroiRemoteConfigUrl(
+        true,
+        {
+          enabled: true,
+          mainnet: 'https://mainnet.example',
+          preprod: 'https://preprod.example/',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
+    ).toEqual('https://preprod.example/v1/config');
+    expect(
+      getYoroiRemoteConfigUrl(
+        false,
+        {
+          enabled: true,
+          mainnet: 'https://mainnet.example/',
+          preprod: 'https://preprod.example',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
+    ).toEqual('https://mainnet.example/v1/config');
+    expect(
+      getYoroiRemoteConfigUrl(
+        false,
+        {
+          enabled: false,
+          mainnet: 'https://mainnet.example/',
+          preprod: 'https://preprod.example',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
+    ).toEqual('https://legacy.example/prod.json');
+  });
+
+  test('enables local development without pointing CI or production at an unverified deployment', () => {
+    expect(developmentConfig.cardanoWalletBackend.enabled).toEqual(true);
+    expect(developmentConfig.cardanoWalletBackend.mainnet).toEqual('');
+    expect(developmentConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:3010');
+    expect(testConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(extensionPackage.scripts['dev:wallet-backend']).toEqual('CARDANO_NETWORK=development npm run dev:stable');
+    expect(extensionPackage.scripts['dev:main']).toMatch(/CARDANO_NETWORK.*mainnet/);
   });
 
   test('builds and signs a local Cardano transaction fixture', async () => {
