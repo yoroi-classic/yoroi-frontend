@@ -13,7 +13,6 @@ import { collectInfo, preloadDBAndStorage, waitTxPage } from '../../helpers/rest
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 import WalletCommonBase from '../../pages/walletCommonBase.page.js';
-import { itQuarantinedDApp } from '../../utils/quarantine.js';
 
 describe('dApp, general functions, without pop-up', function () {
   this.timeout(2 * oneMinute);
@@ -182,15 +181,11 @@ describe('dApp, general functions, without pop-up', function () {
       await customBeforeNestedDAppTest(this, windowManager);
     });
 
-    itQuarantinedDApp(
-      'Request getRegisteredPubStakeKeys',
-      'CIP-95 stake-key fixture response is unstable; see yoroi-frontend#55',
-      async function () {
-        const extensionsResponse = await mockedDApp.getRegisteredPubStakeKeys();
-        expect(extensionsResponse.success, 'The request getRegisteredPubStakeKeys failed').to.be.true;
-        expect(extensionsResponse.retValue).to.be.an('array');
-      }
-    );
+    it('Request getRegisteredPubStakeKeys', async function () {
+      const extensionsResponse = await mockedDApp.getRegisteredPubStakeKeys();
+      expect(extensionsResponse.success, 'The request getRegisteredPubStakeKeys failed').to.be.true;
+      expect(extensionsResponse.retValue).to.be.an('array');
+    });
   });
 
   describe('[nested-dapp] CIP-95, get unregistered public stake key', function () {
@@ -198,17 +193,13 @@ describe('dApp, general functions, without pop-up', function () {
       await customBeforeNestedDAppTest(this, windowManager);
     });
 
-    itQuarantinedDApp(
-      'Request getUnregisteredPubStakeKeys',
-      'CIP-95 stake-key fixture response is unstable; see yoroi-frontend#55',
-      async function () {
-        const extensionsResponse = await mockedDApp.getUnregisteredPubStakeKeys();
-        expect(extensionsResponse.success, 'The request getUnregisteredPubStakeKeys failed').to.be.true;
-        expect(extensionsResponse.retValue).to.be.an('array').that.is.not.empty;
-        expect(extensionsResponse.retValue.length).to.equal(1);
-        expect(extensionsResponse.retValue[0]).to.be.an('string').that.is.not.empty;
-      }
-    );
+    it('Request getUnregisteredPubStakeKeys', async function () {
+      const extensionsResponse = await mockedDApp.getUnregisteredPubStakeKeys();
+      expect(extensionsResponse.success, 'The request getUnregisteredPubStakeKeys failed').to.be.true;
+      expect(extensionsResponse.retValue).to.be.an('array').that.is.not.empty;
+      expect(extensionsResponse.retValue.length).to.equal(1);
+      expect(extensionsResponse.retValue[0]).to.be.an('string').that.is.not.empty;
+    });
   });
 
   afterEach(async function () {
