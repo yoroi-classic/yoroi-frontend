@@ -258,7 +258,7 @@ export default function NotificationsProvider({
 
   const handleToastChanges = props => {
     // event is expired, trigger callback
-    if (props.status === 'removed' && !Boolean(props.data.event)) {
+    if (props.status === 'removed' && !props.data.event) {
       handleToastExpired();
       return;
     }
