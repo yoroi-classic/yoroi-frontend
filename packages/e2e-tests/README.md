@@ -41,8 +41,8 @@ Before running the e2e tests, ensure you have completed the following setup:
    - `TEST_WALLET_MAINNET_1`
    - `SECOND_STATIC_TEST_WALLET`
    - `SECOND_SMOKE_TEST_WALLET`
-   - `SECOND_SMOKE_TEST_WALLET_FF`
    - `RUN_QUARANTINED_DAPP_TESTS=true` (optional, runs quarantined dApp cases)
+   - `RUN_LIVE_PROVIDER_TESTS=true` (optional, runs quarantined public domain-resolver cases; tracked in #88 until 2026-10-16)
    - `CHROME_PATH` (optional, defaults to system Chrome)
 
 6. **Hardware Wallet Emulators** (for hardware wallet tests):
@@ -210,6 +210,8 @@ RUN_QUARANTINED_DAPP_TESTS=true npm run test:dapp
 # Run a single dApp test
 npm run test:dapp:one "YOUR_TEST_NAME_HERE"
 ```
+
+The send suite skips live ADA Handle, CNS, and Unstoppable Domains resolver cases by default because public service availability and records are nondeterministic. Run them deliberately with `RUN_LIVE_PROVIDER_TESTS=true npm run test:ext:send`. The quarantine is owned by @wolf31o2, expires on 2026-10-16, and is tracked in #88.
 
 ### Running Tests in Non-Headless Mode
 
