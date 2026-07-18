@@ -195,7 +195,7 @@ const ensureCardanoWalletBackendHistoryIsEmpty = async ({
               addresses: paymentAddresses,
               ...(after === undefined ? {} : { after }),
             }),
-            headers: { 'content-type': 'application/json', ...headers },
+            headers: { ...headers, 'content-type': 'application/json' },
           }).then(response => response.json()),
         ]),
     ...stakeAddresses.map(stakeAddress =>

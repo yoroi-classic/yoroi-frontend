@@ -1129,10 +1129,7 @@ describe('extension dependency smoke', () => {
       undefined
     );
     const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx
-      .body()
-      .fee()
-      .to_str();
+    const signedFee = signedTx.body().fee().to_str();
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
     expect(new BigNumber(signedFee).gt(0)).toEqual(true);

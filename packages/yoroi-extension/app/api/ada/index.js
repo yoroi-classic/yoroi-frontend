@@ -682,9 +682,7 @@ export default class AdaApi {
           request.signRequest.metadata
         );
         return {
-          txHash: Scope.WalletV4.FixedTransaction.from_hex(signedTx.to_hex())
-            .transaction_hash()
-            .to_hex(),
+          txHash: Scope.WalletV4.FixedTransaction.from_hex(signedTx.to_hex()).transaction_hash().to_hex(),
           encodedTx: signedTx.to_bytes(),
         };
       });
@@ -798,16 +796,19 @@ export default class AdaApi {
           request.network.NetworkId
         );
       } else {
-        const changeAddresses = request.receivers.reduce((arr, next) => {
-          if (next.addressing != null) {
-            arr.push({
-              address: next.address,
-              addressing: next.addressing,
-            });
+        const changeAddresses = request.receivers.reduce(
+          (arr, next) => {
+            if (next.addressing != null) {
+              arr.push({
+                address: next.address,
+                addressing: next.addressing,
+              });
+              return arr;
+            }
             return arr;
-          }
-          return arr;
-        }, ([]: Array<{| ...Address, ...Addressing |}>));
+          },
+          ([]: Array<{| ...Address, ...Addressing |}>)
+        );
         if (changeAddresses.length !== 1) {
           throw new Error(`${nameof(this.createUnsignedTxForUtxos)} needs exactly one change address`);
         }
@@ -815,13 +816,16 @@ export default class AdaApi {
         const otherAddresses: Array<{|
           ...Address,
           +addressHandle?: {| handle: string, nameServer: string |},
-        |}> = request.receivers.reduce((arr, next) => {
-          if (next.addressing == null) {
-            arr.push({ address: next.address, addressHandle: next.addressHandle });
+        |}> = request.receivers.reduce(
+          (arr, next) => {
+            if (next.addressing == null) {
+              arr.push({ address: next.address, addressHandle: next.addressHandle });
+              return arr;
+            }
             return arr;
-          }
-          return arr;
-        }, ([]: Array<{| ...Address, +addressHandle?: {| handle: string, nameServer: string |} |}>));
+          },
+          ([]: Array<{| ...Address, +addressHandle?: {| handle: string, nameServer: string |} |}>)
+        );
         if (otherAddresses.length > 1) {
           throw new Error(`${nameof(this.createUnsignedTxForUtxos)} can't send to more than one address`);
         }
@@ -1051,19 +1055,13 @@ export default class AdaApi {
       }
     }
 
-    function mintEntryToIdentifier(
-      mintEntry: CardanoTxRequestMint
-    ): {|
+    function mintEntryToIdentifier(mintEntry: CardanoTxRequestMint): {|
       policyId: string,
       assetId: string,
     |} {
       const { script, assetName } = mintEntry;
       const policyId = RustModule.WasmScope(Scope => {
-        return bytesToHex(
-          Scope.WalletV4.NativeScript.from_bytes(hexToBytes(script))
-            .hash()
-            .to_bytes()
-        );
+        return bytesToHex(Scope.WalletV4.NativeScript.from_bytes(hexToBytes(script)).hash().to_bytes());
       });
 
       const assetId = `${policyId}.${assetName}`;
@@ -1839,16 +1837,8 @@ export default class AdaApi {
         network: request.network,
       });
 
-      const firstInternalPayment = request.cip1852AccountPubKey
-        .derive(ChainDerivations.INTERNAL)
-        .derive(0)
-        .to_raw_key()
-        .hash();
-      const stakingKey = request.cip1852AccountPubKey
-        .derive(ChainDerivations.CHIMERIC_ACCOUNT)
-        .derive(0)
-        .to_raw_key()
-        .hash();
+      const firstInternalPayment = request.cip1852AccountPubKey.derive(ChainDerivations.INTERNAL).derive(0).to_raw_key().hash();
+      const stakingKey = request.cip1852AccountPubKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0).to_raw_key().hash();
 
       const config = getCardanoHaskellBaseConfig(request.network).reduce((acc, next) => Object.assign(acc, next), {});
 
