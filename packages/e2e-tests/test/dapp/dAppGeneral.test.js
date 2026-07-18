@@ -184,7 +184,7 @@ describe('dApp, general functions, without pop-up', function () {
     it('Request getRegisteredPubStakeKeys', async function () {
       const extensionsResponse = await mockedDApp.getRegisteredPubStakeKeys();
       expect(extensionsResponse.success, 'The request getRegisteredPubStakeKeys failed').to.be.true;
-      expect(extensionsResponse.retValue).to.be.an('array');
+      expect(extensionsResponse.retValue).to.deep.equal([]);
     });
   });
 

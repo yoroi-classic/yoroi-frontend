@@ -26,6 +26,19 @@ export const getMockServer = settings => {
              `);
   });
 
+  server.get('/v1/account/:stakeAddress/state', (req, res) => {
+    res.json({
+      stakeAddress: req.params.stakeAddress,
+      registered: false,
+      balance: '0',
+      rewardsAvailable: '0',
+      rewardsSum: '0',
+      withdrawalsSum: '0',
+      delegatedPool: null,
+      delegatedDrep: null,
+    });
+  });
+
   return new Promise((resolve, reject) => {
     const mockServer = server.listen(mockedServerPorts, () => {
       console.log(`JSON Server is running at http://localhost:${mockedServerPorts}`);

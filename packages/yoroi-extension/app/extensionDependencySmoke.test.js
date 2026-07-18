@@ -805,11 +805,13 @@ describe('extension dependency smoke', () => {
     ).toEqual('https://legacy.example/prod.json');
   });
 
-  test('enables local development without pointing CI or production at an unverified deployment', () => {
+  test('uses only local wallet-backend deployments in development and E2E builds', () => {
     expect(developmentConfig.cardanoWalletBackend.enabled).toEqual(true);
     expect(developmentConfig.cardanoWalletBackend.mainnet).toEqual('');
     expect(developmentConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:3010');
-    expect(testConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(testConfig.cardanoWalletBackend.enabled).toEqual(true);
+    expect(testConfig.cardanoWalletBackend.mainnet).toEqual('http://localhost:21000');
+    expect(testConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:21000');
     expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(extensionPackage.scripts['dev:wallet-backend']).toEqual('CARDANO_NETWORK=development npm run dev:stable');
