@@ -821,6 +821,15 @@ describe('extension dependency smoke', () => {
     expect(extensionPackage.scripts['dev:main']).toMatch(/CARDANO_NETWORK.*mainnet/);
   });
 
+  test('keeps the DApp backend fixture out of maintenance mode', () => {
+    const mockServerSource = fs.readFileSync(
+      path.join(PACKAGE_ROOT, '../e2e-tests/helpers/mock-dApp-webpage/mockServer.js'),
+      'utf8'
+    );
+    expect(mockServerSource).toContain("chain: 'ok'");
+    expect(mockServerSource).not.toContain("chain: 'synced'");
+  });
+
   test('builds and signs a local Cardano transaction fixture', async () => {
     const senderAddress = byronAddrToHex('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4');
     const senderUtxo = {

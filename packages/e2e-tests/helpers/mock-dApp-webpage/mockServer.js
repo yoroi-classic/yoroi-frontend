@@ -44,7 +44,7 @@ export const getMockServer = settings => {
       version: 'e2e',
       network: 'mainnet',
       provider: 'fixture',
-      chain: 'synced',
+      chain: 'ok',
       behindSeconds: 0,
       tip: { blockTime: 1700000000 },
     });
