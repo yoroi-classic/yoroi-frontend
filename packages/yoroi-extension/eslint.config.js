@@ -243,9 +243,14 @@ module.exports = defineConfig([
       'no-unused-vars': 'off',
       'no-dupe-class-members': 'off',
       'no-redeclare': 'off',
-      // Issue #83 tracks enabling the TypeScript recommended rules after the
-      // existing unused-symbol baseline is cleaned up.
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
     },
   },
   globalIgnores([

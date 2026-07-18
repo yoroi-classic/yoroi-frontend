@@ -129,6 +129,7 @@ declare var pushNotificationEventData: EventData | null;
 declare var pushNotificationEventHandler: (_: EventData) => void | Promise<void>;
 
 if (typeof pushNotificationEventData !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- read by the concatenated pushNotificationEventHandler.embedded script
   pushNotificationEventHandler = pushHandler;
 
   if (pushNotificationEventData) {
