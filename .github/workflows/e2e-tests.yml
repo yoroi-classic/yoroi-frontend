@@ -87,6 +87,21 @@ jobs:
           retention-days: 1
           overwrite: true
 
+      - name: Build the DApp test mainnet version
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp'
+        working-directory: ./packages/yoroi-extension
+        run: npm run test:dapp:build
+
+      - name: Archive DApp test app
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp'
+        uses: actions/upload-artifact@v4
+        with:
+          name: builtDApp
+          path: |
+            ./packages/yoroi-extension/Yoroi-test.crx
+          retention-days: 1
+          overwrite: true
+
   Extension:
     if: (github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.test_type == 'all' ||
@@ -217,7 +232,7 @@ jobs:
       - name: Download app
         uses: actions/download-artifact@v4
         with:
-          name: builtApp
+          name: builtDApp
           path: ./packages/yoroi-extension
 
       - name: Run tests

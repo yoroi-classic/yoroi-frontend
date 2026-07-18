@@ -21,6 +21,7 @@ import { GetAccountStateApiError, SendTransactionApiError } from './api/common/e
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
 import developmentConfig from '../config/development.json';
+import dappTestConfig from '../config/dapp-test.json';
 import testConfig from '../config/test.json';
 import extensionPackage from '../package.json';
 
@@ -809,9 +810,10 @@ describe('extension dependency smoke', () => {
     expect(developmentConfig.cardanoWalletBackend.enabled).toEqual(true);
     expect(developmentConfig.cardanoWalletBackend.mainnet).toEqual('');
     expect(developmentConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:3010');
-    expect(testConfig.cardanoWalletBackend.enabled).toEqual(true);
-    expect(testConfig.cardanoWalletBackend.mainnet).toEqual('http://localhost:21000');
-    expect(testConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:21000');
+    expect(testConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(dappTestConfig.cardanoWalletBackend.enabled).toEqual(true);
+    expect(dappTestConfig.cardanoWalletBackend.mainnet).toEqual('http://localhost:21000');
+    expect(dappTestConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:21000');
     expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(extensionPackage.scripts['dev:wallet-backend']).toEqual('CARDANO_NETWORK=development npm run dev:stable');
@@ -872,7 +874,10 @@ describe('extension dependency smoke', () => {
       undefined
     );
     const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx.body().fee().to_str();
+    const signedFee = signedTx
+      .body()
+      .fee()
+      .to_str();
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
     expect(new BigNumber(signedFee).gt(0)).toEqual(true);
@@ -943,6 +948,7 @@ describe('extension dependency smoke', () => {
       ['shelley-testnet', shelleyTestnetConfig],
       ['development', developmentConfig],
       ['test', testConfig],
+      ['dapp-test', dappTestConfig],
     ];
 
     for (const [, config] of activeConfigs) {

@@ -39,6 +39,31 @@ export const getMockServer = settings => {
     });
   });
 
+  server.get('/v1/status', (_req, res) => {
+    res.json({
+      version: 'e2e',
+      network: 'mainnet',
+      provider: 'fixture',
+      chain: 'synced',
+      behindSeconds: 0,
+      tip: { blockTime: 1700000000 },
+    });
+  });
+
+  server.get('/v1/chain/tip', (_req, res) => {
+    res.json({
+      block: 1,
+      epoch: 1,
+      slot: 1,
+      hash: '00'.repeat(32),
+      blockTime: 1700000000,
+    });
+  });
+
+  server.post('/v1/tx/submit', (_req, res) => {
+    res.json({ txHash: '00'.repeat(32) });
+  });
+
   return new Promise((resolve, reject) => {
     const mockServer = server.listen(mockedServerPorts, () => {
       console.log(`JSON Server is running at http://localhost:${mockedServerPorts}`);
