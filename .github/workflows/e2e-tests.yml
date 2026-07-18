@@ -164,6 +164,7 @@ jobs:
   Extension:
     if: always() &&
       needs.Build-Extension.result == 'success' &&
+      needs.E2E-Fixtures.outputs.matrix != '' &&
       ((github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.test_type == 'all' ||
       github.event.inputs.test_type == 'extension')) ||

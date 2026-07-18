@@ -49,3 +49,27 @@ test('writes GitHub outputs and a summary without exposing fixture contents', ()
     rmSync(directory, { force: true, recursive: true });
   }
 });
+
+test('reports unavailable fixtures without exposing the remaining fixture contents', () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'yoroi-e2e-fixtures-'));
+  const outputPath = path.join(directory, 'output');
+  const summaryPath = path.join(directory, 'summary');
+  const environment = { ...completeEnvironment, FIRST_SMOKE_TEST_WALLET: '' };
+
+  try {
+    writeGithubReport(protectedFixtureReport(environment), { outputPath, summaryPath });
+
+    const output = readFileSync(outputPath, 'utf8');
+    const summary = readFileSync(summaryPath, 'utf8');
+    assert.match(output, /^available=false$/m);
+    assert.deepEqual(JSON.parse(output.match(/^matrix=(.+)$/m)[1]), publicExtensionMatrix);
+    assert.match(summary, /Protected wallet fixtures: unavailable/);
+    assert.match(summary, /Missing repository secrets: `FIRST_SMOKE_TEST_WALLET`/);
+    assert.match(summary, /NFT suite uses a public compromised fixture and will still run/);
+    for (const value of Object.values(environment)) {
+      if (value) assert.doesNotMatch(summary, new RegExp(value));
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});

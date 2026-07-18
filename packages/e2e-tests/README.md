@@ -143,6 +143,8 @@ npm run test:ext:settings
 npm run test:ext:transactions
 ```
 
+The send suite skips live ADA Handle, CNS, and Unstoppable Domains resolver cases by default because public service availability and records are nondeterministic. Run them deliberately with `RUN_LIVE_PROVIDER_TESTS=true npm run test:ext:send`. The quarantine is owned by @wolf31o2, expires on 2026-10-16, and is tracked in #88.
+
 #### Run Smoke Tests
 
 Tests with the tag `_smoke_` will be run
@@ -210,8 +212,6 @@ RUN_QUARANTINED_DAPP_TESTS=true npm run test:dapp
 # Run a single dApp test
 npm run test:dapp:one "YOUR_TEST_NAME_HERE"
 ```
-
-The send suite skips live ADA Handle, CNS, and Unstoppable Domains resolver cases by default because public service availability and records are nondeterministic. Run them deliberately with `RUN_LIVE_PROVIDER_TESTS=true npm run test:ext:send`. The quarantine is owned by @wolf31o2, expires on 2026-10-16, and is tracked in #88.
 
 ### Running Tests in Non-Headless Mode
 
