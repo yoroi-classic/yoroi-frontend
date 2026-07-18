@@ -817,6 +817,7 @@ describe('extension dependency smoke', () => {
     expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(extensionPackage.scripts['dev:wallet-backend']).toEqual('CARDANO_NETWORK=development npm run dev:stable');
+    expect(extensionPackage.scripts['test:dapp:build']).toContain("--configEnv 'dapp-test'");
     expect(extensionPackage.scripts['dev:main']).toMatch(/CARDANO_NETWORK.*mainnet/);
   });
 
