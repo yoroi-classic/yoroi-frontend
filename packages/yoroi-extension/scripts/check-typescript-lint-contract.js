@@ -1,4 +1,9 @@
 const path = require('path');
+
+// lintText must parse the supplied mutation instead of reusing the on-disk
+// TypeScript Program that CI's single-run inference caches for this file path.
+process.env.TSESTREE_SINGLE_RUN = 'false';
+
 const { ESLint } = require('eslint');
 
 const packageRoot = path.resolve(__dirname, '..');
@@ -15,7 +20,7 @@ async function lintText(source) {
 async function main() {
   const unusedMessages = await lintText('const unusedSymbol = 1;\nexport {};\n');
   if (unusedMessages.length !== 1 || unusedMessages[0].severity !== 2) {
-    throw new Error('TypeScript unused symbols must fail ESLint');
+    throw new Error(`TypeScript unused symbols must fail ESLint: ${JSON.stringify(unusedMessages)}`);
   }
 
   const ignoredMessages = await lintText('const _intentionallyUnused = 1;\nexport {};\n');
