@@ -16,7 +16,7 @@ import { byronAddrToHex } from './api/ada/lib/storage/bridge/utils';
 import { Bip44DerivationLevels } from './api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { newAdaUnsignedTx, signTransaction } from './api/ada/transactions/shelley/transactions';
 import { getYoroiRemoteConfigUrl } from './utils/yoroiRemoteConfigUrl';
-import { GetAccountStateApiError, SendTransactionApiError } from './api/common/errors';
+import { CheckAddressesInUseApiError, GetAccountStateApiError, SendTransactionApiError } from './api/common/errors';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
@@ -231,78 +231,75 @@ describe('extension dependency smoke', () => {
     );
   });
 
-  test('normalizes mocked backend transaction history responses', async () => {
-    const bech32Address =
-      'addr1q8gpjmyy8zk9nuza24a0f4e7mgp9gd6h3uayp0rqnjnkl54v4dlyj0kwfs0x4e38a7047lymzp37tx0y42glslcdtzhqphf76y';
-    const fetchFixture = [
-      {
-        type: 'shelley',
-        hash: 'tx-hash',
-        last_update: '2024-01-01T00:00:00.000Z',
-        tx_state: 'Successful',
-        inputs: [
-          {
-            id: 'input-id',
-            index: 0,
-            txHash: 'parent-hash',
-            address: bech32Address,
-            amount: '1000000',
-          },
-        ],
-        outputs: [
-          {
-            address: bech32Address,
-            amount: '900000',
-          },
-        ],
-        fee: '100000',
-        certificates: [],
-        withdrawals: [],
-        metadata: null,
-        block_num: 42,
-        block_hash: 'block-hash',
-        tx_ordinal: 0,
-        time: '2024-01-01T00:00:00.000Z',
-        epoch: 1,
-        slot: 2,
-      },
-    ];
-    (global: any).fetch = jest.fn(() => successfulJsonResponse(fetchFixture));
+  test('loads empty address history through cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse([]));
     (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
-    const fetcher = new AdaRemoteFetcher(
-      () => '5.23.200',
-      () => 'en-US',
-      () => 'chrome'
-    );
-    const history = await fetcher.getTransactionsHistoryForAddresses({
-      network: backendNetwork(),
-      addresses: ['addr_fixture'],
-      untilBlock: 'block-hash',
-    });
-
-    expect((global: any).fetch).toHaveBeenCalledWith(
-      'http://localhost:18082/api/v2/txs/history',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(
+        fetcher.getTransactionsHistoryForAddresses({
+          network: backendNetwork(),
           addresses: ['addr_fixture'],
           untilBlock: 'block-hash',
-        }),
-        headers: {
-          'content-type': 'application/json',
-          'yoroi-version': '5.23.200',
-          'yoroi-locale': 'en-US',
-        },
-      })
-    );
-    const normalizedTx = (history[0]: any);
-    expect(normalizedTx.height).toEqual(42);
-    expect(normalizedTx.block_num).toEqual(undefined);
-    expect(history[0].inputs[0].assets).toEqual([]);
-    expect(history[0].outputs[0].assets).toEqual([]);
-    expect(history[0].inputs[0].address).not.toEqual(bech32Address);
-    expect(history[0].outputs[0].address).not.toEqual(bech32Address);
+        })
+      ).resolves.toEqual([]);
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/addresses/txs',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ addresses: ['addr_fixture'] }),
+        })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('uses empty backend history for initial transaction summaries', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse([]));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+    const stakeAddress = 'stake1u8pcjgmx7962w6hey5hhsd502araxp26kdtgagakhaqtq8squng76';
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(
+        fetcher.getRecentTransactionHashes({
+          network: backendNetwork(),
+          addresses: ['addr_vkh1fixture', stakeAddress],
+          before: { blockHash: 'block-hash' },
+        })
+      ).resolves.toEqual({});
+
+      expect((global: any).fetch).toHaveBeenCalledTimes(1);
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        `http://localhost:3010/v1/account/${stakeAddress}/txs`,
+        expect.objectContaining({ method: 'GET' })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
   });
 
   test('keeps the legacy best block endpoint by default', async () => {
@@ -380,6 +377,246 @@ describe('extension dependency smoke', () => {
         slot: 86400123,
         hash: 'aa11bb22',
       });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('filters used addresses through cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    const addresses = ['addr1q-first', 'addr1q-second'];
+    (global: any).fetch = jest.fn(() => successfulJsonResponse([addresses[1]]));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(fetcher.checkAddressesInUse({ network: backendNetwork(), addresses })).resolves.toEqual([addresses[1]]);
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/addresses/filter-used',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ addresses }),
+        })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('converts stored hex addresses for backend discovery and maps them back', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    const displayAddress = 'addr1vxq0nckg3ekgzuqg7w5p9mvgnd9ym28qh5grlph8xd2z92su77c6m';
+    const storedAddress = RustModule.WalletV4.Address.from_bech32(displayAddress).to_hex();
+    (global: any).fetch = jest.fn(() => successfulJsonResponse([displayAddress]));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(fetcher.checkAddressesInUse({ network: backendNetwork(), addresses: [storedAddress] })).resolves.toEqual([
+        storedAddress,
+      ]);
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/addresses/filter-used',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ addresses: [displayAddress] }),
+        })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('loads address UTxOs through cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    const address = 'addr1vxq0nckg3ekgzuqg7w5p9mvgnd9ym28qh5grlph8xd2z92su77c6m';
+    (global: any).fetch = jest.fn(() =>
+      successfulJsonResponse([
+        {
+          txHash: 'aa11',
+          outputIndex: 2,
+          address,
+          value: '900719925474099312345',
+          assets: [{ policyId: 'ab'.repeat(28), assetName: '414243', quantity: '900719925474099398765' }],
+        },
+      ])
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      const utxos = await fetcher.getUTXOsForAddresses({ network: backendNetwork(), addresses: [address] });
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/addresses/utxos',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ addresses: [address] }) })
+      );
+      expect(utxos).toEqual([
+        {
+          utxo_id: 'aa112',
+          tx_hash: 'aa11',
+          tx_index: 2,
+          receiver: expect.not.stringMatching(/^addr/),
+          amount: '900719925474099312345',
+          assets: [
+            {
+              amount: '900719925474099398765',
+              assetId: `${'ab'.repeat(28)}.414243`,
+              policyId: 'ab'.repeat(28),
+              name: '414243',
+            },
+          ],
+        },
+      ]);
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('loads stake-account UTxOs without redundant payment-credential probes', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    const stakeAddress = 'stake1u8pcjgmx7962w6hey5hhsd502araxp26kdtgagakhaqtq8squng76';
+    (global: any).fetch = jest.fn(() => successfulJsonResponse([]));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(
+        fetcher.getUTXOsForAddresses({
+          network: backendNetwork(),
+          addresses: ['addr_vkh1fixture', stakeAddress],
+        })
+      ).resolves.toEqual([]);
+
+      expect((global: any).fetch).toHaveBeenCalledTimes(1);
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        `http://localhost:3010/v1/account/${stakeAddress}/utxos`,
+        expect.objectContaining({ method: 'GET' })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('loads reward history through cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse([]));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+    const stakeHex = 'e1' + 'ab'.repeat(28);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(fetcher.getRewardHistory({ network: backendNetwork(), addresses: [stakeHex] })).resolves.toEqual({
+        [stakeHex]: [],
+      });
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/^http:\/\/localhost:3010\/v1\/account\/stake1/),
+        expect.objectContaining({ method: 'GET' })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test.each([[{ addresses: [] }], [['addr1q-not-requested']], [[1]]])(
+    'rejects invalid used-address response %p',
+    async response => {
+      const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+      (global: any).CONFIG.cardanoWalletBackend = {
+        enabled: true,
+        mainnet: 'http://localhost:3010',
+        preprod: 'http://localhost:3011',
+      };
+      (global: any).fetch = jest.fn(() => successfulJsonResponse(response));
+      (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+      try {
+        const fetcher = new AdaRemoteFetcher(
+          () => '5.23.200',
+          () => 'en-US',
+          () => 'chrome'
+        );
+        await expect(
+          fetcher.checkAddressesInUse({ network: backendNetwork(), addresses: ['addr1q-requested'] })
+        ).rejects.toBeInstanceOf(CheckAddressesInUseApiError);
+      } finally {
+        (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+      }
+    }
+  );
+
+  test('keeps the legacy address-discovery endpoint retired', () => {
+    const remoteFetcherSource = fs.readFileSync(path.join(PACKAGE_ROOT, 'app/api/ada/lib/state-fetch/remoteFetcher.js'), 'utf8');
+    expect(remoteFetcherSource).not.toContain('/api/v2/addresses/filterUsed');
+    expect(remoteFetcherSource).not.toContain('/api/txs/utxoForAddresses');
+    expect(remoteFetcherSource).not.toContain('/api/v2/txs/history');
+    expect(remoteFetcherSource).not.toContain('/api/account/rewardHistory');
+  });
+
+  test('fails address discovery closed without cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: false,
+      mainnet: 'http://localhost:3010',
+      preprod: 'http://localhost:3011',
+    };
+    (global: any).fetch = jest.fn();
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(
+        fetcher.checkAddressesInUse({ network: backendNetwork(), addresses: ['addr1q-requested'] })
+      ).rejects.toBeInstanceOf(CheckAddressesInUseApiError);
+      expect((global: any).fetch).not.toHaveBeenCalled();
     } finally {
       (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
     }
@@ -830,6 +1067,14 @@ describe('extension dependency smoke', () => {
     expect(mockServerSource).not.toContain("chain: 'synced'");
   });
 
+  test('runs hardware E2E against a pinned cardano-wallet-backend checkout', () => {
+    const workflow = fs.readFileSync(path.join(WORKSPACE_ROOT, '.github/workflows/e2e-tests.yml'), 'utf8');
+    expect(workflow.match(/repository: yoroi-classic\/cardano-wallet-backend/g)).toHaveLength(2);
+    expect(workflow.match(/ref: a1724a9ed3de2099bc3f03be104f20df462d4644/g)).toHaveLength(2);
+    expect(workflow.match(/name: builtWalletBackend/g)).toHaveLength(4);
+    expect(workflow.match(/walletBackendPreflight\.mjs http:\/\/127\.0\.0\.1:21000 mainnet/g)).toHaveLength(2);
+  });
+
   test('builds and signs a local Cardano transaction fixture', async () => {
     const senderAddress = byronAddrToHex('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4');
     const senderUtxo = {
@@ -884,7 +1129,10 @@ describe('extension dependency smoke', () => {
       undefined
     );
     const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx.body().fee().to_str();
+    const signedFee = signedTx
+      .body()
+      .fee()
+      .to_str();
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
     expect(new BigNumber(signedFee).gt(0)).toEqual(true);

@@ -89,6 +89,7 @@ import type {
   TxSummary,
   HistoryFunc,
   FilterFunc,
+  AddressUtxoFunc,
 } from '../../state-fetch/types';
 import { ShelleyCertificateTypes, RemoteTransactionTypes } from '../../state-fetch/types';
 import { addressToKind } from './utils';
@@ -179,11 +180,13 @@ export async function rawGetTransactions(
   |},
   request: {
     publicDeriver: IPublicDeriver<ConceptualWallet>,
-    getTxAndBlock: (txIds: Array<number>) => Promise<
+    getTxAndBlock: (
+      txIds: Array<number>
+    ) => Promise<
       $ReadOnlyArray<{|
         Block: null | $ReadOnly<BlockRow>,
         Transaction: $ReadOnly<TransactionRow>,
-      |}>,
+      |}>
     >,
     ...
   },
@@ -383,7 +386,9 @@ export async function getAllTransactions(request: {|
   );
 }
 
-export async function getPendingTransactions(request: {| publicDeriver: IPublicDeriver<ConceptualWallet> |}): Promise<{|
+export async function getPendingTransactions(request: {|
+  publicDeriver: IPublicDeriver<ConceptualWallet>,
+|}): Promise<{|
   addressLookupMap: Map<number, string>,
   txs: Array<{|
     ...CardanoByronTxIO | CardanoShelleyTxIO,
@@ -553,11 +558,13 @@ export async function rawGetForeignAddresses(
   // get rid of duplications (some tx can have multiple inputs of same address)
   return Array.from(new Set(unownedAddresses));
 }
-export async function getForeignAddresses(request: {| publicDeriver: IPublicDeriver<ConceptualWallet> |}): Promise<
+export async function getForeignAddresses(request: {|
+  publicDeriver: IPublicDeriver<ConceptualWallet>,
+|}): Promise<
   Array<{|
     address: string,
     type: CoreAddressT,
-  |}>,
+  |}>
 > {
   const derivationTables = request.publicDeriver.getParent().getDerivationTables();
   const deps = Object.freeze({
@@ -752,6 +759,8 @@ export async function updateUtxos(
   db: lf$Database,
   publicDeriver: IPublicDeriver<ConceptualWallet>,
   checkAddressesInUse: FilterFunc,
+  getUTXOsForAddresses: AddressUtxoFunc,
+  getBestBlock: BestBlockFunc,
   getTokenInfo: TokenInfoFunc,
   getMultiAssetMintMetadata: MultiAssetMintMetadataFunc,
   getMultiAssetSupply: MultiAssetSupplyFunc
@@ -825,7 +834,7 @@ export async function updateUtxos(
         .flatMap(table => getAllSchemaTables(db, table)),
     ],
     async dbTx => {
-      await rawUpdateUtxos(db, dbTx, publicDeriver, getAddrTables, derivationTables);
+      await rawUpdateUtxos(db, dbTx, publicDeriver, getAddrTables, derivationTables, getUTXOsForAddresses, getBestBlock);
     }
   );
 
@@ -1400,7 +1409,7 @@ async function updateTransactionBatch(
   Array<{|
     ...CardanoByronTxIO | CardanoShelleyTxIO,
     ...DbBlock,
-  |}>,
+  |}>
 > {
   const { TransactionSeed, BlockSeed } = await deps.GetEncryptionMeta.get(db, dbTx);
 
@@ -2309,7 +2318,11 @@ async function certificateToDb(
     {
       const rewardAddressHex = RustModule.WasmScope(Module => {
         const stakeCredential = Module.WalletV4.Credential.from_bytes(hexToBytes(stakeCredentialHex));
-        return bytesToHex(Module.WalletV4.RewardAddress.new(request.network, stakeCredential).to_address().to_bytes());
+        return bytesToHex(
+          Module.WalletV4.RewardAddress.new(request.network, stakeCredential)
+            .to_address()
+            .to_bytes()
+        );
       });
       const ownAddress = await findOwnAddress(rewardAddressHex);
       if (ownAddress != null) {
@@ -2319,7 +2332,9 @@ async function certificateToDb(
     {
       const enterpriseAddressHex = RustModule.WasmScope(Module => {
         const stakeCredential = Module.WalletV4.Credential.from_bytes(hexToBytes(stakeCredentialHex));
-        return Module.WalletV4.EnterpriseAddress.new(request.network, stakeCredential).to_address().to_hex();
+        return Module.WalletV4.EnterpriseAddress.new(request.network, stakeCredential)
+          .to_address()
+          .to_hex();
       });
       const ownAddress = await findOwnAddress(enterpriseAddressHex);
       if (ownAddress != null) return ownAddress;
@@ -2339,7 +2354,11 @@ async function certificateToDb(
             )?.payment_cred();
             if (stakeCredentials == null) throw new Error(`${nameof(certificateToDb)} not a valid reward account`);
             return [
-              bytesToHex(Module.WalletV4.RewardAddress.new(request.network, stakeCredentials).to_address().to_bytes()),
+              bytesToHex(
+                Module.WalletV4.RewardAddress.new(request.network, stakeCredentials)
+                  .to_address()
+                  .to_bytes()
+              ),
               bytesToHex(Module.WalletV4.StakeRegistration.new(stakeCredentials).to_bytes()),
             ];
           });
@@ -2371,7 +2390,11 @@ async function certificateToDb(
           )?.payment_cred();
           if (stakeCredentials == null) throw new Error(`${nameof(certificateToDb)} not a valid reward account`);
           return [
-            bytesToHex(Module.WalletV4.RewardAddress.new(request.network, stakeCredentials).to_address().to_bytes()),
+            bytesToHex(
+              Module.WalletV4.RewardAddress.new(request.network, stakeCredentials)
+                .to_address()
+                .to_bytes()
+            ),
             bytesToHex(Module.WalletV4.StakeRegistration.new(stakeCredentials).to_bytes()),
           ];
         });
@@ -2810,7 +2833,9 @@ async function rawUpdateUtxos(
     GetAddress: Class<GetAddress>,
     GetDerivationSpecific: Class<GetDerivationSpecific>,
   |},
-  derivationTables: Map<number, string>
+  derivationTables: Map<number, string>,
+  getUTXOsForAddresses: AddressUtxoFunc,
+  getBestBlock: BestBlockFunc
 ): Promise<void> {
   const addresses = await rawGetAddressRowsForWallet(
     dbTx,
@@ -2824,8 +2849,6 @@ async function rawUpdateUtxos(
   );
 
   const utxoStorageApi = publicDeriver.getUtxoStorageApi();
-  const utxoService = publicDeriver.getUtxoService();
-
   utxoStorageApi.setDb(db);
   utxoStorageApi.setDbTx(dbTx);
 
@@ -2836,7 +2859,24 @@ async function rawUpdateUtxos(
   if (await compareAndSetIfNewAddressSetHash(publicDeriver.getPublicDeriverId(), requestAddresses)) {
     await utxoStorageApi.clearUtxoState();
   }
-  await utxoService.syncUtxoState(requestAddresses);
+  const network = publicDeriver.getParent().getNetworkInfo();
+  const [remoteUtxos, tip] = await Promise.all([
+    getUTXOsForAddresses({ network, addresses: requestAddresses }),
+    getBestBlock({ network }),
+  ]);
+  if (tip.hash == null) throw new Error('cardano-wallet-backend returned no tip hash');
+  await utxoStorageApi.replaceUtxoAtSafePoint(
+    remoteUtxos.map(utxo => ({
+      utxoId: utxo.utxo_id,
+      txHash: utxo.tx_hash,
+      txIndex: utxo.tx_index,
+      receiver: utxo.receiver,
+      amount: new BigNumber(utxo.amount),
+      assets: utxo.assets.map(asset => ({ ...asset })),
+      blockNum: tip.height,
+    })),
+    tip.hash
+  );
 }
 
 export function toRequestAddresses(addresses: {|

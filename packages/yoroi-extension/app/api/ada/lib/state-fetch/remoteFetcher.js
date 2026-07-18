@@ -54,13 +54,13 @@ import {
   GetUtxoDataError,
   GetUtxosForAddressesApiError,
   InvalidWitnessError,
-  RollbackApiError,
   SendTransactionApiError,
 } from '../../../common/errors';
 
 import type { ConfigType } from '../../../../../config/config-types';
 import { bech32 } from 'bech32';
 import { addressBech32ToHex, addressHexToBech32 } from '../cardanoCrypto/utils';
+import { addressToDisplayString } from '../storage/bridge/utils';
 import { bytesToHex } from '../../../../coreUtils';
 import { makeTimeoutAbortSignal, fetchAndEnsureSuccess, type ServerError } from '../../../utils';
 
@@ -85,6 +85,27 @@ type CardanoWalletBackendAccountStateResponse = {|
   delegatedPool?: ?string,
   delegatedDrep?: ?string,
 |};
+
+type CardanoWalletBackendUtxo = {|
+  txHash: string,
+  outputIndex: number,
+  address: string,
+  value: string,
+  assets: Array<{|
+    policyId: string,
+    assetName: string,
+    quantity: string,
+  |}>,
+|};
+
+const toCardanoWalletBackendAddress = (address: string, network: $ReadOnly<NetworkRow>): string => {
+  // Wallet storage uses hex for Shelley addresses and base58 for Byron addresses,
+  // while the backend accepts the chain's display encodings.
+  if (/^(?:[0-9a-f]{2})+$/i.test(address)) {
+    return addressToDisplayString(address, network);
+  }
+  return address;
+};
 
 export const cardanoWalletAccountStateToRemote = (
   response: CardanoWalletBackendAccountStateResponse,
@@ -141,6 +162,62 @@ const getCardanoWalletBackendService = (network: $ReadOnly<NetworkRow>): null | 
   return backendService;
 };
 
+const ensureCardanoWalletBackendHistoryIsEmpty = async ({
+  service,
+  network,
+  addresses,
+  after,
+  headers,
+}: {|
+  service: string,
+  network: $ReadOnly<NetworkRow>,
+  addresses: Array<string>,
+  after?: number,
+  headers: { [string]: string },
+|}): Promise<void> => {
+  const backendAddresses = addresses.map(address => toCardanoWalletBackendAddress(address, network));
+  const stakeAddresses = backendAddresses.filter(address => address.startsWith('stake'));
+  // A stake-account read already covers every payment key in a Shelley account. The backend
+  // accepts addr_vkh for discovery but not for UTxO/history reads, so do not duplicate those
+  // account reads through the address-set endpoint.
+  const paymentAddresses = backendAddresses.filter(
+    address => !address.startsWith('stake') && !(stakeAddresses.length !== 0 && address.startsWith('addr_vkh'))
+  );
+  const afterQuery = after === undefined ? '' : `?after=${after}`;
+  const requests = [
+    ...(paymentAddresses.length === 0
+      ? []
+      : [
+          fetchAndEnsureSuccess(`${withoutTrailingSlash(service)}/v1/addresses/txs`, {
+            method: 'POST',
+            signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+            body: JSON.stringify({
+              addresses: paymentAddresses,
+              ...(after === undefined ? {} : { after }),
+            }),
+            headers: { 'content-type': 'application/json', ...headers },
+          }).then(response => response.json()),
+        ]),
+    ...stakeAddresses.map(stakeAddress =>
+      fetchAndEnsureSuccess(`${withoutTrailingSlash(service)}/v1/account/${encodeURIComponent(stakeAddress)}/txs${afterQuery}`, {
+        method: 'GET',
+        signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+        headers,
+      }).then(response => response.json())
+    ),
+  ];
+  const histories = await Promise.all(requests);
+  if (histories.some(history => !Array.isArray(history))) {
+    throw new Error('cardano-wallet-backend returned invalid history');
+  }
+  // The v1 transaction IO contract does not yet include spent-output references required by
+  // RemoteTransactionInput. Empty histories are complete and safe; non-empty histories fail
+  // closed until the backend exposes those references.
+  if (histories.some(history => history.length !== 0)) {
+    throw new Error('cardano-wallet-backend history needs input references');
+  }
+};
+
 export const sendTx: ({|
   body: SignedRequest,
   lastLaunchVersion: string,
@@ -193,121 +270,123 @@ export class RemoteFetcher implements IFetcher {
   }
 
   getUTXOsForAddresses: AddressUtxoRequest => Promise<AddressUtxoResponse> = async body => {
-    const { BackendService } = body.network.Backend;
-    if (BackendService == null) throw new Error(`${nameof(this.getUTXOsForAddresses)} missing backend url`);
-    const result: AddressUtxoResponse = await fetchAndEnsureSuccess(`${BackendService}/api/txs/utxoForAddresses`, {
-      method: 'POST',
-      signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-      body: JSON.stringify({ addresses: body.addresses }),
-      headers: {
-        'content-type': 'application/json',
-        'yoroi-version': this.getLastLaunchVersion(),
-        'yoroi-locale': this.getCurrentLocale(),
-      },
-    })
-      .then(response => response.json())
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService == null) {
+      throw new GetUtxosForAddressesApiError();
+    }
+    const backendAddresses = body.addresses.map(address => toCardanoWalletBackendAddress(address, body.network));
+    const stakeAddresses = backendAddresses.filter(address => address.startsWith('stake'));
+    const paymentAddresses = backendAddresses.filter(
+      address => !address.startsWith('stake') && !(stakeAddresses.length !== 0 && address.startsWith('addr_vkh'))
+    );
+    const headers = {
+      'yoroi-version': this.getLastLaunchVersion(),
+      'yoroi-locale': this.getCurrentLocale(),
+    };
+    const result: Array<CardanoWalletBackendUtxo> = await Promise.all([
+      ...(paymentAddresses.length === 0
+        ? []
+        : [
+            fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/addresses/utxos`, {
+              method: 'POST',
+              signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+              body: JSON.stringify({ addresses: paymentAddresses }),
+              headers: { 'content-type': 'application/json', ...headers },
+            }).then(response => response.json()),
+          ]),
+      ...stakeAddresses.map(stakeAddress =>
+        fetchAndEnsureSuccess(
+          `${withoutTrailingSlash(cardanoWalletBackendService)}/v1/account/${encodeURIComponent(stakeAddress)}/utxos`,
+          {
+            method: 'GET',
+            signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+            headers,
+          }
+        ).then(response => response.json())
+      ),
+    ])
+      .then(results => results.flat())
       .catch(error => {
-        Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getUTXOsForAddresses)} error: ` + stringifyError(error));
+        Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getUTXOsForAddresses)} v1 error: ` + stringifyError(error));
         throw new GetUtxosForAddressesApiError();
       });
     return result.map(utxo => {
-      if (utxo.receiver.startsWith('addr')) {
-        const fixedAddr = addressBech32ToHex(utxo.receiver);
-        return {
-          ...utxo,
-          receiver: fixedAddr,
-        };
+      if (
+        typeof utxo.txHash !== 'string' ||
+        !Number.isSafeInteger(utxo.outputIndex) ||
+        utxo.outputIndex < 0 ||
+        typeof utxo.address !== 'string' ||
+        !/^\d+$/.test(utxo.value) ||
+        !Array.isArray(utxo.assets)
+      ) {
+        throw new GetUtxosForAddressesApiError();
       }
-      return utxo;
+      const receiver = utxo.address.startsWith('addr') ? addressBech32ToHex(utxo.address) : utxo.address;
+      return {
+        utxo_id: `${utxo.txHash}${utxo.outputIndex}`,
+        tx_hash: utxo.txHash,
+        tx_index: utxo.outputIndex,
+        receiver,
+        amount: utxo.value,
+        assets: utxo.assets.map(asset => ({
+          amount: asset.quantity,
+          assetId: `${asset.policyId}.${asset.assetName}`,
+          policyId: asset.policyId,
+          name: asset.assetName,
+        })),
+      };
     });
   };
 
   getTransactionsHistoryForAddresses: HistoryRequest => Promise<HistoryResponse> = body => {
-    const { network, ...rest } = body;
-    const { BackendService } = network.Backend;
-    if (BackendService == null) throw new Error(`${nameof(this.getTransactionsHistoryForAddresses)} missing backend url`);
-    return fetchAndEnsureSuccess(`${BackendService}/api/v2/txs/history`, {
-      method: 'POST',
-      signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-      body: JSON.stringify(rest),
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService == null) {
+      return Promise.reject(new GetTxHistoryForAddressesApiError());
+    }
+    const after = body.after?.block == null ? undefined : Number(body.after.block);
+    if (after !== undefined && !Number.isSafeInteger(after)) {
+      return Promise.reject(new GetTxHistoryForAddressesApiError());
+    }
+    return ensureCardanoWalletBackendHistoryIsEmpty({
+      service: cardanoWalletBackendService,
+      network: body.network,
+      addresses: body.addresses,
+      after,
       headers: {
         'content-type': 'application/json',
         'yoroi-version': this.getLastLaunchVersion(),
         'yoroi-locale': this.getCurrentLocale(),
       },
     })
-      .then(response => response.json())
-      .then(data => {
-        return data.map((resp: RemoteTransaction) => {
-          if (resp.type === 'shelley') {
-            // unfortunately the backend returns Shelley addresses as bech32
-            // this is a bad idea, and so we manually change them to raw payload
-            for (const input of resp.inputs) {
-              // replace non-existent w/ empty array to handle Allegra -> Mary transition
-              // $FlowExpectedError[cannot-write]
-              input.assets = input.assets ?? [];
-              try {
-                // $FlowExpectedError[cannot-write]
-                input.address = bytesToHex(bech32.fromWords(bech32.decode(input.address, 1000).words));
-              } catch (_e) {
-                /* expected not to work for base58 addresses */
-              }
-            }
-            for (const output of resp.outputs) {
-              // replace non-existent w/ empty array to handle Allegra -> Mary transition
-              // $FlowExpectedError[cannot-write]
-              output.assets = output.assets ?? [];
-              try {
-                // $FlowExpectedError[cannot-write]
-                output.address = bytesToHex(bech32.fromWords(bech32.decode(output.address, 1000).words));
-              } catch (_e) {
-                /* expected not to work for base58 addresses */
-              }
-            }
-          }
-          if (resp.height != null) {
-            return resp;
-          }
-          // $FlowExpectedError[prop-missing] remove if we rename the field in the backend-service
-          const height = resp.block_num;
-          // $FlowExpectedError[prop-missing] remove if we rename the field in the backend-service
-          delete resp.block_num;
-          return {
-            ...resp,
-            height,
-          };
-        });
-      })
+      .then(() => [])
       .catch(error => {
         Logger.error(
-          `${nameof(RemoteFetcher)}::${nameof(this.getTransactionsHistoryForAddresses)} error: ` + stringifyError(error)
+          `${nameof(RemoteFetcher)}::${nameof(this.getTransactionsHistoryForAddresses)} v1 error: ` + stringifyError(error)
         );
-        const errorMessage = error?.response?.data?.error?.response;
-        if (
-          errorMessage === 'REFERENCE_BLOCK_MISMATCH' ||
-          errorMessage === 'REFERENCE_TX_NOT_FOUND' ||
-          errorMessage === 'REFERENCE_BEST_BLOCK_MISMATCH'
-        ) {
-          throw new RollbackApiError();
-        }
         throw new GetTxHistoryForAddressesApiError();
       });
   };
 
   getRecentTransactionHashes: GetRecentTransactionHashesRequest => Promise<GetRecentTransactionHashesResponse> = body => {
-    const { network, addresses, before } = body;
-    const { BackendService } = network.Backend;
-    if (BackendService == null) throw new Error(`${nameof(this.getRecentTransactionHashes)} missing backend url`);
-    return fetchAndEnsureSuccess(`${BackendService}/api/v2.1/txs/summaries`, {
-      method: 'POST',
-      signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-      body: JSON.stringify({ addresses, before }),
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService == null) {
+      return Promise.reject(new GetTxHistoryForAddressesApiError());
+    }
+    return ensureCardanoWalletBackendHistoryIsEmpty({
+      service: cardanoWalletBackendService,
+      network: body.network,
+      addresses: body.addresses,
       headers: {
         'content-type': 'application/json',
         'yoroi-version': this.getLastLaunchVersion(),
         'yoroi-locale': this.getCurrentLocale(),
       },
-    }).then(response => response.json());
+    })
+      .then(() => ({}))
+      .catch(error => {
+        Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getRecentTransactionHashes)} v1 error: ` + stringifyError(error));
+        throw new GetTxHistoryForAddressesApiError();
+      });
   };
 
   getTransactionsByHashes: GetTransactionsByHashesRequest => Promise<GetTransactionsByHashesResponse> = body => {
@@ -387,22 +466,43 @@ export class RemoteFetcher implements IFetcher {
   };
 
   getRewardHistory: RewardHistoryRequest => Promise<RewardHistoryResponse> = body => {
-    const { network, ...rest } = body;
-    const { BackendService } = network.Backend;
-    if (BackendService == null) throw new Error(`${nameof(this.getRewardHistory)} missing backend url`);
-    return fetchAndEnsureSuccess(`${BackendService}/api/account/rewardHistory`, {
-      method: 'POST',
-      body: JSON.stringify(rest),
-      signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-      headers: {
-        'content-type': 'application/json',
-        'yoroi-version': this.getLastLaunchVersion(),
-        'yoroi-locale': this.getCurrentLocale(),
-      },
-    })
-      .then(response => response.json())
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService == null) return Promise.reject(new GetRewardHistoryApiError());
+    return Promise.all(
+      body.addresses.map(async address => {
+        const stakeAddress = addressHexToBech32(address);
+        const rewards = await fetchAndEnsureSuccess(
+          `${withoutTrailingSlash(cardanoWalletBackendService)}/v1/account/${encodeURIComponent(stakeAddress)}/rewards`,
+          {
+            method: 'GET',
+            signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+            headers: {
+              'yoroi-version': this.getLastLaunchVersion(),
+              'yoroi-locale': this.getCurrentLocale(),
+            },
+          }
+        ).then(response => response.json());
+        if (!Array.isArray(rewards)) throw new Error('cardano-wallet-backend returned invalid rewards');
+        return [
+          address,
+          rewards.map(reward => {
+            if (!Number.isSafeInteger(reward.earnedEpoch) || !/^\d+$/.test(reward.amount)) {
+              throw new Error('cardano-wallet-backend returned invalid reward');
+            }
+            let poolHash = '';
+            if (reward.poolId != null) {
+              const decoded = bech32.decode(reward.poolId, 1000);
+              if (decoded.prefix !== 'pool') throw new Error('cardano-wallet-backend returned invalid reward pool');
+              poolHash = bytesToHex(bech32.fromWords(decoded.words));
+            }
+            return { epoch: reward.earnedEpoch, reward: reward.amount, poolHash };
+          }),
+        ];
+      })
+    )
+      .then(entries => Object.fromEntries(entries))
       .catch(error => {
-        Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getRewardHistory)} error: ` + stringifyError(error));
+        Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getRewardHistory)} v1 error: ` + stringifyError(error));
         throw new GetRewardHistoryApiError();
       });
   };
@@ -452,12 +552,17 @@ export class RemoteFetcher implements IFetcher {
   };
 
   checkAddressesInUse: FilterUsedRequest => Promise<FilterUsedResponse> = body => {
-    const { BackendService } = body.network.Backend;
-    if (BackendService == null) throw new Error(`${nameof(this.checkAddressesInUse)} missing backend url`);
-    return fetchAndEnsureSuccess(`${BackendService}/api/v2/addresses/filterUsed`, {
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService == null) {
+      return Promise.reject(new CheckAddressesInUseApiError());
+    }
+    const backendToStoredAddress = new Map(
+      body.addresses.map(address => [toCardanoWalletBackendAddress(address, body.network), address])
+    );
+    return fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/addresses/filter-used`, {
       method: 'POST',
       signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-      body: JSON.stringify({ addresses: body.addresses }),
+      body: JSON.stringify({ addresses: Array.from(backendToStoredAddress.keys()) }),
       headers: {
         'content-type': 'application/json',
         'yoroi-version': this.getLastLaunchVersion(),
@@ -465,8 +570,17 @@ export class RemoteFetcher implements IFetcher {
       },
     })
       .then(response => response.json())
+      .then(response => {
+        if (
+          !Array.isArray(response) ||
+          response.some(address => typeof address !== 'string' || !backendToStoredAddress.has(address))
+        ) {
+          throw new Error('cardano-wallet-backend returned invalid used addresses');
+        }
+        return response.map(address => backendToStoredAddress.get(address)).filter(Boolean);
+      })
       .catch(error => {
-        Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.checkAddressesInUse)} error: ` + stringifyError(error));
+        Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.checkAddressesInUse)} v1 error: ` + stringifyError(error));
         throw new CheckAddressesInUseApiError();
       });
   };
