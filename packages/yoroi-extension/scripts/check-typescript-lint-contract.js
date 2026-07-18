@@ -28,6 +28,11 @@ async function main() {
     throw new Error('Underscore-prefixed TypeScript symbols must remain explicitly ignorable');
   }
 
+  const ignoredParameterMessages = await lintText('export function fixture(_intentionallyUnused: string): void {}\n');
+  if (ignoredParameterMessages.length !== 0) {
+    throw new Error('Underscore-prefixed TypeScript parameters must remain explicitly ignorable');
+  }
+
   console.log('TypeScript lint contract passed');
 }
 
