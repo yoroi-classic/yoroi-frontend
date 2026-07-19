@@ -6,12 +6,19 @@ const test = require('node:test');
 const baseline = require('./typescript-eslint-baseline.json');
 const configuredRuleIds = require('./typescript-eslint-baseline-rules');
 const packageJson = require('../package.json');
+
+function loadCheckerWithoutInheritedParserMode() {
+  delete process.env.TSESTREE_SINGLE_RUN;
+  return require('./check-typescript-eslint-baseline');
+}
+
 const {
   CANONICAL_TSESTREE_SINGLE_RUN,
   classifyResults,
   compareBaseline,
   compareRuleKeys,
-} = require('./check-typescript-eslint-baseline');
+} = loadCheckerWithoutInheritedParserMode();
+const baselineParserMode = process.env.TSESTREE_SINGLE_RUN;
 
 const EXPECTED_RULE_IDS = [
   '@typescript-eslint/ban-ts-comment',
@@ -49,6 +56,7 @@ test('locks the exact authoritative 22-rule baseline inventory', () => {
 
 test('locks canonical single-run mode for the baseline and raw diagnostics', () => {
   assert.equal(CANONICAL_TSESTREE_SINGLE_RUN, 'true');
+  assert.equal(baselineParserMode, 'true');
   assert.match(packageJson.scripts['eslint-loud'], /^TSESTREE_SINGLE_RUN=true eslint /);
 });
 
