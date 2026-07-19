@@ -517,6 +517,37 @@ describe('extension dependency smoke', () => {
     }
   });
 
+  test.each([undefined, '', 'not-a-transaction-hash', 'ab'.repeat(31), 123])(
+    'rejects an invalid cardano-wallet-backend transaction hash response (%p)',
+    async txHash => {
+      const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+      (global: any).CONFIG.cardanoWalletBackend = {
+        enabled: true,
+        mainnet: 'http://localhost:3010/',
+        preprod: 'http://localhost:3010/',
+      };
+      (global: any).fetch = jest.fn(() => successfulJsonResponse({ txHash }));
+      (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+      try {
+        const fetcher = new AdaRemoteFetcher(
+          () => '5.23.200',
+          () => 'en-US',
+          () => 'chrome'
+        );
+        await expect(
+          fetcher.sendTx({
+            network: backendNetwork(),
+            id: 'tx-id',
+            encodedTx: new Uint8Array([0x84, 0x01]),
+          })
+        ).rejects.toBeInstanceOf(SendTransactionApiError);
+      } finally {
+        (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+      }
+    }
+  );
+
   test('maps registered and unregistered account states from cardano-wallet-backend', async () => {
     const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
     (global: any).CONFIG.cardanoWalletBackend = {
@@ -641,6 +672,10 @@ describe('extension dependency smoke', () => {
 
   test.each([
     ['registered', 'true'],
+    ['balance', 1],
+    ['rewardsAvailable', 1],
+    ['rewardsSum', 1],
+    ['withdrawalsSum', 0],
     ['rewardsAvailable', '-1'],
     ['rewardsSum', '1.5'],
     ['withdrawalsSum', 'not-a-number'],
