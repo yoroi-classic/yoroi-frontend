@@ -11,6 +11,7 @@ const prettier = require('eslint-plugin-prettier');
 const simpleImportSort = require('eslint-plugin-simple-import-sort');
 const typescriptEslint = require('@typescript-eslint/eslint-plugin');
 const typescriptParser = require('@typescript-eslint/parser');
+const typescriptEslintBaselineRules = require('./scripts/typescript-eslint-baseline-rules');
 
 const { fixupPluginRules } = require('@eslint/compat');
 
@@ -31,6 +32,9 @@ const projectGlobals = {
 };
 
 const { FlatCompat } = require('@eslint/eslintrc');
+
+const enforceTypescriptEslintBaseline = process.env.YOROI_TYPESCRIPT_ESLINT_BASELINE === '1';
+const typescriptEslintDebtRules = Object.fromEntries(typescriptEslintBaselineRules.map(ruleId => [ruleId, 'warn']));
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
@@ -267,6 +271,9 @@ module.exports = defineConfig([
       '@typescript-eslint/prefer-namespace-keyword': 'error',
       '@typescript-eslint/restrict-plus-operands': 'error',
       '@typescript-eslint/triple-slash-reference': 'error',
+      // The baseline checker activates the remaining non-clean recommended
+      // rules through this same authoritative flat-config block.
+      ...(enforceTypescriptEslintBaseline ? typescriptEslintDebtRules : {}),
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
