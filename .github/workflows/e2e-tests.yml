@@ -19,11 +19,6 @@ on:
         required: false
         default: false
         type: boolean
-      run_live_provider_tests:
-        description: 'Run quarantined E2E cases that call public domain resolvers'
-        required: false
-        default: false
-        type: boolean
   pull_request_review:
     types: [submitted]
 
@@ -239,7 +234,6 @@ jobs:
           TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
-          RUN_LIVE_PROVIDER_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_provider_tests == 'true' }}
         run: npm run test:ext:${{ matrix.suite }}
 
       - name: Archive tests screenshots and logs

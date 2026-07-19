@@ -64,6 +64,12 @@ export type AppConfigType = {|
   pubKeyData: string,
   /** Public key to make sure that the ticker signing key change really does come from EMURGO */
   pubKeyMaster: string,
+  domainResolverFixtures?: {|
+    [domain: string]: {|
+      address: string,
+      nameServer: string,
+    |},
+  |},
 |};
 
 export type NetworkConfigType = {|
