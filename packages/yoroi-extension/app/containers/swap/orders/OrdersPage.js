@@ -234,7 +234,7 @@ export default function SwapOrdersPage(props: StoresProps): Node {
       if (hasCollateral) {
         openTxReviewModal({
           modalView: 'transactionReview',
-          submitTx: passswordInput => submitTx(passswordInput, cancelTxCbor, collateralReorgTxObj, order),
+          submitTx: passswordInput => submitTx(passswordInput, cancelTxCbor, undefined, order),
           cborTx: cancelTxCbor,
           extraOverviewDetails: {
             title: 'Cancel swap order details',
