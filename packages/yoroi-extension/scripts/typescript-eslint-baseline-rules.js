@@ -1,6 +1,5 @@
 module.exports = Object.freeze([
   '@typescript-eslint/ban-ts-comment',
-  '@typescript-eslint/no-empty-object-type',
   '@typescript-eslint/no-explicit-any',
   '@typescript-eslint/no-floating-promises',
   '@typescript-eslint/no-misused-promises',
@@ -11,11 +10,9 @@ module.exports = Object.freeze([
   '@typescript-eslint/no-unsafe-assignment',
   '@typescript-eslint/no-unsafe-call',
   '@typescript-eslint/no-unsafe-enum-comparison',
-  '@typescript-eslint/no-unsafe-function-type',
   '@typescript-eslint/no-unsafe-member-access',
   '@typescript-eslint/no-unsafe-return',
   '@typescript-eslint/no-unused-expressions',
-  '@typescript-eslint/no-wrapper-object-types',
   '@typescript-eslint/only-throw-error',
   '@typescript-eslint/prefer-promise-reject-errors',
   '@typescript-eslint/require-await',

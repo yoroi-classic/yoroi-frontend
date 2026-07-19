@@ -28,7 +28,7 @@ const initialGovernanceProvider = {
   governanceStatus: { status: null, drep: null },
   triggerBuySellAdaDialog: null,
   recentTransactions: [],
-  submitedTransactions: [] as Array<{ isDrepDelegation: Boolean }>,
+  submitedTransactions: [] as Array<{ isDrepDelegation: boolean }>,
   networkId: null,
   isTestnet: false,
   backendServiceZero: null,
@@ -39,7 +39,7 @@ const GovernanceContext = React.createContext(initialGovernanceProvider);
 type GovernanceProviderProps = {
   children: React.ReactNode;
   currentWallet: any; // TODO to be defined
-  createDrepDelegationTransaction: (drepCredential: String) => Promise<void>;
+  createDrepDelegationTransaction: (drepCredential: string) => Promise<void>;
   txDelegationResult: any;
   txDelegationError: any;
   signDelegationTransaction: (params: any) => Promise<void>;

@@ -247,7 +247,7 @@ module.exports = defineConfig([
       'no-unused-vars': 'off',
       'no-dupe-class-members': 'off',
       'no-redeclare': 'off',
-      // These 20 recommended rules have a zero-error whole-tree baseline.
+      // These 23 recommended rules have a zero-error whole-tree baseline.
       // The non-clean recommended/type-aware families are staged in #99.
       'no-array-constructor': 'off',
       '@typescript-eslint/await-thenable': 'error',
@@ -256,6 +256,7 @@ module.exports = defineConfig([
       '@typescript-eslint/no-base-to-string': 'error',
       '@typescript-eslint/no-duplicate-enum-values': 'error',
       '@typescript-eslint/no-duplicate-type-constituents': 'error',
+      '@typescript-eslint/no-empty-object-type': 'error',
       '@typescript-eslint/no-extra-non-null-assertion': 'error',
       '@typescript-eslint/no-for-in-array': 'error',
       'no-implied-eval': 'off',
@@ -266,7 +267,9 @@ module.exports = defineConfig([
       '@typescript-eslint/no-require-imports': 'error',
       '@typescript-eslint/no-unnecessary-type-constraint': 'error',
       '@typescript-eslint/no-unsafe-declaration-merging': 'error',
+      '@typescript-eslint/no-unsafe-function-type': 'error',
       '@typescript-eslint/no-unsafe-unary-minus': 'error',
+      '@typescript-eslint/no-wrapper-object-types': 'error',
       '@typescript-eslint/prefer-as-const': 'error',
       '@typescript-eslint/prefer-namespace-keyword': 'error',
       '@typescript-eslint/restrict-plus-operands': 'error',
