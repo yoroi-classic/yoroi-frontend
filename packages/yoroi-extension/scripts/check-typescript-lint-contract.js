@@ -14,21 +14,47 @@ async function lintText(source) {
   const [result] = await eslint.lintText(source, {
     filePath: includedTypeScriptPath,
   });
-  return result.messages.filter(message => message.ruleId === '@typescript-eslint/no-unused-vars');
+  return result.messages;
+}
+
+function messagesForRule(messages, ruleId) {
+  return messages.filter(message => message.ruleId === ruleId);
 }
 
 async function main() {
-  const unusedMessages = await lintText('const unusedSymbol = 1;\nexport {};\n');
+  const syntaxMessages = await lintText('const broken: = 1;\n');
+  if (!syntaxMessages.some(message => message.fatal === true)) {
+    throw new Error(`TypeScript syntax errors must fail ESLint: ${JSON.stringify(syntaxMessages)}`);
+  }
+
+  const unsafeMessages = messagesForRule(
+    await lintText('export async function fixture(): Promise<void> { await 42; }\n'),
+    '@typescript-eslint/await-thenable'
+  );
+  if (unsafeMessages.length !== 1 || unsafeMessages[0].severity !== 2) {
+    throw new Error(`Type-aware unsafe operations must fail ESLint: ${JSON.stringify(unsafeMessages)}`);
+  }
+
+  const unusedMessages = messagesForRule(
+    await lintText('const unusedSymbol = 1;\nexport {};\n'),
+    '@typescript-eslint/no-unused-vars'
+  );
   if (unusedMessages.length !== 1 || unusedMessages[0].severity !== 2) {
     throw new Error(`TypeScript unused symbols must fail ESLint: ${JSON.stringify(unusedMessages)}`);
   }
 
-  const ignoredMessages = await lintText('const _intentionallyUnused = 1;\nexport {};\n');
+  const ignoredMessages = messagesForRule(
+    await lintText('const _intentionallyUnused = 1;\nexport {};\n'),
+    '@typescript-eslint/no-unused-vars'
+  );
   if (ignoredMessages.length !== 0) {
     throw new Error('Underscore-prefixed TypeScript symbols must remain explicitly ignorable');
   }
 
-  const ignoredParameterMessages = await lintText('export function fixture(_intentionallyUnused: string): void {}\n');
+  const ignoredParameterMessages = messagesForRule(
+    await lintText('export function fixture(_intentionallyUnused: string): void {}\n'),
+    '@typescript-eslint/no-unused-vars'
+  );
   if (ignoredParameterMessages.length !== 0) {
     throw new Error('Underscore-prefixed TypeScript parameters must remain explicitly ignorable');
   }
