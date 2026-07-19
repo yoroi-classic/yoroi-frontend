@@ -272,7 +272,7 @@
       let returnTx = false;
       if (typeof param === 'object') {
         tx = param.tx;
-        partialSign = param.partialSign ?? false;
+        partialSign = param.partialSign === undefined ? false : param.partialSign;
         returnTx = param.returnTx;
       } else if (typeof param !== 'string') {
         throw new Error('.signTx argument is expected to be an object or a string!');
