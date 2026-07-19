@@ -16,6 +16,7 @@ const { handleApiGetCryptoAddress } = require('@yoroi/resolver/lib/commonjs/adap
 const { unstoppableApiGetCryptoAddress } = require('@yoroi/resolver/lib/commonjs/adapters/unstoppable/api');
 const { handleCnsApiError } = require('@yoroi/resolver/lib/commonjs/adapters/cns/api');
 const { makeCnsCardanoApi } = require('@yoroi/resolver/lib/commonjs/adapters/cns/cardano-api-maker');
+const { stringToHex } = require('@yoroi/resolver/lib/commonjs/adapters/cns/utils');
 
 const MAINNET_ADDRESS = 'addr1z8dyldfnnpg4w85d32lv64f5ldra02juhnzxdvlyyrpfs0leh7ahm4pdpqxx0mc0wvmu6n025jml40g7pfd0j0vf6aqsl2tlcx';
 const PREPROD_ADDRESS = 'addr_test1wzzfgjazt5ts34cstrhzaac4xav8x7z2m3vg76s8qmaztzglsw8k5';
@@ -33,6 +34,7 @@ const adapterCases = [
     payload: address => ({ resolved_addresses: { ada: address } }),
     malformedPayload: { resolved_addresses: {} },
     makeResolver: request => handleApiGetCryptoAddress({ request, isMainnet: true }),
+    assertRequest: () => {},
   },
   {
     name: 'Unstoppable Domains',
@@ -43,6 +45,7 @@ const adapterCases = [
     }),
     malformedPayload: { meta: { blockchain: 'MATIC' }, records: { 'crypto.ADA.address': 42 } },
     makeResolver: request => unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request }),
+    assertRequest: () => {},
   },
   {
     name: 'Cardano Name Service',
@@ -51,13 +54,21 @@ const adapterCases = [
     malformedPayload: { address: MAINNET_ADDRESS },
     makeResolver: request => {
       const api = makeCnsCardanoApi('https://resolver.invalid', request);
-      return async () => {
+      return async receiver => {
         try {
-          return await api.getAssetAddress('policy-id', 'asset-name');
+          return await api.getAssetAddress('policy-id', stringToHex(receiver));
         } catch (error) {
           return handleCnsApiError(error);
         }
       };
+    },
+    assertRequest: request => {
+      expect(request).toHaveBeenCalledWith(
+        {
+          url: `https://resolver.invalid/api/asset/accounts?policy=policy-id&asset=${stringToHex('alice.ada')}`,
+        },
+        undefined
+      );
     },
   },
 ];
@@ -72,6 +83,7 @@ describe.each(adapterCases.map(adapter => [adapter.name, adapter]))('%s producti
 
     await expect(adapter.makeResolver(request)(adapter.resolve)).resolves.toBe(MAINNET_ADDRESS);
     expect(request).toHaveBeenCalledTimes(1);
+    adapter.assertRequest(request);
   });
 
   test('maps a provider not-found response without returning an address', async () => {
