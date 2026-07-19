@@ -14,7 +14,7 @@ export async function submitSingleTransaction({
   signedTransactionHexes: $ReadOnlyArray<string>,
   submit: SubmitTransaction,
 |}): Promise<void> {
-  if (signedTransactionHexes.length !== 1) {
+  if (signedTransactionHexes.length !== 1 || signedTransactionHexes[0].length === 0) {
     throw new Error('Single transaction submission requires exactly one signed transaction');
   }
 

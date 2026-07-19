@@ -187,10 +187,8 @@ export default function SwapOrdersPage(props: StoresProps): Node {
         hasCollateral = false;
       }
       return handleCreateCancelTransaction(order, utxoHex, collateralReorgTxHex, collateralReorgTxData, hasCollateral);
-    } catch (e) {
-      console.error('Failed to prepare a collateral utxo for cancel', e);
-      const { unsignedTxHex, txData, collateralUtxoHex } = await swapStore.createCollateralReorgForCancel({ wallet });
-      console.log('{ unsignedTxHex, txData, collateralUtxoHex }', { unsignedTxHex, txData, collateralUtxoHex });
+    } catch (_e) {
+      console.error('Failed to prepare a collateral utxo for cancel');
     }
   };
 
@@ -209,7 +207,7 @@ export default function SwapOrdersPage(props: StoresProps): Node {
       });
 
       if (cancelTxCbor == null || !isHex(cancelTxCbor)) {
-        console.error('Failed to receive swap cancel tx from API. Expected cbor hex, got: ', cancelTxCbor);
+        console.error('Failed to receive a valid swap cancel transaction from API');
         // eslint-disable-next-line no-alert
         alert(
           'Unfortunately 3rd party API failed to produce cancellation transaction. Please retry later or report the issue and provide logs.'
@@ -269,12 +267,17 @@ export default function SwapOrdersPage(props: StoresProps): Node {
           },
         });
       }
-    } catch (e) {
-      console.log('Failed to prepare a cancellation transaction', e);
+    } catch (_e) {
+      console.error('Failed to prepare a cancellation transaction');
     }
   };
 
-  const submitTx = async (passswordInput, cancelTxCbor, signedCollateralReorgTx, _order: any) => {
+  const submitTx = async (
+    passswordInput: string,
+    cancelTxCbor: string,
+    signedCollateralReorgTx: ?string,
+    _order: any
+  ): Promise<void> => {
     try {
       startLoadingTxReview();
       const { signedTxHex: signedCancelTx } = await props.stores.transactionProcessingStore.adaSignTransactionHexFromWallet({
@@ -282,15 +285,15 @@ export default function SwapOrdersPage(props: StoresProps): Node {
         transactionHex: cancelTxCbor,
         password: passswordInput,
       });
-      const signedTransactionHexes: any =
+      const signedTransactionHexes: $ReadOnlyArray<string> =
         signedCollateralReorgTx != null ? [signedCollateralReorgTx, signedCancelTx] : [signedCancelTx];
       await submitSingleTransaction({
         signedTransactionHexes,
         submit: signedTransactionHex => swapStore.executeTransactionHex({ wallet, signedTransactionHex }),
       });
       showTxResultModal(TransactionResult.SUCCESS);
-    } catch (error) {
-      console.log('Failed to sign transaction', error);
+    } catch (_error) {
+      console.error('Failed to sign or submit swap cancellation transaction');
       showTxResultModal(TransactionResult.FAIL);
     }
   };
@@ -318,8 +321,8 @@ export default function SwapOrdersPage(props: StoresProps): Node {
         order,
       });
       closeTxReviewModal();
-    } catch (error) {
-      console.log('Failed to sign collateral transaction', error);
+    } catch (_error) {
+      console.error('Failed to sign collateral transaction');
     }
   };
 

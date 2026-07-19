@@ -5,6 +5,7 @@ import { submitSingleTransaction } from './submitSingleTransaction';
 describe('submitSingleTransaction', () => {
   test.each([
     ['an empty operation', []],
+    ['an empty signed transaction', ['']],
     ['a multi-transaction operation', ['84a1', '84a2']],
   ])('rejects %s before broadcasting', async (_label, signedTransactionHexes) => {
     const submit = jest.fn(() => Promise.resolve());
