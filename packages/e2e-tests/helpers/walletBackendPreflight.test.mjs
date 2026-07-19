@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkWalletBackend } from './walletBackendPreflight.mjs';
+import { checkWalletBackend, waitForWalletBackend } from './walletBackendPreflight.mjs';
 
 const response = body => ({ ok: true, status: 200, json: async () => body });
 
@@ -52,4 +52,26 @@ test('rejects a backend whose remote config is in maintenance', async () => {
     checkWalletBackend({ endpoint: 'http://127.0.0.1:21000', expectedNetwork: 'mainnet', fetchImpl }),
     /v1\/config returned HTTP 503/
   );
+});
+
+test('retries through the injected fetch implementation', async () => {
+  let healthAttempts = 0;
+  const fetchImpl = async url => {
+    if (url.endsWith('/health')) {
+      healthAttempts += 1;
+      if (healthAttempts === 1) throw new Error('backend is starting');
+    }
+    return healthyFetch(url);
+  };
+
+  const status = await waitForWalletBackend({
+    endpoint: 'http://127.0.0.1:21000',
+    expectedNetwork: 'mainnet',
+    attempts: 2,
+    delayMs: 0,
+    fetchImpl,
+  });
+
+  assert.equal(status.network, 'mainnet');
+  assert.equal(healthAttempts, 2);
 });

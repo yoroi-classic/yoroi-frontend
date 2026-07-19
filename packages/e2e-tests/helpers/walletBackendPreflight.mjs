@@ -27,11 +27,11 @@ export const checkWalletBackend = async ({ endpoint, expectedNetwork, fetchImpl 
   return status;
 };
 
-export const waitForWalletBackend = async ({ endpoint, expectedNetwork, attempts = 30, delayMs = 2000 }) => {
+export const waitForWalletBackend = async ({ endpoint, expectedNetwork, attempts = 30, delayMs = 2000, fetchImpl = fetch }) => {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await checkWalletBackend({ endpoint, expectedNetwork });
+      return await checkWalletBackend({ endpoint, expectedNetwork, fetchImpl });
     } catch (error) {
       lastError = error;
       if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, delayMs));

@@ -162,28 +162,42 @@ const getCardanoWalletBackendService = (network: $ReadOnly<NetworkRow>): null | 
   return backendService;
 };
 
+const splitCardanoWalletBackendAddresses = (
+  addresses: Array<string>,
+  network: $ReadOnly<NetworkRow>
+): {|
+  paymentAddresses: Array<string>,
+  stakeAddresses: Array<string>,
+|} => {
+  const backendAddresses = addresses.map(address => toCardanoWalletBackendAddress(address, network));
+  const stakeAddresses = backendAddresses.filter(address => address.startsWith('stake'));
+  const paymentCredentials = backendAddresses.filter(address => address.startsWith('addr_vkh'));
+
+  // A stake-account read covers every payment credential in this wallet. The backend accepts
+  // addr_vkh for discovery, but its UTxO/history endpoints require full payment addresses. Do
+  // not turn a credential-only request into a successful empty wallet snapshot.
+  if (paymentCredentials.length !== 0 && stakeAddresses.length === 0) {
+    throw new Error('cardano-wallet-backend UTxO/history reads require a stake address for payment credentials');
+  }
+
+  return {
+    paymentAddresses: backendAddresses.filter(address => !address.startsWith('stake') && !address.startsWith('addr_vkh')),
+    stakeAddresses,
+  };
+};
+
 const ensureCardanoWalletBackendHistoryIsEmpty = async ({
   service,
   network,
   addresses,
-  after,
   headers,
 }: {|
   service: string,
   network: $ReadOnly<NetworkRow>,
   addresses: Array<string>,
-  after?: number,
   headers: { [string]: string },
 |}): Promise<void> => {
-  const backendAddresses = addresses.map(address => toCardanoWalletBackendAddress(address, network));
-  const stakeAddresses = backendAddresses.filter(address => address.startsWith('stake'));
-  // A stake-account read already covers every payment key in a Shelley account. The backend
-  // accepts addr_vkh for discovery but not for UTxO/history reads, so do not duplicate those
-  // account reads through the address-set endpoint.
-  const paymentAddresses = backendAddresses.filter(
-    address => !address.startsWith('stake') && !(stakeAddresses.length !== 0 && address.startsWith('addr_vkh'))
-  );
-  const afterQuery = after === undefined ? '' : `?after=${after}`;
+  const { paymentAddresses, stakeAddresses } = splitCardanoWalletBackendAddresses(addresses, network);
   const requests = [
     ...(paymentAddresses.length === 0
       ? []
@@ -191,15 +205,12 @@ const ensureCardanoWalletBackendHistoryIsEmpty = async ({
           fetchAndEnsureSuccess(`${withoutTrailingSlash(service)}/v1/addresses/txs`, {
             method: 'POST',
             signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-            body: JSON.stringify({
-              addresses: paymentAddresses,
-              ...(after === undefined ? {} : { after }),
-            }),
+            body: JSON.stringify({ addresses: paymentAddresses }),
             headers: { ...headers, 'content-type': 'application/json' },
           }).then(response => response.json()),
         ]),
     ...stakeAddresses.map(stakeAddress =>
-      fetchAndEnsureSuccess(`${withoutTrailingSlash(service)}/v1/account/${encodeURIComponent(stakeAddress)}/txs${afterQuery}`, {
+      fetchAndEnsureSuccess(`${withoutTrailingSlash(service)}/v1/account/${encodeURIComponent(stakeAddress)}/txs`, {
         method: 'GET',
         signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
         headers,
@@ -274,11 +285,14 @@ export class RemoteFetcher implements IFetcher {
     if (cardanoWalletBackendService == null) {
       throw new GetUtxosForAddressesApiError();
     }
-    const backendAddresses = body.addresses.map(address => toCardanoWalletBackendAddress(address, body.network));
-    const stakeAddresses = backendAddresses.filter(address => address.startsWith('stake'));
-    const paymentAddresses = backendAddresses.filter(
-      address => !address.startsWith('stake') && !(stakeAddresses.length !== 0 && address.startsWith('addr_vkh'))
-    );
+    let paymentAddresses;
+    let stakeAddresses;
+    try {
+      ({ paymentAddresses, stakeAddresses } = splitCardanoWalletBackendAddresses(body.addresses, body.network));
+    } catch (error) {
+      Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getUTXOsForAddresses)} v1 error: ` + stringifyError(error));
+      throw new GetUtxosForAddressesApiError();
+    }
     const headers = {
       'yoroi-version': this.getLastLaunchVersion(),
       'yoroi-locale': this.getCurrentLocale(),
@@ -317,7 +331,17 @@ export class RemoteFetcher implements IFetcher {
         utxo.outputIndex < 0 ||
         typeof utxo.address !== 'string' ||
         !/^\d+$/.test(utxo.value) ||
-        !Array.isArray(utxo.assets)
+        !Array.isArray(utxo.assets) ||
+        utxo.assets.some(
+          asset =>
+            asset == null ||
+            typeof asset.policyId !== 'string' ||
+            !/^[0-9a-f]{56}$/i.test(asset.policyId) ||
+            typeof asset.assetName !== 'string' ||
+            !/^(?:[0-9a-f]{2}){0,32}$/i.test(asset.assetName) ||
+            typeof asset.quantity !== 'string' ||
+            !/^\d+$/.test(asset.quantity)
+        )
       ) {
         throw new GetUtxosForAddressesApiError();
       }
@@ -343,15 +367,15 @@ export class RemoteFetcher implements IFetcher {
     if (cardanoWalletBackendService == null) {
       return Promise.reject(new GetTxHistoryForAddressesApiError());
     }
-    const after = body.after?.block == null ? undefined : Number(body.after.block);
-    if (after !== undefined && !Number.isSafeInteger(after)) {
+    // History pagination identifies the cursor by block hash, while cardano-wallet-backend v1
+    // currently accepts only a numeric block-height cursor. Never reinterpret a hash as a height.
+    if (body.after != null) {
       return Promise.reject(new GetTxHistoryForAddressesApiError());
     }
     return ensureCardanoWalletBackendHistoryIsEmpty({
       service: cardanoWalletBackendService,
       network: body.network,
       addresses: body.addresses,
-      after,
       headers: {
         'content-type': 'application/json',
         'yoroi-version': this.getLastLaunchVersion(),
