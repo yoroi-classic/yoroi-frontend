@@ -272,10 +272,13 @@
       let returnTx = false;
       if (typeof param === 'object') {
         tx = param.tx;
-        partialSign = param.partialSign;
+        partialSign = param.partialSign ?? false;
         returnTx = param.returnTx;
       } else if (typeof param !== 'string') {
         throw new Error('.signTx argument is expected to be an object or a string!');
+      }
+      if (typeof partialSign !== 'boolean') {
+        throw new Error('.signTx partialSign must be a boolean!');
       }
       return CardanoAPI._cardano_rpc_call('sign_tx/cardano', [{ tx, partialSign, returnTx }]);
     }

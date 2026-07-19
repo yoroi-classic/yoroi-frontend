@@ -220,6 +220,17 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  test.each([
+    ['positional', api => api.signTx('tx-0', 'false')],
+    ['object', api => api.signTx({ tx: 'tx-0', partialSign: 'false' })],
+  ])('signTx rejects a non-boolean %s partialSign before prompting', (_description, sign) => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+
+    expect(() => sign(api)).toThrow('.signTx partialSign must be a boolean!');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('signTxs rejects non-spec tx requests', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
