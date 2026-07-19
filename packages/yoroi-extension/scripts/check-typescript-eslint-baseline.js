@@ -4,6 +4,7 @@ const baseline = require('./typescript-eslint-baseline.json');
 const configuredRuleIds = require('./typescript-eslint-baseline-rules');
 
 process.env.YOROI_TYPESCRIPT_ESLINT_BASELINE = '1';
+process.env.TSESTREE_SINGLE_RUN = 'false';
 
 const { ESLint } = require('eslint');
 

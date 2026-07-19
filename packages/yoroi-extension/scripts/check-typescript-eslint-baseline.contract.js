@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
+// Kept outside Jest's *.test.js discovery; this contract uses Node's test runner.
+
 const baseline = require('./typescript-eslint-baseline.json');
 const configuredRuleIds = require('./typescript-eslint-baseline-rules');
 const { classifyResults, compareBaseline, compareRuleKeys } = require('./check-typescript-eslint-baseline');

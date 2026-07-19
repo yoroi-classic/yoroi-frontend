@@ -34,7 +34,7 @@
     "eslint-baseline": "node scripts/check-typescript-eslint-baseline.js",
     "eslint-loud": "eslint --config eslint.config.js \"**/*.{js,jsx,ts,tsx,mjs,cjs}\"",
     "test:typescript-lint-contract": "node scripts/check-typescript-lint-contract.js",
-    "test:typescript-eslint-baseline": "node --test scripts/check-typescript-eslint-baseline.test.js",
+    "test:typescript-eslint-baseline": "node --test scripts/check-typescript-eslint-baseline.contract.js",
     "test:build": "npm run prod:build -- --env 'test' --isE2E && npm run prod:compress -- --env 'test' --app-id 'yoroi' --codebase 'https://yoroi-downloads.blinklabs.cloud/dw/yoroi-test-extension.crx' --key ./e2etest-key.pem",
     "test:dapp:build": "npm run prod:build -- --env 'test' --configEnv 'dapp-test' --isE2E && npm run prod:compress -- --env 'test' --app-id 'yoroi' --codebase 'https://yoroi-downloads.blinklabs.cloud/dw/yoroi-test-extension.crx' --key ./e2etest-key.pem",
     "translations:manage": "node ./translations/translation-runner.js",
