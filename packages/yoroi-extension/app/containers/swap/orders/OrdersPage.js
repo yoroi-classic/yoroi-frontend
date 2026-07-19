@@ -25,6 +25,7 @@ import { LoadingCompletedOrders, LoadingOpenOrders } from './OrdersPlaceholders'
 import { useStrings } from '../common/useStrings';
 import { isHex } from '@emurgo/yoroi-lib/dist/internals/utils/index';
 import type { StoresProps } from '../../../stores';
+import { submitSingleTransaction } from '../../../stores/ada/submitSingleTransaction';
 // $FlowIgnore[cannot-resolve-module]
 import { useTxReviewModal } from '../../../UI/features/transaction-review/module/ReviewTxProvider';
 import { SummaryRow } from '../asset-swap/SwapTxInfo';
@@ -283,9 +284,9 @@ export default function SwapOrdersPage(props: StoresProps): Node {
       });
       const signedTransactionHexes: any =
         signedCollateralReorgTx != null ? [signedCollateralReorgTx, signedCancelTx] : [signedCancelTx];
-      await swapStore.executeTransactionHexes({
-        wallet,
+      await submitSingleTransaction({
         signedTransactionHexes,
+        submit: signedTransactionHex => swapStore.executeTransactionHex({ wallet, signedTransactionHex }),
       });
       showTxResultModal(TransactionResult.SUCCESS);
     } catch (error) {
@@ -301,12 +302,13 @@ export default function SwapOrdersPage(props: StoresProps): Node {
     }
 
     try {
-      const { signedTxHex: signedCollateralReorgTx } =
-        await props.stores.transactionProcessingStore.adaSignTransactionHexFromWallet({
-          wallet,
-          transactionHex: collateralReorgTxObj.cbor,
-          password: passswordInput,
-        });
+      const {
+        signedTxHex: signedCollateralReorgTx,
+      } = await props.stores.transactionProcessingStore.adaSignTransactionHexFromWallet({
+        wallet,
+        transactionHex: collateralReorgTxObj.cbor,
+        password: passswordInput,
+      });
 
       setOpenTxModalAfterColateral({
         open: true,
@@ -499,8 +501,8 @@ const SwapTxCancelInfo = ({ defaultTokenInfo, order, swapPoolLabel, formattedFee
 };
 
 const AssetAndAmountRow = ({ order, defaultTokenInfo, type }) => {
-  const assetName = type === 'from' ? (order.from?.token.ticker ?? '-') : (order.to?.token.ticker ?? '-');
-  const assetFingerprint = type === 'from' ? (order.from?.token.fingerprint ?? '-') : (order.to?.token.fingerprint ?? '-');
+  const assetName = type === 'from' ? order.from?.token.ticker ?? '-' : order.to?.token.ticker ?? '-';
+  const assetFingerprint = type === 'from' ? order.from?.token.fingerprint ?? '-' : order.to?.token.fingerprint ?? '-';
   const assetImage =
     type === 'from'
       ? tokenImg(order.from.token, defaultTokenInfo, '48px', '48px')

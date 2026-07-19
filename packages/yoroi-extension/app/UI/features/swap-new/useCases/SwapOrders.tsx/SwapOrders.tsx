@@ -94,10 +94,10 @@ export const SwapOrders = (props: Props) => {
   const openOrders = orders.filter(order => order.status === 'open');
 
   const columnContext = { completedOrders: showCompletedOrders };
-  const visibleColumns = React.useMemo(
-    () => orderColumns.filter(c => !(showCompletedOrders && c.openOrdersOnly)),
-    [orderColumns, showCompletedOrders]
-  );
+  const visibleColumns = React.useMemo(() => orderColumns.filter(c => !(showCompletedOrders && c.openOrdersOnly)), [
+    orderColumns,
+    showCompletedOrders,
+  ]);
 
   const columnNames = visibleColumns.map(c => resolveValueOrGetter(c.name, columnContext));
   const columnKeys = visibleColumns.map((c, i) => (typeof c as any).id ?? `${resolveValueOrGetter(c.name, columnContext)}__${i}`);
@@ -264,10 +264,9 @@ const OrderCancelation = ({ order }: { order: Swap.Order }) => {
           password: passswordInput,
         });
 
-        const signedTransactionHexes: any = [signedCancelTx];
-        await stores.substores.ada.swapStore.executeTransactionHexes({
+        await stores.substores.ada.swapStore.executeTransactionHex({
           wallet,
-          signedTransactionHexes,
+          signedTransactionHex: signedCancelTx,
         });
 
         showTxResultModal(TransactionResult.SUCCESS);

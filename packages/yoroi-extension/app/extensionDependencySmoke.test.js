@@ -1121,9 +1121,12 @@ describe('extension dependency smoke', () => {
       path.join(PACKAGE_ROOT, 'chrome/extension/background/handlers/yoroi/transaction.js'),
       'utf8'
     );
+    const swapStoreSource = fs.readFileSync(path.join(PACKAGE_ROOT, 'app/stores/ada/SwapStore.js'), 'utf8');
 
     expect(remoteFetcherSource).not.toContain('/api/txs/signed');
     expect(transactionHandlerSource).not.toContain('signedTxHexArray');
+    expect(transactionHandlerSource).not.toContain('SignedBatchRequest');
+    expect(swapStoreSource).not.toContain('executeTransactionHexes');
   });
 
   test('routes remote config through the selected cardano-wallet-backend deployment', () => {
@@ -1251,7 +1254,10 @@ describe('extension dependency smoke', () => {
       undefined
     );
     const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx.body().fee().to_str();
+    const signedFee = signedTx
+      .body()
+      .fee()
+      .to_str();
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
     expect(new BigNumber(signedFee).gt(0)).toEqual(true);
