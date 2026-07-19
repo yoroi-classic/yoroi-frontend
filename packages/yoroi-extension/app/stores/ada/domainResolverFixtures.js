@@ -1,13 +1,6 @@
 // @flow
 
-export type DomainResolverFixture = {|
-  address: string,
-  nameServer: string,
-|};
-
-export type DomainResolverFixtures = {|
-  [domain: string]: DomainResolverFixture,
-|};
+import type { DomainResolverFixtures } from '../../../config/config-types';
 
 export type DomainResolverFixtureResult = {|
   address: ?string,
@@ -26,8 +19,8 @@ export function resolveDomainAddressFixture(
 ): void | null | DomainResolverFixtureResult {
   if (fixtures == null) return undefined;
 
+  if (!Object.prototype.hasOwnProperty.call(fixtures, domain)) return null;
   const fixture = fixtures[domain];
-  if (fixture == null) return null;
 
   return {
     address: fixture.address,

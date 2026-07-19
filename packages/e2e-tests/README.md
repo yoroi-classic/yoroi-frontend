@@ -148,7 +148,7 @@ npm run test:ext:transactions
 ```
 
 The test extension resolves ADA Handle, CNS, and Unstoppable Domains names from
-`config/test.json`'s `app.domainResolverFixtures`. When that map is present, an
+`packages/yoroi-extension/config/test.json`'s `app.domainResolverFixtures`. When that map is present, an
 unknown name returns not found without contacting a public resolver. Keep one
 positive fixture for every supported provider and let the send suite generate
 unknown names for negative coverage. Fixture addresses must be valid mainnet

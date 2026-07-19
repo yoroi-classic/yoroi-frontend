@@ -1,7 +1,7 @@
 // @flow
 
 import { resolveDomainAddressFixture } from './domainResolverFixtures';
-import type { DomainResolverFixtures } from './domainResolverFixtures';
+import type { DomainResolverFixtures } from '../../../config/config-types';
 import developmentConfig from '../../../config/development.json';
 import mainnetConfig from '../../../config/mainnet.json';
 import shelleyTestnetConfig from '../../../config/shelley-testnet.json';
@@ -30,6 +30,10 @@ describe('domain resolver fixtures', () => {
 
   test('fails closed as not found when a deterministic fixture is missing', () => {
     expect(resolveDomainAddressFixture('$missing', fixtures)).toBeNull();
+  });
+
+  test.each(['constructor', '__proto__', 'toString'])('fails closed for inherited object key %s', inheritedKey => {
+    expect(resolveDomainAddressFixture(inheritedKey, fixtures)).toBeNull();
   });
 
   test('keeps deterministic fixtures test-only and covers every resolver', () => {
