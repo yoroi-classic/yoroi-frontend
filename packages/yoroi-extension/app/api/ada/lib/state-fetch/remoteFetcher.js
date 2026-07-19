@@ -106,7 +106,6 @@ const toCardanoWalletBackendAddress = (address: string, network: $ReadOnly<Netwo
   }
   return address;
 };
-
 export const cardanoWalletAccountStateToRemote = (
   response: CardanoWalletBackendAccountStateResponse,
   expectedStakeAddress: string
@@ -116,8 +115,13 @@ export const cardanoWalletAccountStateToRemote = (
   }
   if (
     typeof response.registered !== 'boolean' ||
+    typeof response.balance !== 'string' ||
+    !/^\d+$/.test(response.balance) ||
+    typeof response.rewardsAvailable !== 'string' ||
     !/^\d+$/.test(response.rewardsAvailable) ||
+    typeof response.rewardsSum !== 'string' ||
     !/^\d+$/.test(response.rewardsSum) ||
+    typeof response.withdrawalsSum !== 'string' ||
     !/^\d+$/.test(response.withdrawalsSum)
   ) {
     throw new Error('cardano-wallet-backend returned invalid account state');
@@ -250,7 +254,12 @@ export const sendTx: ({|
     },
   })
     .then(response => response.json())
-    .then(data => ({ txId: data.txHash }))
+    .then(data => {
+      if (typeof data.txHash !== 'string' || !/^[0-9a-fA-F]{64}$/.test(data.txHash)) {
+        throw new Error('cardano-wallet-backend returned an invalid transaction hash');
+      }
+      return { txId: data.txHash };
+    })
     .catch(error => handleSendTxError(error, errorHandler));
 };
 

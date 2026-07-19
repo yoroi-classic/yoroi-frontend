@@ -49,6 +49,15 @@ jobs:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
 
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
+
       - name: Cache node modules
         uses: actions/cache@v4
         id: node-cache
@@ -137,6 +146,15 @@ jobs:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
 
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
+
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
         id: node-modules-cache
@@ -211,6 +229,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -303,6 +330,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -402,6 +438,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
