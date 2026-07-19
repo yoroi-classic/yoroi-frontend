@@ -3,6 +3,7 @@
 import type {
   AccountStateRequest,
   AccountStateResponse,
+  RemoteAccountState,
   AddressUtxoRequest,
   AddressUtxoResponse,
   BestBlockRequest,
@@ -32,9 +33,7 @@ import type {
   RemoteTransaction,
   RewardHistoryRequest,
   RewardHistoryResponse,
-  SignedBatchRequest,
   SignedRequest,
-  SignedRequestInternal,
   SignedResponse,
   TokenInfoRequest,
   TokenInfoResponse,
@@ -61,8 +60,8 @@ import {
 
 import type { ConfigType } from '../../../../../config/config-types';
 import { bech32 } from 'bech32';
-import { addressBech32ToHex } from '../cardanoCrypto/utils';
-import { bytesToBase64, bytesToHex, forceNonNull, last } from '../../../../coreUtils';
+import { addressBech32ToHex, addressHexToBech32 } from '../cardanoCrypto/utils';
+import { bytesToHex } from '../../../../coreUtils';
 import { makeTimeoutAbortSignal, fetchAndEnsureSuccess, type ServerError } from '../../../utils';
 
 // populated by ConfigWebpackPlugin
@@ -75,6 +74,56 @@ type CardanoWalletBackendTipResponse = {|
   hash: string,
   blockTime: number,
 |};
+
+type CardanoWalletBackendAccountStateResponse = {|
+  stakeAddress: string,
+  registered: boolean,
+  balance: string,
+  rewardsAvailable: string,
+  rewardsSum: string,
+  withdrawalsSum: string,
+  delegatedPool?: ?string,
+  delegatedDrep?: ?string,
+|};
+
+export const cardanoWalletAccountStateToRemote = (
+  response: CardanoWalletBackendAccountStateResponse,
+  expectedStakeAddress: string
+): RemoteAccountState => {
+  if (response.stakeAddress !== expectedStakeAddress) {
+    throw new Error('cardano-wallet-backend returned account state for a different stake address');
+  }
+  if (
+    typeof response.registered !== 'boolean' ||
+    typeof response.balance !== 'string' ||
+    !/^\d+$/.test(response.balance) ||
+    typeof response.rewardsAvailable !== 'string' ||
+    !/^\d+$/.test(response.rewardsAvailable) ||
+    typeof response.rewardsSum !== 'string' ||
+    !/^\d+$/.test(response.rewardsSum) ||
+    typeof response.withdrawalsSum !== 'string' ||
+    !/^\d+$/.test(response.withdrawalsSum)
+  ) {
+    throw new Error('cardano-wallet-backend returned invalid account state');
+  }
+  let delegation = null;
+  if (response.delegatedPool != null) {
+    const decodedPool = bech32.decode(response.delegatedPool, 1000);
+    const poolKeyHash = bech32.fromWords(decodedPool.words);
+    if (decodedPool.prefix !== 'pool' || poolKeyHash.length !== 28) {
+      throw new Error('cardano-wallet-backend returned an invalid delegated pool');
+    }
+    delegation = bytesToHex(poolKeyHash);
+  }
+  return {
+    poolOperator: null,
+    remainingAmount: response.rewardsAvailable,
+    rewards: response.rewardsSum,
+    withdrawals: response.withdrawalsSum,
+    delegation,
+    stakeRegistered: response.registered,
+  };
+};
 
 export const cardanoWalletTipToBestBlock = (tip: CardanoWalletBackendTipResponse): BestBlockResponse => ({
   height: tip.block,
@@ -98,44 +147,48 @@ const getCardanoWalletBackendService = (network: $ReadOnly<NetworkRow>): null | 
 };
 
 export const sendTx: ({|
-  body: SignedRequest | SignedBatchRequest,
+  body: SignedRequest,
   lastLaunchVersion: string,
   currentLocale: string,
   errorHandler?: ServerError => void,
 |}) => Promise<SignedResponse> = ({ body, lastLaunchVersion, currentLocale, errorHandler }) => {
-  // $FlowIgnore[prop-missing]
-  const txs: Array<{| encodedTx: Uint8Array, id: string |}> = body.txs ?? [body];
-  if (txs.length === 0) throw new Error('At least one transaction is required for submit');
-  const signedTx64: Array<string> = txs.map(t => bytesToBase64(t.encodedTx));
-  const { BackendService } = body.network.Backend;
-  if (BackendService == null) throw new Error(`${nameof(sendTx)} missing backend url`);
-  return fetchAndEnsureSuccess(`${BackendService}/api/txs/signed`, {
+  const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+  if (cardanoWalletBackendService == null) {
+    return Promise.reject(new SendTransactionApiError());
+  }
+  return fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/tx/submit`, {
     method: 'POST',
     signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-    body: JSON.stringify(({ signedTx: signedTx64 }: SignedRequestInternal)),
+    body: JSON.stringify({ cbor: bytesToHex(body.encodedTx) }),
     headers: {
       'content-type': 'application/json',
       'yoroi-version': lastLaunchVersion,
       'yoroi-locale': currentLocale,
     },
   })
-    .then(() => ({
-      txId: forceNonNull(last(txs)).id,
-    }))
-    .catch(error => {
-      if (errorHandler != null) {
-        errorHandler(error);
+    .then(response => response.json())
+    .then(data => {
+      if (typeof data.txHash !== 'string' || !/^[0-9a-fA-F]{64}$/.test(data.txHash)) {
+        throw new Error('cardano-wallet-backend returned an invalid transaction hash');
       }
-      const err = {
-        msg: error.message,
-        res: error.response?.data || null,
-      };
-      Logger.error(`${nameof(RemoteFetcher)}::${nameof(sendTx)} error: ${stringifyError(err)}`);
-      if (JSON.stringify(error.response?.data ?? '').includes('InvalidWitnessesUTXOW')) {
-        throw new InvalidWitnessError();
-      }
-      throw new SendTransactionApiError();
-    });
+      return { txId: data.txHash };
+    })
+    .catch(error => handleSendTxError(error, errorHandler));
+};
+
+const handleSendTxError = (error: ServerError, errorHandler?: ServerError => void): Promise<SignedResponse> => {
+  if (errorHandler != null) {
+    errorHandler(error);
+  }
+  const err = {
+    msg: error.message,
+    res: error.response?.data || null,
+  };
+  Logger.error(`${nameof(RemoteFetcher)}::${nameof(sendTx)} error: ${stringifyError(err)}`);
+  if (JSON.stringify(error.response?.data ?? '').includes('InvalidWitnessesUTXOW')) {
+    throw new InvalidWitnessError();
+  }
+  throw new SendTransactionApiError();
 };
 
 export class RemoteFetcher implements IFetcher {
@@ -400,7 +453,7 @@ export class RemoteFetcher implements IFetcher {
       });
   };
 
-  sendTx: (SignedRequest | SignedBatchRequest) => Promise<SignedResponse> = body => {
+  sendTx: SignedRequest => Promise<SignedResponse> = body => {
     return sendTx({
       body,
       lastLaunchVersion: this.getLastLaunchVersion(),
@@ -429,19 +482,34 @@ export class RemoteFetcher implements IFetcher {
   };
 
   getAccountState: AccountStateRequest => Promise<AccountStateResponse> = body => {
-    const { BackendService } = body.network.Backend;
-    if (BackendService == null) throw new Error(`${nameof(this.getAccountState)} missing backend url`);
-    return fetchAndEnsureSuccess(`${BackendService}/api/account/state`, {
-      method: 'POST',
-      signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-      body: JSON.stringify({ addresses: body.addresses }),
-      headers: {
-        'content-type': 'application/json',
-        'yoroi-version': this.getLastLaunchVersion(),
-        'yoroi-locale': this.getCurrentLocale(),
-      },
-    })
-      .then(response => response.json())
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService == null) {
+      return Promise.reject(new GetAccountStateApiError());
+    }
+
+    return Promise.all(
+      body.addresses.map(async address => {
+        const stakeAddress = addressHexToBech32(address);
+        const response: CardanoWalletBackendAccountStateResponse = await fetchAndEnsureSuccess(
+          `${withoutTrailingSlash(cardanoWalletBackendService)}/v1/account/${encodeURIComponent(stakeAddress)}/state`,
+          {
+            method: 'GET',
+            signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+            headers: {
+              'yoroi-version': this.getLastLaunchVersion(),
+              'yoroi-locale': this.getCurrentLocale(),
+            },
+          }
+        ).then(result => result.json());
+        return ([address, cardanoWalletAccountStateToRemote(response, stakeAddress)]: [string, RemoteAccountState]);
+      })
+    )
+      .then(entries =>
+        entries.reduce((accountState: AccountStateResponse, [address, state]) => {
+          accountState[address] = state;
+          return accountState;
+        }, {})
+      )
       .catch(error => {
         Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getAccountState)} error: ` + stringifyError(error));
         throw new GetAccountStateApiError();

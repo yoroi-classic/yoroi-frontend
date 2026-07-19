@@ -4,20 +4,26 @@ import './api/ada/lib/test-config.forTests';
 import fs from 'fs';
 import path from 'path';
 import BigNumber from 'bignumber.js';
+import { bech32 } from 'bech32';
 import WalletRestoreStore, { RestoreSteps } from './stores/toplevel/WalletRestoreStore';
 import AdaStateFetchStore from './stores/ada/AdaStateFetchStore';
 import { RemoteFetcher as AdaRemoteFetcher } from './api/ada/lib/state-fetch/remoteFetcher';
+import { RemoteFetcher as CommonRemoteFetcher } from './api/common/lib/state-fetch/remoteFetcher';
 import { defaultAssets, networks } from './api/ada/lib/storage/database/prepackaged/networks';
 import { RustModule } from './api/ada/lib/cardanoCrypto/rustLoader';
 import { MultiToken } from './api/common/lib/MultiToken';
 import { byronAddrToHex } from './api/ada/lib/storage/bridge/utils';
 import { Bip44DerivationLevels } from './api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { newAdaUnsignedTx, signTransaction } from './api/ada/transactions/shelley/transactions';
+import { getYoroiRemoteConfigUrl } from './utils/yoroiRemoteConfigUrl';
+import { GetAccountStateApiError, SendTransactionApiError } from './api/common/errors';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
 import developmentConfig from '../config/development.json';
+import dappTestConfig from '../config/dapp-test.json';
 import testConfig from '../config/test.json';
+import extensionPackage from '../package.json';
 
 const SMOKE_MNEMONIC = 'prevent company field green slot measure chief hero apple task eagle sunset endorse dress seed';
 
@@ -83,10 +89,28 @@ function backendNetwork() {
   };
 }
 
-function successfulJsonResponse(body) {
+function successfulJsonResponse(body, headers = {}) {
   return Promise.resolve({
     ok: true,
+    headers: {
+      get: name => headers[name.toLowerCase()] ?? null,
+    },
     json: () => Promise.resolve(body),
+  });
+}
+
+function rewardAddressFixture(keyByte, networkId = 0) {
+  return RustModule.WasmScope(Module => {
+    const keyHash = Module.WalletV4.Ed25519KeyHash.from_hex(keyByte.repeat(28));
+    const address = Module.WalletV4.RewardAddress.new(networkId, Module.WalletV4.Credential.from_keyhash(keyHash)).to_address();
+    return { bech32: address.to_bech32(), hex: address.to_hex() };
+  });
+}
+
+function poolFixture(keyByte) {
+  return RustModule.WasmScope(Module => {
+    const keyHash = Module.WalletV4.Ed25519KeyHash.from_hex(keyByte.repeat(28));
+    return { bech32: keyHash.to_bech32('pool'), hex: keyHash.to_hex() };
   });
 }
 
@@ -318,7 +342,7 @@ describe('extension dependency smoke', () => {
     (global: any).CONFIG.cardanoWalletBackend = {
       enabled: true,
       mainnet: 'http://localhost:3010/',
-      preprod: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
     };
     const fetchFixture = {
       block: 3500000,
@@ -359,6 +383,486 @@ describe('extension dependency smoke', () => {
     } finally {
       (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
     }
+  });
+
+  test('maps cardano-wallet-backend status without treating maintenance as a network failure', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    const serverTime = Date.parse('2026-07-16T14:30:00.000Z');
+    (global: any).fetch = jest.fn(() =>
+      successfulJsonResponse(
+        {
+          version: '0.5.0',
+          network: 'preprod',
+          provider: 'koios',
+          chain: 'stale',
+          behindSeconds: 600,
+          tip: null,
+        },
+        { date: new Date(serverTime).toUTCString() }
+      )
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+      const status = await fetcher.checkServerStatus({
+        backend: networks.CardanoPreprodTestnet.Backend.BackendService,
+        networkId: networks.CardanoPreprodTestnet.NetworkId,
+      });
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3011/v1/status',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(status).toEqual({
+        isServerOk: true,
+        isMaintenance: true,
+        serverTime,
+      });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('rejects a cardano-wallet-backend deployment serving the wrong network', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    (global: any).fetch = jest.fn(() =>
+      successfulJsonResponse(
+        {
+          version: '0.5.0',
+          network: 'mainnet',
+          provider: 'koios',
+          chain: 'ok',
+          behindSeconds: 0,
+          tip: {
+            block: 3500000,
+            slot: 42000000,
+            epoch: 165,
+            hash: 'aa11bb22',
+            blockTime: 1784212200,
+          },
+        },
+        { date: 'Thu, 16 Jul 2026 14:30:00 GMT' }
+      )
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+
+      await expect(
+        fetcher.checkServerStatus({
+          backend: networks.CardanoPreprodTestnet.Backend.BackendService,
+          networkId: networks.CardanoPreprodTestnet.NetworkId,
+        })
+      ).rejects.toThrow();
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('submits a single transaction as CBOR hex through cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3010/',
+    };
+    const txHash = 'ab'.repeat(32);
+    (global: any).fetch = jest.fn(() => successfulJsonResponse({ txHash }));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      const result = await fetcher.sendTx({
+        network: backendNetwork(),
+        id: txHash,
+        encodedTx: new Uint8Array([0x84, 0x01, 0xab]),
+      });
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/tx/submit',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ cbor: '8401ab' }),
+        })
+      );
+      expect(result).toEqual({ txId: txHash });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test.each([undefined, '', 'not-a-transaction-hash', 'ab'.repeat(31), 123])(
+    'rejects an invalid cardano-wallet-backend transaction hash response (%p)',
+    async txHash => {
+      const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+      (global: any).CONFIG.cardanoWalletBackend = {
+        enabled: true,
+        mainnet: 'http://localhost:3010/',
+        preprod: 'http://localhost:3010/',
+      };
+      (global: any).fetch = jest.fn(() => successfulJsonResponse({ txHash }));
+      (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+      try {
+        const fetcher = new AdaRemoteFetcher(
+          () => '5.23.200',
+          () => 'en-US',
+          () => 'chrome'
+        );
+        await expect(
+          fetcher.sendTx({
+            network: backendNetwork(),
+            id: 'tx-id',
+            encodedTx: new Uint8Array([0x84, 0x01]),
+          })
+        ).rejects.toBeInstanceOf(SendTransactionApiError);
+      } finally {
+        (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+      }
+    }
+  );
+
+  test('maps registered and unregistered account states from cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    const registeredAddress = rewardAddressFixture('11');
+    const unregisteredAddress = rewardAddressFixture('22');
+    const pool = poolFixture('33');
+    (global: any).fetch = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        successfulJsonResponse({
+          stakeAddress: registeredAddress.bech32,
+          registered: true,
+          balance: '9000000',
+          rewardsAvailable: '7000000',
+          rewardsSum: '8000000',
+          withdrawalsSum: '1000000',
+          delegatedPool: pool.bech32,
+        })
+      )
+      .mockImplementationOnce(() =>
+        successfulJsonResponse({
+          stakeAddress: unregisteredAddress.bech32,
+          registered: false,
+          balance: '0',
+          rewardsAvailable: '0',
+          rewardsSum: '0',
+          withdrawalsSum: '0',
+        })
+      );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      const accountStates = await fetcher.getAccountState({
+        network: backendNetwork(),
+        addresses: [registeredAddress.hex, unregisteredAddress.hex],
+      });
+
+      expect((global: any).fetch.mock.calls).toEqual([
+        [`http://localhost:3010/v1/account/${registeredAddress.bech32}/state`, expect.objectContaining({ method: 'GET' })],
+        [`http://localhost:3010/v1/account/${unregisteredAddress.bech32}/state`, expect.objectContaining({ method: 'GET' })],
+      ]);
+      expect(accountStates).toEqual({
+        [registeredAddress.hex]: {
+          poolOperator: null,
+          remainingAmount: '7000000',
+          rewards: '8000000',
+          withdrawals: '1000000',
+          delegation: pool.hex,
+          stakeRegistered: true,
+        },
+        [unregisteredAddress.hex]: {
+          poolOperator: null,
+          remainingAmount: '0',
+          rewards: '0',
+          withdrawals: '0',
+          delegation: null,
+          stakeRegistered: false,
+        },
+      });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test.each(['mismatched stake address', 'malformed delegated pool', 'wrong delegated-pool HRP', 'wrong delegated-pool length'])(
+    'rejects account state with %s',
+    async failure => {
+      const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+      (global: any).CONFIG.cardanoWalletBackend = {
+        enabled: true,
+        mainnet: 'http://localhost:3010',
+        preprod: 'http://localhost:3011',
+      };
+      const address = rewardAddressFixture('55');
+      const validPool = poolFixture('77');
+      const delegatedPool = (() => {
+        if (failure === 'malformed delegated pool') return 'not-a-pool';
+        if (failure === 'wrong delegated-pool HRP') {
+          return bech32.encode('stake', bech32.decode(validPool.bech32, 1000).words, 1000);
+        }
+        if (failure === 'wrong delegated-pool length') {
+          return bech32.encode('pool', bech32.toWords(new Uint8Array(27)), 1000);
+        }
+        return null;
+      })();
+      (global: any).fetch = jest.fn(() =>
+        successfulJsonResponse({
+          stakeAddress: failure === 'mismatched stake address' ? rewardAddressFixture('44').bech32 : address.bech32,
+          registered: true,
+          balance: '1',
+          rewardsAvailable: '1',
+          rewardsSum: '1',
+          withdrawalsSum: '0',
+          delegatedPool,
+        })
+      );
+      (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+      try {
+        const fetcher = new AdaRemoteFetcher(
+          () => '5.23.200',
+          () => 'en-US',
+          () => 'chrome'
+        );
+        await expect(fetcher.getAccountState({ network: backendNetwork(), addresses: [address.hex] })).rejects.toBeInstanceOf(
+          GetAccountStateApiError
+        );
+      } finally {
+        (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+      }
+    }
+  );
+
+  test.each([
+    ['registered', 'true'],
+    ['balance', 1],
+    ['rewardsAvailable', 1],
+    ['rewardsSum', 1],
+    ['withdrawalsSum', 0],
+    ['rewardsAvailable', '-1'],
+    ['rewardsSum', '1.5'],
+    ['withdrawalsSum', 'not-a-number'],
+  ])('rejects account state with invalid %s', async (field, invalidValue) => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010',
+      preprod: 'http://localhost:3011',
+    };
+    const address = rewardAddressFixture('88');
+    (global: any).fetch = jest.fn(() =>
+      successfulJsonResponse({
+        stakeAddress: address.bech32,
+        registered: true,
+        balance: '1',
+        rewardsAvailable: '1',
+        rewardsSum: '1',
+        withdrawalsSum: '0',
+        delegatedPool: null,
+        [field]: invalidValue,
+      })
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(fetcher.getAccountState({ network: backendNetwork(), addresses: [address.hex] })).rejects.toBeInstanceOf(
+        GetAccountStateApiError
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('fails account state closed on HTTP failure or missing cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    const address = rewardAddressFixture('66');
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+    const fetcher = new AdaRemoteFetcher(
+      () => '5.23.200',
+      () => 'en-US',
+      () => 'chrome'
+    );
+
+    try {
+      (global: any).CONFIG.cardanoWalletBackend = {
+        enabled: true,
+        mainnet: 'http://localhost:3010',
+        preprod: 'http://localhost:3011',
+      };
+      (global: any).fetch = jest.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve('unavailable'),
+        })
+      );
+      await expect(fetcher.getAccountState({ network: backendNetwork(), addresses: [address.hex] })).rejects.toBeInstanceOf(
+        GetAccountStateApiError
+      );
+
+      (global: any).CONFIG.cardanoWalletBackend = {
+        enabled: false,
+        mainnet: 'http://localhost:3010',
+        preprod: 'http://localhost:3011',
+      };
+      (global: any).fetch.mockClear();
+      await expect(fetcher.getAccountState({ network: backendNetwork(), addresses: [address.hex] })).rejects.toBeInstanceOf(
+        GetAccountStateApiError
+      );
+      expect((global: any).fetch).not.toHaveBeenCalled();
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('keeps the legacy account-state endpoint retired', () => {
+    const remoteFetcherSource = fs.readFileSync(path.join(PACKAGE_ROOT, 'app/api/ada/lib/state-fetch/remoteFetcher.js'), 'utf8');
+    expect(remoteFetcherSource).not.toContain('/api/account/state');
+  });
+
+  test('fails closed without a configured cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: false,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3010/',
+    };
+    (global: any).fetch = jest.fn();
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(
+        fetcher.sendTx({
+          network: backendNetwork(),
+          id: 'tx-id',
+          encodedTx: new Uint8Array([0x84, 0x01]),
+        })
+      ).rejects.toBeInstanceOf(SendTransactionApiError);
+      expect((global: any).fetch).not.toHaveBeenCalled();
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('keeps legacy batch transaction submission retired', () => {
+    const remoteFetcherSource = fs.readFileSync(path.join(PACKAGE_ROOT, 'app/api/ada/lib/state-fetch/remoteFetcher.js'), 'utf8');
+    const transactionHandlerSource = fs.readFileSync(
+      path.join(PACKAGE_ROOT, 'chrome/extension/background/handlers/yoroi/transaction.js'),
+      'utf8'
+    );
+
+    expect(remoteFetcherSource).not.toContain('/api/txs/signed');
+    expect(transactionHandlerSource).not.toContain('signedTxHexArray');
+  });
+
+  test('routes remote config through the selected cardano-wallet-backend deployment', () => {
+    expect(
+      getYoroiRemoteConfigUrl(
+        true,
+        {
+          enabled: true,
+          mainnet: 'https://mainnet.example',
+          preprod: 'https://preprod.example/',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
+    ).toEqual('https://preprod.example/v1/config');
+    expect(
+      getYoroiRemoteConfigUrl(
+        false,
+        {
+          enabled: true,
+          mainnet: 'https://mainnet.example/',
+          preprod: 'https://preprod.example',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
+    ).toEqual('https://mainnet.example/v1/config');
+    expect(
+      getYoroiRemoteConfigUrl(
+        false,
+        {
+          enabled: false,
+          mainnet: 'https://mainnet.example/',
+          preprod: 'https://preprod.example',
+        },
+        'https://legacy.example/dev.json',
+        'https://legacy.example/prod.json'
+      )
+    ).toEqual('https://legacy.example/prod.json');
+  });
+
+  test('uses only local wallet-backend deployments in development and E2E builds', () => {
+    expect(developmentConfig.cardanoWalletBackend.enabled).toEqual(true);
+    expect(developmentConfig.cardanoWalletBackend.mainnet).toEqual('');
+    expect(developmentConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:3010');
+    expect(testConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(dappTestConfig.cardanoWalletBackend.enabled).toEqual(true);
+    expect(dappTestConfig.cardanoWalletBackend.mainnet).toEqual('http://localhost:21000');
+    expect(dappTestConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:21000');
+    expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);
+    expect(extensionPackage.scripts['dev:wallet-backend']).toEqual('CARDANO_NETWORK=development npm run dev:stable');
+    expect(extensionPackage.scripts['test:dapp:build']).toContain("--configEnv 'dapp-test'");
+    expect(extensionPackage.scripts['dev:main']).toMatch(/CARDANO_NETWORK.*mainnet/);
+  });
+
+  test('keeps the DApp backend fixture out of maintenance mode', () => {
+    const mockServerSource = fs.readFileSync(
+      path.join(PACKAGE_ROOT, '../e2e-tests/helpers/mock-dApp-webpage/mockServer.js'),
+      'utf8'
+    );
+    expect(mockServerSource).toContain("chain: 'ok'");
+    expect(mockServerSource).not.toContain("chain: 'synced'");
   });
 
   test('builds and signs a local Cardano transaction fixture', async () => {
@@ -486,6 +990,7 @@ describe('extension dependency smoke', () => {
       ['shelley-testnet', shelleyTestnetConfig],
       ['development', developmentConfig],
       ['test', testConfig],
+      ['dapp-test', dappTestConfig],
     ];
 
     for (const [, config] of activeConfigs) {
