@@ -12,7 +12,7 @@ const {
 } = require('./utils');
 
 // override NODE_ENV for ConfigWebpackPlugin
-process.env.NODE_CONFIG_ENV = argv.env;
+process.env.NODE_CONFIG_ENV = argv.configEnv ?? argv.env;
 
 function buildProd(env: string) {
   console.log('[Build manifest]');
@@ -27,7 +27,9 @@ function buildProd(env: string) {
   console.log('-'.repeat(80));
 
   exec(
-    `npx webpack --config webpack/prodConfig.js --progress --profile --color --env networkName=${argv.env} --env nightly=${isNightly.toString()} --env isLight=${(!shouldInjectConnector).toString()} --env isE2E=${isE2E.toString()}`
+    `npx webpack --config webpack/prodConfig.js --progress --profile --color --env networkName=${
+      argv.env
+    } --env nightly=${isNightly.toString()} --env isLight=${(!shouldInjectConnector).toString()} --env isE2E=${isE2E.toString()}`
   );
 
   if (shouldInjectConnector) {

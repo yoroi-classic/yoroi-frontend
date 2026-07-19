@@ -9,11 +9,14 @@ import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import ConnectorTab from '../../pages/wallet/connectorTab/connectorTab.page.js';
 import driversPoolsManager from '../../utils/driversPool.js';
+import { beforeQuarantinedDApp } from '../../utils/quarantine.js';
 import { collectInfo, preloadDBAndStorage, waitTxPage } from '../../helpers/restoreWalletHelper.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 
 describe('dApp, mainnet, connection in extension', function () {
+  beforeQuarantinedDApp('mainnet wallet balance fixture drifts with network state; see yoroi-frontend#55');
+
   this.timeout(2 * oneMinute);
   /** @type {WebDriver} */
   let webdriver = null;
@@ -82,7 +85,11 @@ describe('dApp, mainnet, connection in extension', function () {
   });
 
   after(async function () {
-    await connectorTabPage.closeBrowser();
-    mockServer.close();
+    if (connectorTabPage) {
+      await connectorTabPage.closeBrowser();
+    }
+    if (mockServer) {
+      mockServer.close();
+    }
   });
 });

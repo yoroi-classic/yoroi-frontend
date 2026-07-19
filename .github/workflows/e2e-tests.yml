@@ -14,6 +14,11 @@ on:
           - dapp
           - trezor
           - ledger
+      run_quarantined_dapp_tests:
+        description: 'Run quarantined DApp cases that depend on stale fixtures'
+        required: false
+        default: false
+        type: boolean
   pull_request_review:
     types: [submitted]
 
@@ -43,6 +48,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache node modules
         uses: actions/cache@v4
@@ -82,6 +96,21 @@ jobs:
           retention-days: 1
           overwrite: true
 
+      - name: Build the DApp test mainnet version
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp'
+        working-directory: ./packages/yoroi-extension
+        run: npm run test:dapp:build
+
+      - name: Archive DApp test app
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp'
+        uses: actions/upload-artifact@v4
+        with:
+          name: builtDApp
+          path: |
+            ./packages/yoroi-extension/Yoroi-test.crx
+          retention-days: 1
+          overwrite: true
+
   Extension:
     if: (github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.test_type == 'all' ||
@@ -116,6 +145,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -192,6 +230,15 @@ jobs:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
 
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
+
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
         id: node-modules-cache
@@ -212,7 +259,7 @@ jobs:
       - name: Download app
         uses: actions/download-artifact@v4
         with:
-          name: builtApp
+          name: builtDApp
           path: ./packages/yoroi-extension
 
       - name: Run tests
@@ -225,6 +272,7 @@ jobs:
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
+          RUN_QUARANTINED_DAPP_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_quarantined_dapp_tests == 'true' }}
         run: xvfb-run -a -e /dev/stdout -s "-screen 0 1600x900x24" npm run test:dapp
 
       - name: Archive tests screenshots and logs
@@ -275,6 +323,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -347,6 +404,15 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4

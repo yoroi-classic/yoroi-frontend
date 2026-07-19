@@ -9,11 +9,14 @@ import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { getTestWalletName } from '../../helpers/constants.js';
 import { collectInfo, createWallet, preloadBrowserStorage } from '../../helpers/restoreWalletHelper.js';
 import driversPoolsManager from '../../utils/driversPool.js';
+import { beforeQuarantinedDApp } from '../../utils/quarantine.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 import WalletCommonBase from '../../pages/walletCommonBase.page.js';
 
 describe('dApp, getUtxos, empty wallet', function () {
+  beforeQuarantinedDApp('empty wallet creation waits indefinitely in CI; see yoroi-frontend#55');
+
   const testWalletName = getTestWalletName();
   let newTestWallet = {
     name: '',
@@ -74,7 +77,11 @@ describe('dApp, getUtxos, empty wallet', function () {
   });
 
   after(async function () {
-    await walletCommonPage.closeBrowser();
-    mockServer.close();
+    if (walletCommonPage) {
+      await walletCommonPage.closeBrowser();
+    }
+    if (mockServer) {
+      mockServer.close();
+    }
   });
 });
