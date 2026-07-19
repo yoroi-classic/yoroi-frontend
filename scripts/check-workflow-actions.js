@@ -18,7 +18,7 @@ const ACTIONS = Object.freeze({
   cache: Object.freeze({
     sha: '55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
     version: 'v6.1.0',
-    count: 9,
+    count: 2,
   }),
   'upload-artifact': Object.freeze({
     sha: '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',

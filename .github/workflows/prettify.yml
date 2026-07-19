@@ -17,33 +17,24 @@ jobs:
 
       - name: Read .nvmrc
         id: nvm
-        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            packages/yoroi-extension/package-lock.json
+            packages/e2e-tests/package-lock.json
       - name: Setup npm
         run: |
           corepack enable npm
           corepack prepare npm@10.9.7 --activate
           npm --version
 
-      - name: Cache node modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: node-cache
-        with:
-          path: |
-            **/node_modules
-            ~/.npm
-          key: ${{ runner.os }}-node-${{ steps.nvm.outputs.NVMRC }}-modules-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-${{ steps.nvm.outputs.NVMRC }}-modules-
-            ${{ runner.os }}-node-modules-
-
       - name: Install packages
-        if: steps.node-cache.outputs.cache-hit != 'true'
         run: |
           ./ci-install-all.sh
 

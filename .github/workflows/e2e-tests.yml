@@ -48,6 +48,10 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            packages/yoroi-extension/package-lock.json
+            packages/e2e-tests/package-lock.json
 
       - name: Setup npm
         run: |
@@ -58,20 +62,7 @@ jobs:
       - name: Check toolchain baseline
         run: npm run check:toolchain
 
-      - name: Cache node modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: node-cache
-        with:
-          path: |
-            **/node_modules
-            ~/.npm
-          key: ${{ runner.os }}-node-${{ steps.nvm.outputs.NVMRC }}-modules-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-${{ steps.nvm.outputs.NVMRC }}-modules-
-            ${{ runner.os }}-node-modules-
-
       - name: Install packages
-        if: steps.node-cache.outputs.cache-hit != 'true'
         run: |
           ./ci-install-all.sh
 
@@ -145,6 +136,7 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+          cache-dependency-path: packages/e2e-tests/package-lock.json
 
       - name: Setup npm
         run: |
@@ -155,20 +147,7 @@ jobs:
       - name: Check toolchain baseline
         run: npm run check:toolchain
 
-      - name: Cache e2e-tests node modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: node-modules-cache
-        with:
-          path: |
-            packages/e2e-tests/node_modules
-            ~/.npm
-          key: ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-${{ steps.setup-chrome.outputs.chrome-version }}-${{ hashFiles('packages/e2e-tests/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-
-            ${{ runner.os }}-e2e-tests-node-
-
       - name: Install packages
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
         run: npm ci
 
@@ -229,6 +208,7 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+          cache-dependency-path: packages/e2e-tests/package-lock.json
 
       - name: Setup npm
         run: |
@@ -239,20 +219,7 @@ jobs:
       - name: Check toolchain baseline
         run: npm run check:toolchain
 
-      - name: Cache e2e-tests node modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: node-modules-cache
-        with:
-          path: |
-            packages/e2e-tests/node_modules
-            ~/.npm
-          key: ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-${{ steps.setup-chrome.outputs.chrome-version }}-${{ hashFiles('packages/e2e-tests/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-
-            ${{ runner.os }}-e2e-tests-node-
-
       - name: Install packages
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
         run: npm ci
 
@@ -330,6 +297,7 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+          cache-dependency-path: packages/e2e-tests/package-lock.json
 
       - name: Setup npm
         run: |
@@ -340,20 +308,7 @@ jobs:
       - name: Check toolchain baseline
         run: npm run check:toolchain
 
-      - name: Cache e2e-tests node modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: node-modules-cache
-        with:
-          path: |
-            packages/e2e-tests/node_modules
-            ~/.npm
-          key: ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-${{ steps.setup-chrome.outputs.chrome-version }}-${{ hashFiles('packages/e2e-tests/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-
-            ${{ runner.os }}-e2e-tests-node-
-
       - name: Install packages
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
         run: npm ci
 
@@ -438,6 +393,7 @@ jobs:
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+          cache-dependency-path: packages/e2e-tests/package-lock.json
 
       - name: Setup npm
         run: |
@@ -448,20 +404,7 @@ jobs:
       - name: Check toolchain baseline
         run: npm run check:toolchain
 
-      - name: Cache e2e-tests node modules
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: node-modules-cache
-        with:
-          path: |
-            packages/e2e-tests/node_modules
-            ~/.npm
-          key: ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-${{ steps.setup-chrome.outputs.chrome-version }}-${{ hashFiles('packages/e2e-tests/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-e2e-tests-node-${{ steps.nvm.outputs.NVMRC }}-
-            ${{ runner.os }}-e2e-tests-node-
-
       - name: Install packages
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         working-directory: ./packages/e2e-tests
         run: npm ci
 
