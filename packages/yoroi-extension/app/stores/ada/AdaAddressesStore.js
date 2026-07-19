@@ -11,6 +11,10 @@ import { Api, Resolver } from '@yoroi/types';
 import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import { isValidMainnetPaymentAddress } from './domainResolverUtils';
 import { resolveDomainAddressFixture } from './domainResolverFixtures';
+import type { ConfigType } from '../../../config/config-types';
+
+// populated by ConfigWebpackPlugin
+declare var CONFIG: ConfigType;
 
 export async function filterMangledAddresses(request: {|
   +publicDeriver: { stakingAddress: string, ... },

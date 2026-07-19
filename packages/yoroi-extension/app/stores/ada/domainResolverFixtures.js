@@ -10,8 +10,8 @@ export type DomainResolverFixtures = {|
 |};
 
 export type DomainResolverFixtureResult = {|
-  address: string,
-  error: null,
+  address: ?string,
+  error: ?('forbidden' | 'unexpected'),
   nameServer: string,
 |};
 

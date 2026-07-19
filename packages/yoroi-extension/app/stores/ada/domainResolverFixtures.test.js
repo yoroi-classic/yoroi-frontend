@@ -1,6 +1,7 @@
 // @flow
 
 import { resolveDomainAddressFixture } from './domainResolverFixtures';
+import type { DomainResolverFixtures } from './domainResolverFixtures';
 import developmentConfig from '../../../config/development.json';
 import mainnetConfig from '../../../config/mainnet.json';
 import shelleyTestnetConfig from '../../../config/shelley-testnet.json';
@@ -41,7 +42,8 @@ describe('domain resolver fixtures', () => {
     expect(mainnetConfig.app.domainResolverFixtures).toBeUndefined();
     expect(shelleyTestnetConfig.app.domainResolverFixtures).toBeUndefined();
 
-    const fixtureAddresses = Object.values(testConfig.app.domainResolverFixtures).map(fixture => fixture.address);
+    const configuredFixtures: DomainResolverFixtures = testConfig.app.domainResolverFixtures;
+    const fixtureAddresses = Object.keys(configuredFixtures).map(domain => configuredFixtures[domain].address);
     expect(new Set(fixtureAddresses).size).toBe(3);
     for (const address of fixtureAddresses) {
       expect(Address.from_bech32(address).network_id()).toBe(1);
