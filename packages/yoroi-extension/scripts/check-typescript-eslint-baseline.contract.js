@@ -12,12 +12,8 @@ function loadCheckerWithoutInheritedParserMode() {
   return require('./check-typescript-eslint-baseline');
 }
 
-const {
-  CANONICAL_TSESTREE_SINGLE_RUN,
-  classifyResults,
-  compareBaseline,
-  compareRuleKeys,
-} = loadCheckerWithoutInheritedParserMode();
+const { CANONICAL_TSESTREE_SINGLE_RUN, classifyResults, compareBaseline, compareRuleKeys } =
+  loadCheckerWithoutInheritedParserMode();
 const baselineParserMode = process.env.TSESTREE_SINGLE_RUN;
 
 const EXPECTED_RULE_IDS = [
