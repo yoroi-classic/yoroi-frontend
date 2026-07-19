@@ -5,7 +5,13 @@ const test = require('node:test');
 
 const baseline = require('./typescript-eslint-baseline.json');
 const configuredRuleIds = require('./typescript-eslint-baseline-rules');
-const { classifyResults, compareBaseline, compareRuleKeys } = require('./check-typescript-eslint-baseline');
+const packageJson = require('../package.json');
+const {
+  CANONICAL_TSESTREE_SINGLE_RUN,
+  classifyResults,
+  compareBaseline,
+  compareRuleKeys,
+} = require('./check-typescript-eslint-baseline');
 
 const EXPECTED_RULE_IDS = [
   '@typescript-eslint/ban-ts-comment',
@@ -37,8 +43,13 @@ test('locks the exact authoritative 22-rule baseline inventory', () => {
   assert.deepEqual(Object.keys(baseline), EXPECTED_RULE_IDS);
   assert.equal(
     Object.values(baseline).reduce((sum, count) => sum + count, 0),
-    4785
+    5399
   );
+});
+
+test('locks canonical single-run mode for the baseline and raw diagnostics', () => {
+  assert.equal(CANONICAL_TSESTREE_SINGLE_RUN, 'true');
+  assert.match(packageJson.scripts['eslint-loud'], /^TSESTREE_SINGLE_RUN=true eslint /);
 });
 
 test('rejects per-rule baseline growth', () => {

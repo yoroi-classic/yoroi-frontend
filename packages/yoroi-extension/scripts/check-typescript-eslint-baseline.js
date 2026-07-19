@@ -3,8 +3,10 @@ const path = require('path');
 const baseline = require('./typescript-eslint-baseline.json');
 const configuredRuleIds = require('./typescript-eslint-baseline-rules');
 
+const CANONICAL_TSESTREE_SINGLE_RUN = 'true';
+
 process.env.YOROI_TYPESCRIPT_ESLINT_BASELINE = '1';
-process.env.TSESTREE_SINGLE_RUN = 'false';
+process.env.TSESTREE_SINGLE_RUN = CANONICAL_TSESTREE_SINGLE_RUN;
 
 const { ESLint } = require('eslint');
 
@@ -104,6 +106,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  CANONICAL_TSESTREE_SINGLE_RUN,
   classifyResults,
   compareBaseline,
   compareRuleKeys,
