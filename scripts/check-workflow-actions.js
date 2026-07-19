@@ -33,7 +33,7 @@ const ACTIONS = Object.freeze({
 });
 
 const TARGET_USE =
-  /uses:\s*actions\/(checkout|setup-node|cache|upload-artifact|download-artifact)@([^\s#]+)(?:\s+#\s*(\S+))?\s*$/;
+  /^\s*(?:-\s+)?uses:\s*actions\/(checkout|setup-node|cache|upload-artifact|download-artifact)@([^\s#]+)(?:\s+#\s*(\S+))?\s*$/;
 const NVMRC_NODE_VERSION = /node-version:\s*['"]?\$\{\{\s*steps\.nvm\.outputs\.NVMRC\s*\}\}['"]?/;
 
 function workflowFiles(root = WORKSPACE_ROOT) {

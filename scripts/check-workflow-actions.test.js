@@ -38,6 +38,29 @@ test('rejects mutable action tags', t => {
   assert.match(auditWorkflows({ root }).errors.join('\n'), /full 40-character commit SHA/);
 });
 
+test('rejects action references disguised as shell commands', t => {
+  const root = mutatedWorkflows(source =>
+    source.replace(
+      `- uses: actions/checkout@${ACTIONS.checkout.sha}`,
+      `- run: echo "uses: actions/checkout@${ACTIONS.checkout.sha}" #`
+    )
+  );
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const errors = auditWorkflows({ root }).errors.join('\n');
+  assert.match(errors, /has an invalid official action reference/);
+  assert.match(errors, /actions\/checkout inventory must contain 14 uses, found 13/);
+});
+
+test('rejects commented-out action references', t => {
+  const root = mutatedWorkflows(source =>
+    source.replace(`- uses: actions/checkout@${ACTIONS.checkout.sha}`, `# - uses: actions/checkout@${ACTIONS.checkout.sha}`)
+  );
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const errors = auditWorkflows({ root }).errors.join('\n');
+  assert.match(errors, /has an invalid official action reference/);
+  assert.match(errors, /actions\/checkout inventory must contain 14 uses, found 13/);
+});
+
 test('rejects short action SHAs', t => {
   const root = mutatedWorkflows(source =>
     source.replace(`actions/checkout@${ACTIONS.checkout.sha}`, `actions/checkout@${ACTIONS.checkout.sha.slice(0, 12)}`)
