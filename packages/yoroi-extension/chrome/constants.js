@@ -1,6 +1,24 @@
 // @flow
 /* eslint-disable  import/no-unused-modules */
 
+export function getCardanoWalletBackendOrigins(
+  cardanoWalletBackend: ?{|
+    enabled?: boolean,
+    mainnet?: string,
+    preprod?: string,
+  |}
+): Array<string> {
+  if (cardanoWalletBackend?.enabled !== true) return [];
+
+  const origins = new Set();
+  for (const endpoint of [cardanoWalletBackend.mainnet, cardanoWalletBackend.preprod]) {
+    if (endpoint != null && endpoint !== '') {
+      origins.add(new URL(endpoint).origin);
+    }
+  }
+  return Array.from(origins);
+}
+
 export function genCSP(request: {|
   isDev: boolean,
   additional: {|

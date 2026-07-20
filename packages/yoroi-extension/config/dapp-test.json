@@ -1,16 +1,16 @@
 {
   "network": {
-    "name": "testnet",
+    "name": "test",
     "priceBackendUrl": "http://localhost:8080"
   },
   "poolExplorer": {
     "simpleTemplate": ""
   },
   "app": {
-    "walletRefreshInterval": 20000,
-    "serverStatusRefreshInterval": 20000,
+    "walletRefreshInterval": 2000,
+    "serverStatusRefreshInterval": 2000,
     "logsBufferSize": 500,
-    "logsFileSuffix": "-yoroi-testnet.log",
+    "logsFileSuffix": "-yoroi.log",
     "addressRequestSize": 50,
     "txsBodiesRequestSize": 150,
     "coinPriceRefreshInterval": 60000,
@@ -48,8 +48,8 @@
   },
   "cardanoWalletBackend": {
     "enabled": true,
-    "mainnet": "",
-    "preprod": "http://localhost:3010"
+    "mainnet": "http://localhost:21000",
+    "preprod": "http://localhost:21000"
   },
   "tokenMetadata": {
     "mainnet": "https://tokens.cardano.org",
