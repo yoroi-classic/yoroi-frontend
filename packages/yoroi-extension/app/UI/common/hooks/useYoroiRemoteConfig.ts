@@ -13,7 +13,7 @@ declare const CONFIG: {
 };
 
 export const useYoroiRemoteConfig = () => {
-  const isDev = environment.isDev();
+  const isDev = environment.isDev() === true;
   const remoteConfigUrl = getYoroiRemoteConfigUrl(
     isDev,
     CONFIG.cardanoWalletBackend,
