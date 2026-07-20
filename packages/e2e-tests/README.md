@@ -160,6 +160,40 @@ npm run test:ext:one "YOUR_TEST_NAME_HERE"
 npm run test:ext:one "Creating wallet _smoke_"
 ```
 
+#### Built CRX against a Kubernetes wallet backend
+
+From the repository root, use the checked-in smoke topology to verify the signed test CRX from the loaded
+extension context. The command accepts either `mainnet` or `preprod`, discovers
+the selected Kubernetes Service's NodePort, builds and signs the CRX with the
+Compose origin already present in its CSP and `host_permissions`, starts the
+containers, checks `/v1/status` and `/v1/chain/tip`, asserts the reported
+network, and tears the containers down automatically:
+
+```bash
+# SERVICE_PORT may be a Service port name or number; it defaults to http.
+./scripts/run-built-crx-backend-smoke.sh preprod wallet-backend cardano-wallet-backend
+./scripts/run-built-crx-backend-smoke.sh mainnet wallet-backend-mainnet cardano-wallet-backend api
+```
+
+Prerequisites are Docker with Compose, `kubectl` access to the cluster, `jq`,
+and the repository's pinned Node/npm toolchain with dependencies installed. The
+selected Service must expose the chosen port as a NodePort.
+
+The networking boundary is deliberate: Chromium runs in the Compose `selenium`
+container, so its localhost is not the Kubernetes host. The Compose-managed
+`wallet-backend` bridge forwards the stable origin
+`http://wallet-backend:3010` through Docker's `host.docker.internal` gateway to
+the discovered NodePort. The CRX is built against that stable origin before it
+is signed; the script never patches the artifact and never starts a forwarding
+process inside Selenium. `docker compose down --volumes --remove-orphans` runs
+from the script's exit trap on success, failure, or interruption. If a prior
+run was killed before the trap ran, clean it with:
+
+```bash
+COMPOSE_PROJECT_NAME=yoroi-built-crx-smoke \
+  docker compose --file scripts/built-crx-backend-smoke.compose.yml down --volumes --remove-orphans
+```
+
 ### Running Hardware Wallet Tests
 
 Ledger and Trezor CI build the backend-enabled extension artifact and start a pinned
