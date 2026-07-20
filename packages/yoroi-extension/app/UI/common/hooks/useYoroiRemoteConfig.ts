@@ -23,12 +23,13 @@ export const useYoroiRemoteConfig = () => {
 
   return useQuery<YoroiRemoteConfig>({
     queryKey: ['yoroiRemoteConfig', remoteConfigUrl],
-    queryFn: async () => {
+    queryFn: async (): Promise<YoroiRemoteConfig> => {
       const res = await fetch(remoteConfigUrl);
       if (!res.ok) {
         throw new Error('Failed to fetch Yoroi remote config');
       }
-      return res.json();
+      const remoteConfig: unknown = await res.json();
+      return remoteConfig as YoroiRemoteConfig;
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 30, // v5: cacheTime -> gcTime (30 minutes)
