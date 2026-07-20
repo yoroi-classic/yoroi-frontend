@@ -1,10 +1,8 @@
-// @flow
-
-type CardanoWalletBackendConfig = {|
-  enabled: boolean,
-  mainnet: string,
-  preprod: string,
-|};
+type CardanoWalletBackendConfig = {
+  enabled: boolean;
+  mainnet: string;
+  preprod: string;
+};
 
 export const getYoroiRemoteConfigUrl = (
   isDev: boolean,
