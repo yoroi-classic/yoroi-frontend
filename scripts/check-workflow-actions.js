@@ -8,7 +8,7 @@ const ACTIONS = Object.freeze({
   checkout: Object.freeze({
     sha: '9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
     version: 'v7.0.0',
-    count: 14,
+    count: 16,
   }),
   'setup-node': Object.freeze({
     sha: '820762786026740c76f36085b0efc47a31fe5020',
@@ -23,7 +23,7 @@ const ACTIONS = Object.freeze({
   'upload-artifact': Object.freeze({
     sha: '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
     version: 'v7.0.1',
-    count: 6,
+    count: 9,
   }),
   'download-artifact': Object.freeze({
     sha: '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',

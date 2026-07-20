@@ -103,7 +103,7 @@ jobs:
 
       - name: Archive wallet-backend test app
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp' || github.event.inputs.test_type == 'trezor' || github.event.inputs.test_type == 'ledger'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: builtWalletBackend
           path: |
@@ -315,7 +315,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Check out cardano-wallet-backend
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: yoroi-classic/cardano-wallet-backend
           ref: a1724a9ed3de2099bc3f03be104f20df462d4644
@@ -394,7 +394,7 @@ jobs:
 
       - name: Archive cardano-wallet-backend log
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cardano-wallet-backend_trezor
           path: ${{ runner.temp }}/cardano-wallet-backend.log
@@ -423,7 +423,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Check out cardano-wallet-backend
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: yoroi-classic/cardano-wallet-backend
           ref: a1724a9ed3de2099bc3f03be104f20df462d4644
@@ -502,7 +502,7 @@ jobs:
 
       - name: Archive cardano-wallet-backend log
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cardano-wallet-backend_ledger
           path: ${{ runner.temp }}/cardano-wallet-backend.log

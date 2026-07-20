@@ -48,7 +48,10 @@ test('rejects action references disguised as shell commands', t => {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const errors = auditWorkflows({ root }).errors.join('\n');
   assert.match(errors, /has an invalid official action reference/);
-  assert.match(errors, /actions\/checkout inventory must contain 14 uses, found 13/);
+  assert.match(
+    errors,
+    new RegExp(`actions/checkout inventory must contain ${ACTIONS.checkout.count} uses, found ${ACTIONS.checkout.count - 1}`)
+  );
 });
 
 test('rejects commented-out action references', t => {
@@ -58,7 +61,10 @@ test('rejects commented-out action references', t => {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const errors = auditWorkflows({ root }).errors.join('\n');
   assert.match(errors, /has an invalid official action reference/);
-  assert.match(errors, /actions\/checkout inventory must contain 14 uses, found 13/);
+  assert.match(
+    errors,
+    new RegExp(`actions/checkout inventory must contain ${ACTIONS.checkout.count} uses, found ${ACTIONS.checkout.count - 1}`)
+  );
 });
 
 test('rejects short action SHAs', t => {
@@ -92,5 +98,8 @@ test('rejects setup-node steps that bypass .nvmrc', t => {
 test('rejects action inventory drift', t => {
   const root = mutatedWorkflows(source => source.replace(/^\s*- uses: actions\/checkout@[^\n]+\n/m, ''));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  assert.match(auditWorkflows({ root }).errors.join('\n'), /actions\/checkout inventory must contain 14 uses, found 13/);
+  assert.match(
+    auditWorkflows({ root }).errors.join('\n'),
+    new RegExp(`actions/checkout inventory must contain ${ACTIONS.checkout.count} uses, found ${ACTIONS.checkout.count - 1}`)
+  );
 });
