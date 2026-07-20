@@ -42,6 +42,7 @@ Before running the e2e tests, ensure you have completed the following setup:
    - `SECOND_STATIC_TEST_WALLET`
    - `SECOND_SMOKE_TEST_WALLET`
    - `SECOND_SMOKE_TEST_WALLET_FF`
+   - `RUN_QUARANTINED_DAPP_TESTS=true` (optional, runs quarantined dApp cases)
    - `CHROME_PATH` (optional, defaults to system Chrome)
 
 6. **Hardware Wallet Emulators** (for hardware wallet tests):
@@ -161,6 +162,15 @@ npm run test:ext:one "Creating wallet _smoke_"
 
 ### Running Hardware Wallet Tests
 
+Ledger and Trezor CI build the backend-enabled extension artifact and start a pinned
+`yoroi-classic/cardano-wallet-backend` checkout on `http://127.0.0.1:21000` with `NETWORK=mainnet`.
+Before starting browser tests, CI requires both `/health` to report `status: ok` and `/v1/status`
+to report the mainnet chain as `ok` with a tip. Run the same preflight against a local backend with:
+
+```bash
+node helpers/walletBackendPreflight.mjs http://127.0.0.1:21000 mainnet
+```
+
 #### Trezor Tests
 ```bash
 # Start Trezor emulator (requires Docker)
@@ -193,6 +203,9 @@ npm run test:ledger:one "YOUR_TEST_NAME_HERE"
 ### Running dApp Tests
 ```bash
 npm run test:dapp
+
+# Include quarantined dApp tests that depend on stale fixtures
+RUN_QUARANTINED_DAPP_TESTS=true npm run test:dapp
 
 # Run a single dApp test
 npm run test:dapp:one "YOUR_TEST_NAME_HERE"

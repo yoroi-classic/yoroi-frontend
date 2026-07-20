@@ -27,7 +27,6 @@ const getChromeBuilder = () => {
       enableExtensionTargets: true,
     },
   })
-    .setChromeBinaryPath(chromeBin)
     .addExtensions(path.resolve(__extensionDir, 'Yoroi-test.crx'))
     .addArguments('--disable-dev-shm-usage')
     .addArguments('--no-sandbox')
@@ -44,6 +43,9 @@ const getChromeBuilder = () => {
     })
     .addArguments('disable-infobars')
     .addArguments('--enable-clipboard');
+  if (chromeBin && !process.env.SELENIUM_REMOTE_URL) {
+    chromeOpts.setChromeBinaryPath(chromeBin);
+  }
   if (isHeadless()) {
     chromeOpts.addArguments('--headless=new');
   }
@@ -51,6 +53,9 @@ const getChromeBuilder = () => {
     chromeOpts.addArguments('--disable-web-security');
   }
   const builder = new Builder().forBrowser('chrome').setLoggingPrefs(prefs).setChromeOptions(chromeOpts);
+  if (process.env.SELENIUM_REMOTE_URL) {
+    builder.usingServer(process.env.SELENIUM_REMOTE_URL);
+  }
   if (process.env.CHROMEDRIVER_PATH) {
     builder.setChromeService(new chrome.ServiceBuilder(process.env.CHROMEDRIVER_PATH));
   }

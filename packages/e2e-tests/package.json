@@ -59,7 +59,8 @@
     "test:ledger": "npm run test:ledger:base:sequintel",
     "test:ledger:one": "npm run test:ledger:base:one",
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
-    "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one"
+    "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one",
+    "test:wallet-backend-preflight": "node --test helpers/walletBackendPreflight.test.mjs"
   },
   "author": "Yoroi Classic Contributors",
   "license": "ISC",

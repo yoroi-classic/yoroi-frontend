@@ -204,10 +204,14 @@ export default class SwapStore extends Store<StoresMap> {
     wallet,
     signedTransactionHexes,
   }) => {
-    await broadcastTransaction({
-      publicDeriverId: wallet.publicDeriverId,
-      signedTxHexArray: signedTransactionHexes,
-    });
+    // Submit and record each dependency in order. If a later transaction is
+    // rejected, earlier accepted transactions remain visible to wallet sync.
+    for (const signedTxHex of signedTransactionHexes) {
+      await broadcastTransaction({
+        publicDeriverId: wallet.publicDeriverId,
+        signedTxHex,
+      });
+    }
 
     // refresh call is non-blocking
     noop(this.stores.wallets.refreshWalletFromRemote(wallet.publicDeriverId));
