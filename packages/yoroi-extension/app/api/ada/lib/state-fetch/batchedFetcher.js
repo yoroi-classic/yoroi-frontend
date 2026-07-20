@@ -46,7 +46,6 @@ import type {
   GetSwapFeeTiersFunc,
   GetTransactionSlotsByHashesResponse,
   GetTransactionSlotsByHashesFunc,
-  SignedBatchRequest,
 } from './types';
 import LocalizableError from '../../../../i18n/LocalizableError';
 
@@ -106,7 +105,7 @@ export class BatchedFetcher implements IFetcher {
     // We don't batch transaction sending (it's just a single request)
     this.baseFetcher.getBestBlock(body);
 
-  sendTx: (SignedRequest | SignedBatchRequest) => Promise<SignedResponse> = body =>
+  sendTx: SignedRequest => Promise<SignedResponse> = body =>
     // We don't batch transaction sending (it's just a single request)
     this.baseFetcher.sendTx(body);
 

@@ -52,13 +52,6 @@ export type SignedRequest = {|
   id: string,
   encodedTx: Uint8Array,
 |};
-export type SignedBatchRequest = {|
-  ...BackendNetworkInfo,
-  txs: Array<{|
-    id: string,
-    encodedTx: Uint8Array,
-  |}>,
-|};
 export type SignedResponse = {| txId: string |};
 export type SendFunc = (body: SignedRequest) => Promise<SignedResponse>;
 

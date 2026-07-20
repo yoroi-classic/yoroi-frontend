@@ -364,6 +364,7 @@ export const RefreshTransactions: HandlerType<
       getRecentTransactionHashes: stateFetcher.getRecentTransactionHashes,
       getTransactionsByHashes: stateFetcher.getTransactionsByHashes,
       checkAddressesInUse: stateFetcher.checkAddressesInUse,
+      getUTXOsForAddresses: stateFetcher.getUTXOsForAddresses,
       getBestBlock: stateFetcher.getBestBlock,
       getTokenInfo: stateFetcher.getTokenInfo,
       getMultiAssetMetadata: stateFetcher.getMultiAssetMintMetadata,
