@@ -111,7 +111,7 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  Extension:
+  Extension-Matrix:
     if: (github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.test_type == 'all' ||
       github.event.inputs.test_type == 'extension')) ||
@@ -121,11 +121,38 @@ jobs:
       contains(github.event.review.body, '/check')
       ))
     runs-on: ubuntu-24.04
-    needs: [Build-Extension]
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select extension suites
+        id: matrix
+        working-directory: ./packages/e2e-tests
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PULL_REQUEST_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: node scripts/select-extension-matrix.mjs
+
+  Extension:
+    if: always() &&
+      needs.Build-Extension.result == 'success' &&
+      needs.Extension-Matrix.result == 'success' &&
+      needs.Extension-Matrix.outputs.matrix != '' &&
+      ((github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.test_type == 'all' ||
+      github.event.inputs.test_type == 'extension')) ||
+      (github.event.review &&
+      (
+      github.event.review.state == 'approved' ||
+      contains(github.event.review.body, '/check')
+      )))
+    runs-on: ubuntu-24.04
+    needs: [Build-Extension, Extension-Matrix]
     continue-on-error: true
     strategy:
-      matrix:
-        suite: [cashback, general, governance, nft, portfolio, receive, send, settings, transactions]
+      matrix: ${{ fromJSON(needs.Extension-Matrix.outputs.matrix) }}
 
     steps:
       - uses: browser-actions/setup-chrome@v2
