@@ -15,6 +15,7 @@ import ConnectorTab from '../../pages/wallet/connectorTab/connectorTab.page.js';
 import DAppConnectWallet from '../../pages/dapp/dAppConnectWallet.page.js';
 import { collectInfo } from '../../helpers/restoreWalletHelper.js';
 import driversPoolsManager from '../../utils/driversPool.js';
+import { itQuarantinedDApp } from '../../utils/quarantine.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 
@@ -69,26 +70,38 @@ describe('dApp, connection, no wallets', function () {
     expect(popUpIsClosed).to.be.true;
   });
 
-  it('Pass initials steps and restore a wallet', async function () {
-    await windowManager.findNewWindowAndSwitchTo(extensionTabName);
-    await restoreWallet(webdriver, logger, testWallet1);
-  });
+  itQuarantinedDApp(
+    'Pass initial steps and restore a wallet',
+    'restore from the no-wallet connector path has stale setup assumptions; see yoroi-frontend#55',
+    async function () {
+      await windowManager.findNewWindowAndSwitchTo(extensionTabName);
+      await restoreWallet(webdriver, logger, testWallet1);
+    }
+  );
 
-  it('Try to connect the dapp the wallet again', async function () {
-    await windowManager.switchTo(mockDAppName);
-    await connectNonAuth(webdriver, logger, windowManager, mockedDApp, testWallet1);
-  });
+  itQuarantinedDApp(
+    'Try to connect the dapp the wallet again',
+    'depends on the quarantined restore flow; see yoroi-frontend#55',
+    async function () {
+      await windowManager.switchTo(mockDAppName);
+      await connectNonAuth(webdriver, logger, windowManager, mockedDApp, testWallet1);
+    }
+  );
 
-  it('Connection is displayed in the extension', async function () {
-    // switch to the extension
-    await windowManager.switchTo(extensionTabName);
-    // go to the extension connector tab
-    await connectorTabPage.goToConnectorTab();
-    // check displayed info
-    const connectedWalletInfo = await connectorTabPage.getConnectedWalletInfo(testWallet1.name);
-    expect(connectedWalletInfo.walletBalance).to.equal(testWallet1.balance);
-    expect(connectedWalletInfo.dappUrl).to.equal('localhost');
-  });
+  itQuarantinedDApp(
+    'Connection is displayed in the extension',
+    'depends on the quarantined restore flow; see yoroi-frontend#55',
+    async function () {
+      // switch to the extension
+      await windowManager.switchTo(extensionTabName);
+      // go to the extension connector tab
+      await connectorTabPage.goToConnectorTab();
+      // check displayed info
+      const connectedWalletInfo = await connectorTabPage.getConnectedWalletInfo(testWallet1.name);
+      expect(connectedWalletInfo.walletBalance).to.equal(testWallet1.balance);
+      expect(connectedWalletInfo.dappUrl).to.equal('localhost');
+    }
+  );
 
   afterEach(async function () {
     await customAfterEach(this, webdriver, logger);

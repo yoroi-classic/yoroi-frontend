@@ -10,10 +10,25 @@ const noFloatingPromise = require('eslint-plugin-no-floating-promise');
 const prettier = require('eslint-plugin-prettier');
 const simpleImportSort = require('eslint-plugin-simple-import-sort');
 const typescriptEslint = require('@typescript-eslint/eslint-plugin');
+const typescriptParser = require('@typescript-eslint/parser');
 
 const { fixupPluginRules } = require('@eslint/compat');
 
 const js = require('@eslint/js');
+
+const projectGlobals = {
+  ...globals.browser,
+  ...globals.mocha,
+  ...globals.node,
+  ...globals.jest,
+  chrome: true,
+  API: true,
+  NETWORK: true,
+  MOBX_DEV_TOOLS: true,
+  CONFIG: true,
+  yoroi: true,
+  nameof: true,
+};
 
 const { FlatCompat } = require('@eslint/eslintrc');
 
@@ -25,6 +40,7 @@ const compat = new FlatCompat({
 
 module.exports = defineConfig([
   {
+    files: ['**/*.{js,jsx,mjs,cjs}'],
     languageOptions: {
       parser: babelParser,
       ecmaVersion: 6,
@@ -36,18 +52,13 @@ module.exports = defineConfig([
         },
       },
 
-      globals: {
-        ...globals.browser,
-        ...globals.mocha,
-        ...globals.node,
-        ...globals.jest,
-        chrome: true,
-        API: true,
-        NETWORK: true,
-        MOBX_DEV_TOOLS: true,
-        CONFIG: true,
-        yoroi: true,
-        nameof: true,
+      globals: projectGlobals,
+    },
+
+    settings: {
+      'import/parsers': {
+        '@babel/eslint-parser': ['.js', '.jsx', '.mjs', '.cjs'],
+        '@typescript-eslint/parser': ['.ts', '.tsx'],
       },
     },
 
@@ -186,12 +197,10 @@ module.exports = defineConfig([
         },
       ],
 
-      'import/no-unused-modules': [
-        1,
-        {
-          unusedExports: true,
-        },
-      ],
+      // eslint-plugin-import's project scanner invokes the legacy config
+      // loader and cannot traverse this mixed Flow/TypeScript flat-config
+      // project. Restore this signal under issue #82.
+      'import/no-unused-modules': 'off',
 
       camelcase: 0,
       'react/jsx-curly-brace-presence': 0,
@@ -206,6 +215,37 @@ module.exports = defineConfig([
       prettier,
       'simple-import-sort': simpleImportSort,
       '@typescript-eslint': typescriptEslint,
+    },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: typescriptParser,
+      globals: projectGlobals,
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+        project: './tsconfig.json',
+        sourceType: 'module',
+        tsconfigRootDir: __dirname,
+      },
+    },
+    plugins: {
+      '@typescript-eslint': typescriptEslint,
+      react,
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      // TypeScript provides these checks with awareness of type-only symbols
+      // and valid declaration merging/overloads.
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      'no-dupe-class-members': 'off',
+      'no-redeclare': 'off',
+      // Issue #83 tracks enabling the TypeScript recommended rules after the
+      // existing unused-symbol baseline is cleaned up.
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
   globalIgnores([

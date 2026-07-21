@@ -14,6 +14,11 @@ on:
           - dapp
           - trezor
           - ledger
+      run_quarantined_dapp_tests:
+        description: 'Run quarantined DApp cases that depend on stale fixtures'
+        required: false
+        default: false
+        type: boolean
   pull_request_review:
     types: [submitted]
 
@@ -36,13 +41,22 @@ jobs:
 
       - name: Read .nvmrc
         id: nvm
-        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache node modules
         uses: actions/cache@v4
@@ -82,6 +96,21 @@ jobs:
           retention-days: 1
           overwrite: true
 
+      - name: Build the wallet-backend test mainnet version
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp' || github.event.inputs.test_type == 'trezor' || github.event.inputs.test_type == 'ledger'
+        working-directory: ./packages/yoroi-extension
+        run: npm run test:dapp:build
+
+      - name: Archive wallet-backend test app
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp' || github.event.inputs.test_type == 'trezor' || github.event.inputs.test_type == 'ledger'
+        uses: actions/upload-artifact@v4
+        with:
+          name: builtWalletBackend
+          path: |
+            ./packages/yoroi-extension/Yoroi-test.crx
+          retention-days: 1
+          overwrite: true
+
   Extension:
     if: (github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.test_type == 'all' ||
@@ -109,13 +138,22 @@ jobs:
 
       - name: Read .nvmrc
         id: nvm
-        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -184,13 +222,22 @@ jobs:
 
       - name: Read .nvmrc
         id: nvm
-        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -212,7 +259,7 @@ jobs:
       - name: Download app
         uses: actions/download-artifact@v4
         with:
-          name: builtApp
+          name: builtWalletBackend
           path: ./packages/yoroi-extension
 
       - name: Run tests
@@ -225,6 +272,7 @@ jobs:
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
+          RUN_QUARANTINED_DAPP_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_quarantined_dapp_tests == 'true' }}
         run: xvfb-run -a -e /dev/stdout -s "-screen 0 1600x900x24" npm run test:dapp
 
       - name: Archive tests screenshots and logs
@@ -266,15 +314,31 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Check out cardano-wallet-backend
+        uses: actions/checkout@v4
+        with:
+          repository: yoroi-classic/cardano-wallet-backend
+          ref: a1724a9ed3de2099bc3f03be104f20df462d4644
+          path: cardano-wallet-backend
+
       - name: Read .nvmrc
         id: nvm
-        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -293,10 +357,23 @@ jobs:
         working-directory: ./packages/e2e-tests
         run: npm ci
 
+      - name: Start mainnet cardano-wallet-backend
+        working-directory: ./cardano-wallet-backend
+        env:
+          HOST: 127.0.0.1
+          NETWORK: mainnet
+          PORT: 21000
+          PROVIDER: koios
+        run: |
+          npm ci
+          npm run build
+          npm start > "$RUNNER_TEMP/cardano-wallet-backend.log" 2>&1 &
+          node ../packages/e2e-tests/helpers/walletBackendPreflight.mjs http://127.0.0.1:21000 mainnet
+
       - name: Download app
         uses: actions/download-artifact@v4
         with:
-          name: builtApp
+          name: builtWalletBackend
           path: ./packages/yoroi-extension
 
       - name: Run tests
@@ -314,6 +391,13 @@ jobs:
           path: |
             ./packages/e2e-tests/mochawesome-report
             ./packages/e2e-tests/testRunsData
+
+      - name: Archive cardano-wallet-backend log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cardano-wallet-backend_trezor
+          path: ${{ runner.temp }}/cardano-wallet-backend.log
 
   Ledger:
     if: (github.event_name == 'workflow_dispatch' &&
@@ -338,15 +422,31 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Check out cardano-wallet-backend
+        uses: actions/checkout@v4
+        with:
+          repository: yoroi-classic/cardano-wallet-backend
+          ref: a1724a9ed3de2099bc3f03be104f20df462d4644
+          path: cardano-wallet-backend
+
       - name: Read .nvmrc
         id: nvm
-        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
         uses: actions/setup-node@v4
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+
+      - name: Setup npm
+        run: |
+          corepack enable npm
+          corepack prepare npm@10.9.7 --activate
+          npm --version
+
+      - name: Check toolchain baseline
+        run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
         uses: actions/cache@v4
@@ -365,10 +465,23 @@ jobs:
         working-directory: ./packages/e2e-tests
         run: npm ci
 
+      - name: Start mainnet cardano-wallet-backend
+        working-directory: ./cardano-wallet-backend
+        env:
+          HOST: 127.0.0.1
+          NETWORK: mainnet
+          PORT: 21000
+          PROVIDER: koios
+        run: |
+          npm ci
+          npm run build
+          npm start > "$RUNNER_TEMP/cardano-wallet-backend.log" 2>&1 &
+          node ../packages/e2e-tests/helpers/walletBackendPreflight.mjs http://127.0.0.1:21000 mainnet
+
       - name: Download app
         uses: actions/download-artifact@v4
         with:
-          name: builtApp
+          name: builtWalletBackend
           path: ./packages/yoroi-extension
 
       - name: Run tests
@@ -386,3 +499,10 @@ jobs:
           path: |
             ./packages/e2e-tests/mochawesome-report
             ./packages/e2e-tests/testRunsData
+
+      - name: Archive cardano-wallet-backend log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cardano-wallet-backend_ledger
+          path: ${{ runner.temp }}/cardano-wallet-backend.log

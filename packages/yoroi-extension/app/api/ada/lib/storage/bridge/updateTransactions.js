@@ -89,6 +89,7 @@ import type {
   TxSummary,
   HistoryFunc,
   FilterFunc,
+  AddressUtxoFunc,
 } from '../../state-fetch/types';
 import { ShelleyCertificateTypes, RemoteTransactionTypes } from '../../state-fetch/types';
 import { addressToKind } from './utils';
@@ -752,6 +753,8 @@ export async function updateUtxos(
   db: lf$Database,
   publicDeriver: IPublicDeriver<ConceptualWallet>,
   checkAddressesInUse: FilterFunc,
+  getUTXOsForAddresses: AddressUtxoFunc,
+  getBestBlock: BestBlockFunc,
   getTokenInfo: TokenInfoFunc,
   getMultiAssetMintMetadata: MultiAssetMintMetadataFunc,
   getMultiAssetSupply: MultiAssetSupplyFunc
@@ -825,7 +828,7 @@ export async function updateUtxos(
         .flatMap(table => getAllSchemaTables(db, table)),
     ],
     async dbTx => {
-      await rawUpdateUtxos(db, dbTx, publicDeriver, getAddrTables, derivationTables);
+      await rawUpdateUtxos(db, dbTx, publicDeriver, getAddrTables, derivationTables, getUTXOsForAddresses, getBestBlock);
     }
   );
 
@@ -2810,7 +2813,9 @@ async function rawUpdateUtxos(
     GetAddress: Class<GetAddress>,
     GetDerivationSpecific: Class<GetDerivationSpecific>,
   |},
-  derivationTables: Map<number, string>
+  derivationTables: Map<number, string>,
+  getUTXOsForAddresses: AddressUtxoFunc,
+  getBestBlock: BestBlockFunc
 ): Promise<void> {
   const addresses = await rawGetAddressRowsForWallet(
     dbTx,
@@ -2824,8 +2829,6 @@ async function rawUpdateUtxos(
   );
 
   const utxoStorageApi = publicDeriver.getUtxoStorageApi();
-  const utxoService = publicDeriver.getUtxoService();
-
   utxoStorageApi.setDb(db);
   utxoStorageApi.setDbTx(dbTx);
 
@@ -2836,7 +2839,25 @@ async function rawUpdateUtxos(
   if (await compareAndSetIfNewAddressSetHash(publicDeriver.getPublicDeriverId(), requestAddresses)) {
     await utxoStorageApi.clearUtxoState();
   }
-  await utxoService.syncUtxoState(requestAddresses);
+  const network = publicDeriver.getParent().getNetworkInfo();
+  const [remoteUtxos, tip] = await Promise.all([
+    getUTXOsForAddresses({ network, addresses: requestAddresses }),
+    getBestBlock({ network }),
+  ]);
+  const tipHash = tip.hash;
+  if (tipHash == null) throw new Error('cardano-wallet-backend returned no tip hash');
+  await utxoStorageApi.replaceUtxoAtSafePoint(
+    remoteUtxos.map(utxo => ({
+      utxoId: utxo.utxo_id,
+      txHash: utxo.tx_hash,
+      txIndex: utxo.tx_index,
+      receiver: utxo.receiver,
+      amount: new BigNumber(utxo.amount),
+      assets: utxo.assets.map(asset => ({ ...asset })),
+      blockNum: tip.height,
+    })),
+    tipHash
+  );
 }
 
 export function toRequestAddresses(addresses: {|

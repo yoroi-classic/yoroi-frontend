@@ -10,6 +10,7 @@ export type BackendNetworkInfo = {|
 
 export type ServerStatusRequest = {|
   backend: string,
+  networkId: number,
 |};
 export type ServerStatusResponse = {|
   isServerOk: boolean,
