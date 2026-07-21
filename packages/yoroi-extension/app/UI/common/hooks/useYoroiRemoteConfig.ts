@@ -3,6 +3,7 @@ import { YoroiRemoteConfig } from '../../types/yoroi';
 import { YOROI_DEV_REMOTE_CONFIG_URL, YOROI_PROD_REMOTE_CONFIG_URL } from '../constants';
 import { environment } from '../../../environment';
 import { getYoroiRemoteConfigUrl } from '../../../utils/yoroiRemoteConfigUrl';
+import { parseYoroiRemoteConfig } from '../helpers/yoroiRemoteConfig';
 
 declare const CONFIG: {
   cardanoWalletBackend: {
@@ -29,7 +30,7 @@ export const useYoroiRemoteConfig = () => {
         throw new Error('Failed to fetch Yoroi remote config');
       }
       const remoteConfig: unknown = await res.json();
-      return remoteConfig as YoroiRemoteConfig;
+      return parseYoroiRemoteConfig(remoteConfig);
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 30, // v5: cacheTime -> gcTime (30 minutes)

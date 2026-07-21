@@ -46,7 +46,7 @@ test('locks the exact authoritative 22-rule baseline inventory', () => {
   assert.deepEqual(Object.keys(baseline), EXPECTED_RULE_IDS);
   assert.equal(
     Object.values(baseline).reduce((sum, count) => sum + count, 0),
-    5399
+    5397
   );
 });
 
