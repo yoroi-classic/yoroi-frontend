@@ -106,14 +106,34 @@ test('rejects mutable third-party action tags', t => {
   assert.match(auditWorkflows({ root }).errors.join('\n'), /full 40-character commit SHA/);
 });
 
+test('rejects mutable actions behind quoted escape-encoded uses keys', t => {
+  const root = mutatedWorkflow(source =>
+    source.replace(`uses: actions/checkout@${CHECKOUT.sha}`, '"u\\u0073es": actions/checkout@v7')
+  );
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const errors = auditWorkflows({ root }).errors.join('\n');
+  assert.match(errors, /quoted YAML mapping keys are not allowed/);
+  assert.match(errors, new RegExp(`actions/checkout inventory must contain ${CHECKOUT.count} uses, found ${CHECKOUT.count - 1}`));
+});
+
 test('rejects unreviewed external actions even when SHA-pinned', t => {
   const root = mutatedWorkflow(source => source.replace('actions/checkout@', 'unreviewed/example-action@'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   assert.match(auditWorkflows({ root }).errors.join('\n'), /uses unreviewed external action unreviewed\/example-action/);
 });
 
-test('preserves the Chrome Web Store nightly publication inputs', t => {
-  const root = mutatedWorkflow(source => source.replace('oauth-client-id:', 'client-id:'), 'nightly-publish.yml');
+test('preserves the Chrome Web Store nightly publication inputs in the action with block', t => {
+  const root = mutatedWorkflow(
+    source =>
+      source.replace('oauth-client-id:', 'client-id:').replace(
+        '      - name: Configure Git',
+        `      - name: "Decoy oauth-client-id: \${{ secrets.NIGHTLY_CLIENT_ID }}"
+        run: echo decoy
+
+      - name: Configure Git`
+      ),
+    'nightly-publish.yml'
+  );
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   assert.match(
     auditWorkflows({ root }).errors.join('\n'),

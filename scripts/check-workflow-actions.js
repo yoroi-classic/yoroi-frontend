@@ -74,14 +74,16 @@ const ACTIONS = Object.freeze({
 
 const TARGET_USE = /^\s*(?:-\s+)?uses:\s*([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)@([^\s#]+)(?:\s+#\s*(\S+))?\s*$/;
 const LOCAL_USE = /^\s*(?:-\s+)?uses:\s*\.\/\S+(?:\s+#.*)?$/;
-const NVMRC_NODE_VERSION = /node-version:\s*['"]?\$\{\{\s*steps\.nvm\.outputs\.NVMRC\s*\}\}['"]?/;
-const CHROME_PUBLISH_INPUTS = Object.freeze([
-  /extension-id:\s*['"]poonlenmfdfbjfeeballhiibknlknepo['"]/,
-  /extension-path:\s*['"]\.\/packages\/yoroi-extension\/Yoroi Nightly\.zip['"]/,
-  /oauth-client-id:\s*\$\{\{\s*secrets\.NIGHTLY_CLIENT_ID\s*\}\}/,
-  /oauth-client-secret:\s*\$\{\{\s*secrets\.NIGHTLY_CLIENT_SECRET\s*\}\}/,
-  /oauth-refresh-token:\s*\$\{\{\s*secrets\.NIGHTLY_TOKEN\s*\}\}/,
-]);
+const QUOTED_MAPPING_KEY = /^\s*(?:-\s+)?(?:\{\s*)?(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*')\s*:/;
+const FLOW_STYLE_STEP = /^\s*-\s*\{/;
+const NVMRC_NODE_VERSION = '${{ steps.nvm.outputs.NVMRC }}';
+const CHROME_PUBLISH_INPUTS = Object.freeze({
+  'extension-id': 'poonlenmfdfbjfeeballhiibknlknepo',
+  'extension-path': './packages/yoroi-extension/Yoroi Nightly.zip',
+  'oauth-client-id': '${{ secrets.NIGHTLY_CLIENT_ID }}',
+  'oauth-client-secret': '${{ secrets.NIGHTLY_CLIENT_SECRET }}',
+  'oauth-refresh-token': '${{ secrets.NIGHTLY_TOKEN }}',
+});
 
 function workflowFiles(root = WORKSPACE_ROOT) {
   const workflowDir = path.join(root, '.github', 'workflows');
@@ -92,6 +94,53 @@ function workflowFiles(root = WORKSPACE_ROOT) {
     .map(file => path.join(workflowDir, file));
 }
 
+function indentation(line) {
+  return /^\s*/.exec(line)[0].length;
+}
+
+function stepEnd(lines, actionIndex) {
+  const keyIndent = lines[actionIndex].indexOf('uses:');
+  for (let index = actionIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
+    if (indentation(line) < keyIndent || (indentation(line) === keyIndent && /^\s*-\s+/.test(line))) {
+      return index;
+    }
+  }
+  return lines.length;
+}
+
+function indentedMapping(lines, actionIndex, key) {
+  const keyIndent = lines[actionIndex].indexOf('uses:');
+  const end = stepEnd(lines, actionIndex);
+  const mappingIndex = lines.findIndex(
+    (line, index) =>
+      index > actionIndex && index < end && indentation(line) === keyIndent && new RegExp(`^\\s*${key}:\\s*(?:#.*)?$`).test(line)
+  );
+  if (mappingIndex === -1) return new Map();
+
+  const values = new Map();
+  for (let index = mappingIndex + 1; index < end; index += 1) {
+    const line = lines[index];
+    if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
+    if (indentation(line) <= keyIndent) break;
+    if (indentation(line) !== keyIndent + 2) continue;
+    const match = /^\s*([A-Za-z0-9_-]+):\s*(.*?)\s*$/.exec(line);
+    if (match == null) continue;
+    let value = match[2];
+    if (value.length >= 2 && ((value.startsWith("'") && value.endsWith("'")) || (value.startsWith('"') && value.endsWith('"')))) {
+      value = value.slice(1, -1);
+    }
+    values.set(match[1], value);
+  }
+  return values;
+}
+
+function preservesChromePublishInputs(lines, actionIndex) {
+  const withValues = indentedMapping(lines, actionIndex, 'with');
+  return Object.entries(CHROME_PUBLISH_INPUTS).every(([key, expected]) => withValues.get(key) === expected);
+}
+
 function auditWorkflows({ root = WORKSPACE_ROOT } = {}) {
   const errors = [];
   const inventory = Object.fromEntries(Object.keys(ACTIONS).map(action => [action, 0]));
@@ -99,6 +148,15 @@ function auditWorkflows({ root = WORKSPACE_ROOT } = {}) {
   for (const file of workflowFiles(root)) {
     const relativeFile = path.relative(root, file);
     const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+
+    lines.forEach((line, index) => {
+      if (QUOTED_MAPPING_KEY.test(line)) {
+        errors.push(`${relativeFile}:${index + 1} quoted YAML mapping keys are not allowed`);
+      }
+      if (FLOW_STYLE_STEP.test(line)) {
+        errors.push(`${relativeFile}:${index + 1} flow-style workflow steps are not allowed`);
+      }
+    });
 
     lines.forEach((line, index) => {
       if (!line.includes('uses:')) return;
@@ -126,17 +184,13 @@ function auditWorkflows({ root = WORKSPACE_ROOT } = {}) {
       }
 
       if (action === 'actions/setup-node') {
-        const setupBlock = lines.slice(index + 1, index + 8).join('\n');
-        if (!NVMRC_NODE_VERSION.test(setupBlock)) {
+        if (indentedMapping(lines, index, 'with').get('node-version') !== NVMRC_NODE_VERSION) {
           errors.push(`${relativeFile}:${index + 1} ${action} must install the version read from .nvmrc`);
         }
       }
 
-      if (action === 'browser-actions/release-chrome-extension') {
-        const publishBlock = lines.slice(index + 1, index + 9).join('\n');
-        if (CHROME_PUBLISH_INPUTS.some(pattern => !pattern.test(publishBlock))) {
-          errors.push(`${relativeFile}:${index + 1} Chrome publication inputs must preserve the nightly release contract`);
-        }
+      if (action === 'browser-actions/release-chrome-extension' && !preservesChromePublishInputs(lines, index)) {
+        errors.push(`${relativeFile}:${index + 1} Chrome publication inputs must preserve the nightly release contract`);
       }
     });
   }
