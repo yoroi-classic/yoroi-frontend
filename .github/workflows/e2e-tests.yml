@@ -37,14 +37,14 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Read .nvmrc
         id: nvm
         run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
@@ -59,7 +59,7 @@ jobs:
         run: npm run check:toolchain
 
       - name: Cache node modules
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: node-cache
         with:
           path: |
@@ -88,7 +88,7 @@ jobs:
           fi
 
       - name: Archive built app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: builtApp
           path: |
@@ -103,7 +103,7 @@ jobs:
 
       - name: Archive wallet-backend test app
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'dapp' || github.event.inputs.test_type == 'trezor' || github.event.inputs.test_type == 'ledger'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: builtWalletBackend
           path: |
@@ -134,14 +134,14 @@ jobs:
           chrome-version: 'stable'
           install-chromedriver: true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Read .nvmrc
         id: nvm
         run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
@@ -156,7 +156,7 @@ jobs:
         run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: node-modules-cache
         with:
           path: |
@@ -173,7 +173,7 @@ jobs:
         run: npm ci
 
       - name: Download app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: builtApp
           path: ./packages/yoroi-extension
@@ -192,7 +192,7 @@ jobs:
 
       - name: Archive tests screenshots and logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: testRunsData_E2E_tests_extension_${{ matrix.suite }}
           path: |
@@ -218,14 +218,14 @@ jobs:
           chrome-version: 'stable'
           install-chromedriver: true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Read .nvmrc
         id: nvm
         run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
@@ -240,7 +240,7 @@ jobs:
         run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: node-modules-cache
         with:
           path: |
@@ -257,7 +257,7 @@ jobs:
         run: npm ci
 
       - name: Download app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: builtWalletBackend
           path: ./packages/yoroi-extension
@@ -277,7 +277,7 @@ jobs:
 
       - name: Archive tests screenshots and logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: testRunsData_E2E_tests_dapp
           path: |
@@ -312,10 +312,10 @@ jobs:
           chrome-version: 'stable'
           install-chromedriver: true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Check out cardano-wallet-backend
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: yoroi-classic/cardano-wallet-backend
           ref: a1724a9ed3de2099bc3f03be104f20df462d4644
@@ -326,7 +326,7 @@ jobs:
         run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
@@ -341,7 +341,7 @@ jobs:
         run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: node-modules-cache
         with:
           path: |
@@ -371,7 +371,7 @@ jobs:
           node ../packages/e2e-tests/helpers/walletBackendPreflight.mjs http://127.0.0.1:21000 mainnet
 
       - name: Download app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: builtWalletBackend
           path: ./packages/yoroi-extension
@@ -385,7 +385,7 @@ jobs:
 
       - name: Archive tests screenshots and logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: testRunsData_E2E_tests_trezor
           path: |
@@ -394,7 +394,7 @@ jobs:
 
       - name: Archive cardano-wallet-backend log
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cardano-wallet-backend_trezor
           path: ${{ runner.temp }}/cardano-wallet-backend.log
@@ -420,10 +420,10 @@ jobs:
           chrome-version: 'stable'
           install-chromedriver: true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Check out cardano-wallet-backend
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: yoroi-classic/cardano-wallet-backend
           ref: a1724a9ed3de2099bc3f03be104f20df462d4644
@@ -434,7 +434,7 @@ jobs:
         run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
@@ -449,7 +449,7 @@ jobs:
         run: npm run check:toolchain
 
       - name: Cache e2e-tests node modules
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: node-modules-cache
         with:
           path: |
@@ -479,7 +479,7 @@ jobs:
           node ../packages/e2e-tests/helpers/walletBackendPreflight.mjs http://127.0.0.1:21000 mainnet
 
       - name: Download app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: builtWalletBackend
           path: ./packages/yoroi-extension
@@ -493,7 +493,7 @@ jobs:
 
       - name: Archive tests screenshots and logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: testRunsData_E2E_tests_ledger
           path: |
@@ -502,7 +502,7 @@ jobs:
 
       - name: Archive cardano-wallet-backend log
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cardano-wallet-backend_ledger
           path: ${{ runner.temp }}/cardano-wallet-backend.log
