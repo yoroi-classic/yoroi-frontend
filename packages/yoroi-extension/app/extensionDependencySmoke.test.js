@@ -16,7 +16,13 @@ import { byronAddrToHex } from './api/ada/lib/storage/bridge/utils';
 import { Bip44DerivationLevels } from './api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { newAdaUnsignedTx, signTransaction } from './api/ada/transactions/shelley/transactions';
 import { getYoroiRemoteConfigUrl } from './utils/yoroiRemoteConfigUrl';
-import { CheckAddressesInUseApiError, GetAccountStateApiError, SendTransactionApiError } from './api/common/errors';
+import {
+  CheckAddressesInUseApiError,
+  CurrentCoinPriceError,
+  GetAccountStateApiError,
+  SendTransactionApiError,
+} from './api/common/errors';
+import { Logger } from './utils/logging';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
@@ -97,6 +103,23 @@ function successfulJsonResponse(body, headers = {}) {
     },
     json: () => Promise.resolve(body),
   });
+}
+
+function currentAdaPriceFixture(asOf = Math.floor(Date.now() / 1000)) {
+  return {
+    prices: {
+      USD: 0.42,
+      JPY: 63,
+      EUR: 0.39,
+      CNY: 3.01,
+      KRW: 580,
+      BTC: 0.000004,
+      ETH: 0.00015,
+      BRL: 2.3,
+    },
+    changePercent24h: {},
+    asOf,
+  };
 }
 
 function rewardAddressFixture(keyByte, networkId = 0) {
@@ -800,6 +823,190 @@ describe('extension dependency smoke', () => {
           networkId: networks.CardanoPreprodTestnet.NetworkId,
         })
       ).rejects.toThrow();
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test.each([
+    ['mainnet', CARDANO_MAINNET.NetworkId, 'http://localhost:3010/'],
+    ['preprod', networks.CardanoPreprodTestnet.NetworkId, 'http://localhost:3011'],
+  ])('routes current ADA prices to the enabled %s cardano-wallet-backend endpoint', async (_, networkId, endpoint) => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011',
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse(currentAdaPriceFixture()));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => networkId
+      );
+
+      await fetcher.getCurrentCoinPrice({ from: 'ADA' });
+
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        `${endpoint.replace(/\/+$/, '')}/v1/price/ada?currencies=USD,JPY,EUR,CNY,KRW,BTC,ETH,BRL`,
+        expect.objectContaining({
+          method: 'GET',
+          headers: {
+            'yoroi-version': '5.23.200',
+            'yoroi-locale': 'en-US',
+          },
+        })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('maps validated cardano-wallet-backend ADA prices to the legacy ticker shape', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010',
+      preprod: 'http://localhost:3011',
+    };
+    const asOf = Math.floor(Date.now() / 1000);
+    const fixture = currentAdaPriceFixture(asOf);
+    const response = { ...fixture, prices: { ...fixture.prices, UNREQUESTED: 123 } };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse(response));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+
+      await expect(fetcher.getCurrentCoinPrice({ from: 'ADA' })).resolves.toEqual({
+        error: null,
+        ticker: {
+          from: 'ADA',
+          timestamp: asOf * 1000,
+          prices: {
+            USD: 0.42,
+            JPY: 63,
+            EUR: 0.39,
+            CNY: 3.01,
+            KRW: 580,
+            BTC: 0.000004,
+            ETH: 0.00015,
+            BRL: 2.3,
+          },
+        },
+      });
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test.each([
+    ['malformed response', null],
+    ['missing prices', { asOf: Math.floor(Date.now() / 1000) }],
+    ['missing currency', { ...currentAdaPriceFixture(), prices: { ...currentAdaPriceFixture().prices, USD: undefined } }],
+    ['nonpositive price', { ...currentAdaPriceFixture(), prices: { ...currentAdaPriceFixture().prices, USD: 0 } }],
+    [
+      'nonfinite price',
+      { ...currentAdaPriceFixture(), prices: { ...currentAdaPriceFixture().prices, USD: Number.POSITIVE_INFINITY } },
+    ],
+    ['missing asOf', { ...currentAdaPriceFixture(), asOf: undefined }],
+    ['nonpositive asOf', { ...currentAdaPriceFixture(), asOf: 0 }],
+    ['fractional asOf', { ...currentAdaPriceFixture(), asOf: Date.now() / 1000 }],
+    [
+      'stale asOf',
+      currentAdaPriceFixture(Math.floor((Date.now() - (global: any).CONFIG.app.coinPriceFreshnessThreshold - 1000) / 1000)),
+    ],
+  ])('rejects cardano-wallet-backend ADA prices with a %s', async (_, response) => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010',
+      preprod: 'http://localhost:3011',
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse(response));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+
+      await expect(fetcher.getCurrentCoinPrice({ from: 'ADA' })).rejects.toBeInstanceOf(CurrentCoinPriceError);
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('does not log a cardano-wallet-backend price error response body', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010',
+      preprod: 'http://localhost:3011',
+    };
+    const secretMarker = 'sensitive-provider-response';
+    (global: any).fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve(secretMarker),
+      })
+    );
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+    const logger = jest.spyOn(Logger, 'error').mockImplementation(() => {});
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+
+      await expect(fetcher.getCurrentCoinPrice({ from: 'ADA' })).rejects.toBeInstanceOf(CurrentCoinPriceError);
+      expect(logger).toHaveBeenCalledWith('RemoteFetcher::getCurrentCoinPrice v1 error');
+      expect(logger.mock.calls.flat().join(' ')).not.toContain(secretMarker);
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
+  test('keeps the legacy current price route when cardano-wallet-backend is disabled', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: false,
+      mainnet: 'http://localhost:3010',
+      preprod: 'http://localhost:3011',
+    };
+    const legacyResponse = { error: null, ticker: currentAdaPriceFixture().prices };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse(legacyResponse));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new CommonRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome',
+        () => CARDANO_MAINNET.NetworkId
+      );
+
+      await expect(fetcher.getCurrentCoinPrice({ from: 'ADA' })).resolves.toBe(legacyResponse);
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        `${CARDANO_MAINNET.Backend.BackendService}/api/price/ADA/current`,
+        expect.objectContaining({ method: 'GET' })
+      );
     } finally {
       (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
     }
