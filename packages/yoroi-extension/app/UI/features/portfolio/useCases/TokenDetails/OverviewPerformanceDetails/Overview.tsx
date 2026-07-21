@@ -111,7 +111,7 @@ const TokenOverviewSection = ({
               href={
                 isNetworkUrl != null
                   ? isPrimary
-                    ? explorer.tokenInfo.baseUrl.replace(/^(https?:\/\/[^\/]+)\/.*/, '$1')
+                    ? explorer.tokenInfo.baseUrl.replace(/^(https?:\/\/[^/]+)\/.*/, '$1')
                     : `${explorer.tokenInfo.baseUrl}${value}`
                   : ''
               }

@@ -52,7 +52,7 @@ const TabMenuItem: React.FC<Props> = observer(({ label, active, disabled = false
   const componentClasses = classNames('component', stateClass, className);
   const componentClassesArr = componentClasses.split(' ');
   const lastClass = componentClassesArr[componentClassesArr.length - 1];
-  const subMenuItemId = lastClass?.toLowerCase().replace(/[ \/]/gi, '');
+  const subMenuItemId = lastClass?.toLowerCase().replace(/[ /]/gi, '');
 
   return (
     <StyledButton

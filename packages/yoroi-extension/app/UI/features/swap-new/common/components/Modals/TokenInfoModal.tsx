@@ -43,7 +43,7 @@ const TokenInfoModal = ({ token }) => {
               target="_blank"
               href={
                 isPrimary
-                  ? explorer.tokenInfo.baseUrl.replace(/^(https?:\/\/[^\/]+)\/.*/, '$1')
+                  ? explorer.tokenInfo.baseUrl.replace(/^(https?:\/\/[^/]+)\/.*/, '$1')
                   : `${explorer.tokenInfo.baseUrl}${token.fingerprint}`
               }
               rel="noopener noreferrer"

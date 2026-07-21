@@ -25,7 +25,7 @@ function stepReducer(state: StepStateType, action: StepAction): StepStateType {
         stepState: StepState.LOAD,
         error: null,
       };
-    case 'NEXT_STEP':
+    case 'NEXT_STEP': {
       if (state.currentStep === -1) return state;
 
       const stepsAmount = state.currentStep === ProgressStep.CONFIRM && action.selectedWallet.isHardware ? 2 : 1;
@@ -38,6 +38,7 @@ function stepReducer(state: StepStateType, action: StepAction): StepStateType {
         stepState: StepState.LOAD,
         error: null,
       };
+    }
     case 'PREVIOUS_STEP':
       if (state.currentStep <= ProgressStep.GENERATE) return state;
 
