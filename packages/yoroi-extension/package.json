@@ -161,7 +161,7 @@
     "@mui/material": "^5.0.4",
     "@mui/x-date-pickers": "^5.0.8",
     "@posthog/react": "1.4.0",
-    "@svgr/webpack": "5.5.0",
+    "@svgr/webpack": "8.1.0",
     "@tanstack/react-query": "^5.90.11",
     "@yoroi-classic/cip14-js": "github:yoroi-classic/cip14-js#4b44db234319448a6c5a0c87659c1e0c46282460",
     "@yoroi-classic/cip4-js": "github:yoroi-classic/CIP4#b157df58aa1de34ed580dce463a2014616089749",
