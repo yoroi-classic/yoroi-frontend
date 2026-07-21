@@ -12,8 +12,8 @@ jest.mock('@yoroi/common', () => ({
 }));
 jest.mock('@yoroi/api', () => ({ CardanoApi: {} }));
 
-const { handleApiGetCryptoAddress } = require('@yoroi/resolver/lib/commonjs/adapters/handle/api');
-const { unstoppableApiGetCryptoAddress } = require('@yoroi/resolver/lib/commonjs/adapters/unstoppable/api');
+const { handleApiConfig, handleApiGetCryptoAddress } = require('@yoroi/resolver/lib/commonjs/adapters/handle/api');
+const { unstoppableApiConfig, unstoppableApiGetCryptoAddress } = require('@yoroi/resolver/lib/commonjs/adapters/unstoppable/api');
 const { handleCnsApiError } = require('@yoroi/resolver/lib/commonjs/adapters/cns/api');
 const { makeCnsCardanoApi } = require('@yoroi/resolver/lib/commonjs/adapters/cns/cardano-api-maker');
 const { stringToHex } = require('@yoroi/resolver/lib/commonjs/adapters/cns/utils');
@@ -34,7 +34,9 @@ const adapterCases = [
     payload: address => ({ resolved_addresses: { ada: address } }),
     malformedPayload: { resolved_addresses: {} },
     makeResolver: request => handleApiGetCryptoAddress({ request, isMainnet: true }),
-    assertRequest: () => {},
+    assertRequest: request => {
+      expect(request).toHaveBeenCalledWith({ url: `${handleApiConfig.mainnet.getCryptoAddress}alice` }, undefined);
+    },
   },
   {
     name: 'Unstoppable Domains',
@@ -45,7 +47,18 @@ const adapterCases = [
     }),
     malformedPayload: { meta: { blockchain: 'MATIC' }, records: { 'crypto.ADA.address': 42 } },
     makeResolver: request => unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request }),
-    assertRequest: () => {},
+    assertRequest: request => {
+      expect(request).toHaveBeenCalledWith(
+        {
+          url: `${unstoppableApiConfig.mainnet.getCryptoAddress}alice.crypto`,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer test-api-key',
+          },
+        },
+        undefined
+      );
+    },
   },
   {
     name: 'Cardano Name Service',
