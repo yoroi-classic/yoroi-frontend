@@ -16,7 +16,12 @@ const command = async (webdriverUrl, path, { method = 'POST', body } = {}) => {
 };
 
 export const validateSmokeResult = ({ result, backendOrigin, expectedNetwork }) => {
-  if (result?.smokeError) throw new Error(result.smokeError);
+  if (result?.smokeError) {
+    throw new Error(`${result.smokeError} from ${String(result.locationHref ?? 'unknown browser context')}`);
+  }
+  if (!result?.locationHref?.startsWith('chrome-extension://') || !result?.extensionId) {
+    throw new Error(`smoke did not run in a loaded extension context: ${String(result?.locationHref)}`);
+  }
   if (!result?.hostPermissions?.includes(`${backendOrigin}/*`)) {
     throw new Error(`signed CRX manifest does not permit ${backendOrigin}/*`);
   }
@@ -53,16 +58,15 @@ const waitForWebdriver = async webdriverUrl => {
   throw new Error(`WebDriver did not become ready: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 };
 
-export const runSmoke = async ({ crxPath, webdriverUrl, backendOrigin, expectedNetwork }) => {
-  await waitForWebdriver(webdriverUrl);
-  const extension = readFileSync(crxPath).toString('base64');
-  const session = await command(webdriverUrl, '/session', {
+const createBrowserSession = (webdriverUrl, extension) =>
+  command(webdriverUrl, '/session', {
     body: {
       capabilities: {
         alwaysMatch: {
           browserName: 'chrome',
           'goog:chromeOptions': {
             args: ['--headless=new', '--no-sandbox', '--disable-dev-shm-usage'],
+            enableExtensionTargets: true,
             extensions: [extension],
           },
         },
@@ -70,41 +74,81 @@ export const runSmoke = async ({ crxPath, webdriverUrl, backendOrigin, expectedN
     },
   });
 
-  const sessionId = session.sessionId;
-  try {
+export const extensionOriginFromUrl = rawUrl => {
+  const url = new URL(rawUrl);
+  if (url.protocol !== 'chrome-extension:' || !url.host) throw new Error(`invalid extension URL: ${rawUrl}`);
+  return `${url.protocol}//${url.host}`;
+};
+
+const findExtensionOrigin = async (webdriverUrl, sessionId) => {
+  for (let attempt = 1; attempt <= 100; attempt += 1) {
     const targets = await command(webdriverUrl, `/session/${sessionId}/goog/cdp/execute`, {
       body: { cmd: 'Target.getTargets', params: {} },
     });
     const serviceWorker = targets.targetInfos.find(
       ({ type, url }) => type === 'service_worker' && url.startsWith('chrome-extension://')
     );
-    if (!serviceWorker) throw new Error('Yoroi extension service worker was not loaded');
+    if (serviceWorker) {
+      return extensionOriginFromUrl(serviceWorker.url);
+    }
+    if (attempt < 100) await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Yoroi extension service worker was not loaded');
+};
 
-    const extensionOrigin = new URL(serviceWorker.url).origin;
-    const extensionTarget = await command(webdriverUrl, `/session/${sessionId}/goog/cdp/execute`, {
-      body: { cmd: 'Target.createTarget', params: { url: `${extensionOrigin}/manifest.json` } },
-    });
-    await command(webdriverUrl, `/session/${sessionId}/window`, {
-      body: { handle: extensionTarget.targetId },
-    });
+const selectExtensionWindow = async (webdriverUrl, sessionId, extensionOrigin) => {
+  const extensionTarget = await command(webdriverUrl, `/session/${sessionId}/goog/cdp/execute`, {
+    body: { cmd: 'Target.createTarget', params: { url: `${extensionOrigin}/manifest.json` } },
+  });
+  const observedUrls = [];
+  for (let attempt = 1; attempt <= 50; attempt += 1) {
+    const windowHandles = await command(webdriverUrl, `/session/${sessionId}/window/handles`, { method: 'GET' });
+    const extensionHandle = windowHandles.find(handle => handle.endsWith(extensionTarget.targetId));
+    if (extensionHandle) {
+      await command(webdriverUrl, `/session/${sessionId}/window`, { body: { handle: extensionHandle } });
+      const currentUrl = await command(webdriverUrl, `/session/${sessionId}/url`, { method: 'GET' });
+      observedUrls.push(currentUrl);
+      if (currentUrl.startsWith(extensionOrigin)) return;
+    }
+    if (attempt < 50) await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error(`ChromeDriver did not expose an extension window: ${observedUrls.join(', ')}`);
+};
+
+export const runSmoke = async ({ crxPath, webdriverUrl, backendOrigin, expectedNetwork }) => {
+  await waitForWebdriver(webdriverUrl);
+  const extension = readFileSync(crxPath).toString('base64');
+  const session = await createBrowserSession(webdriverUrl, extension);
+  const sessionId = session.sessionId;
+  try {
+    const extensionOrigin = await findExtensionOrigin(webdriverUrl, sessionId);
+    await selectExtensionWindow(webdriverUrl, sessionId, extensionOrigin);
     const result = await command(webdriverUrl, `/session/${sessionId}/execute/async`, {
       body: {
         script: `
           const done = arguments[arguments.length - 1];
+          const locationHref = location.href;
+          const extensionId = chrome.runtime?.id;
+          const manifest = chrome.runtime?.getManifest?.();
+          if (!extensionId || !manifest) {
+            done({ smokeError: 'Chrome extension runtime is unavailable', locationHref });
+            return;
+          }
           const fetchJson = async path => {
             const response = await fetch(${JSON.stringify(backendOrigin)} + path);
             return { httpStatus: response.status, body: await response.json() };
           };
           Promise.all([fetchJson('/v1/status'), fetchJson('/v1/chain/tip')])
             .then(([status, tip]) => {
-              const manifest = chrome.runtime.getManifest();
               done({
+                locationHref,
+                extensionId,
                 hostPermissions: manifest.host_permissions ?? [],
                 contentSecurityPolicy: manifest.content_security_policy?.extension_pages ?? '',
                 status,
                 tip,
               });
-            }, error => done({ smokeError: String(error) }));
+            }, error => done({ smokeError: String(error), locationHref, extensionId }));
         `,
         args: [],
       },

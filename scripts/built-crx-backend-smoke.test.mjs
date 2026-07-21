@@ -3,11 +3,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { validateSmokeResult } from './built-crx-backend-smoke.mjs';
+import { extensionOriginFromUrl, validateSmokeResult } from './built-crx-backend-smoke.mjs';
 
 const backendOrigin = 'http://wallet-backend:3010';
 const expectedNetwork = 'preprod';
 const validResult = {
+  locationHref: 'chrome-extension://extension-id/manifest.json',
+  extensionId: 'extension-id',
   hostPermissions: [`${backendOrigin}/*`],
   contentSecurityPolicy: `connect-src 'self' ${backendOrigin};`,
   status: { httpStatus: 200, body: { network: expectedNetwork, chain: 'ok', tip: { height: 1 } } },
@@ -32,16 +34,32 @@ test('keeps the signed origin and self-contained topology wired together', () =>
   assert.match(runner, /--configEnv backend-smoke/);
   assert.match(runner, /built-crx-backend-smoke\.mjs/);
   assert.doesNotMatch(runner, /docker\s+(?:compose\s+)?exec/);
+  const browserSmoke = readFileSync(`${repositoryRoot}scripts/built-crx-backend-smoke.mjs`, 'utf8');
+  assert.match(browserSmoke, /\/window\/handles/);
 });
 
 test('accepts extension-context status and tip responses from the signed origin', () => {
   assert.doesNotThrow(() => validateSmokeResult({ result: validResult, backendOrigin, expectedNetwork }));
 });
 
+test('constructs a Chrome extension origin without the WHATWG opaque-origin null', () => {
+  assert.equal(
+    extensionOriginFromUrl('chrome-extension://abcdefghijklmnop/background-service-worker.js'),
+    'chrome-extension://abcdefghijklmnop'
+  );
+});
+
 test('rejects a signed CRX without the tested backend origin', () => {
   assert.throws(
     () => validateSmokeResult({ result: { ...validResult, hostPermissions: [] }, backendOrigin, expectedNetwork }),
     /manifest does not permit/
+  );
+});
+
+test('rejects execution outside the loaded extension context', () => {
+  assert.throws(
+    () => validateSmokeResult({ result: { ...validResult, locationHref: 'data:,' }, backendOrigin, expectedNetwork }),
+    /did not run in a loaded extension context/
   );
 });
 
