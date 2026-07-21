@@ -140,3 +140,15 @@ test('preserves the Chrome Web Store nightly publication inputs in the action wi
     /Chrome publication inputs must preserve the nightly release contract/
   );
 });
+
+test('rejects mutable actions behind explicit escape-encoded mapping keys', t => {
+  const root = mutatedWorkflow(source =>
+    source.replace(
+      `uses: actions/checkout@${CHECKOUT.sha}`,
+      `? "u\\u0073es"
+        : actions/checkout@v7`
+    )
+  );
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  assert.match(auditWorkflows({ root }).errors.join('\n'), /explicit, decorated, and merged YAML mappings are not allowed/);
+});

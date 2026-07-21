@@ -76,6 +76,9 @@ const TARGET_USE = /^\s*(?:-\s+)?uses:\s*([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)@([^\
 const LOCAL_USE = /^\s*(?:-\s+)?uses:\s*\.\/\S+(?:\s+#.*)?$/;
 const QUOTED_MAPPING_KEY = /^\s*(?:-\s+)?(?:\{\s*)?(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*')\s*:/;
 const FLOW_STYLE_STEP = /^\s*-\s*\{/;
+const EXPLICIT_MAPPING_KEY = /^\s*(?:-\s+)?\?\s+/;
+const DECORATED_YAML_NODE = /^\s*(?:-\s+)?(?:(?:!\S+|&\S+)\s+(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[A-Za-z0-9_-]+)|\*\S+)\s*:/;
+const MERGED_MAPPING = /^\s*<<\s*:/;
 const NVMRC_NODE_VERSION = '${{ steps.nvm.outputs.NVMRC }}';
 const CHROME_PUBLISH_INPUTS = Object.freeze({
   'extension-id': 'poonlenmfdfbjfeeballhiibknlknepo',
@@ -155,6 +158,9 @@ function auditWorkflows({ root = WORKSPACE_ROOT } = {}) {
       }
       if (FLOW_STYLE_STEP.test(line)) {
         errors.push(`${relativeFile}:${index + 1} flow-style workflow steps are not allowed`);
+      }
+      if (EXPLICIT_MAPPING_KEY.test(line) || DECORATED_YAML_NODE.test(line) || MERGED_MAPPING.test(line)) {
+        errors.push(`${relativeFile}:${index + 1} explicit, decorated, and merged YAML mappings are not allowed`);
       }
     });
 
