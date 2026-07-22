@@ -15,7 +15,6 @@ Run the repository-wide checks from the repository root:
 npm run check:toolchain
 npm run flow
 npm run eslint
-npm run tsc
 npm run test
 npm run fmt:check
 ```
@@ -26,9 +25,11 @@ To focus on the extension after installing dependencies, run from
 ```bash
 npm run flow
 npm run eslint
-npm run tsc
 npm run test -- --runInBand
 ```
+
+The current extension `flow` script runs both Flow and TypeScript. Use
+`npm run tsc` by itself when you only need the TypeScript compiler signal.
 
 ## Extension build smoke check
 

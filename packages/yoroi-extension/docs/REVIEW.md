@@ -57,9 +57,9 @@ npm run check:toolchain
 # Reproduce CI's clean dependency installation.
 ./ci-install-all.sh
 
-# Build the extension without packaging it with a production signing key.
+# Reproduce CI's test extension build without a production signing key.
 cd packages/yoroi-extension
-npm run prod:build -- --env mainnet
+npm run prod:build -- --env test --isE2E
 ```
 
 See [SETUP.md](./SETUP.md), [BUILD.md](./BUILD.md), and [TEST.md](./TEST.md)
