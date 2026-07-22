@@ -14,7 +14,7 @@
 
 [RELEASE.md](docs/RELEASE.md) for releasing a new build
 
-[TEST.md](docs/TEST.md) for running tests
+[TEST.md](docs/TEST.md) for running CI-equivalent checks and tests
 
 ## For reviewers
 
@@ -22,4 +22,4 @@
 
 ## LICENSE
 
-[MIT](LICENSE)
+[MIT](../../LICENSE)
