@@ -133,6 +133,89 @@ test('close is idempotent and rejects pending work after partial initialization'
   assert.equal(socket.closeCount, 1);
 });
 
+test('unexpected close does not leak queued events into a reconnected socket', async () => {
+  const controller = makeController();
+  const firstSocket = await connect(controller, { type: 'stale-client' });
+
+  firstSocket.close();
+  const secondSocket = await connect(controller, { type: 'current-client' });
+
+  assert.deepEqual(await controller.getLastEvent(), { type: 'current-client' });
+  secondSocket.close();
+});
+
+test('connecting again replaces an open socket and rejects its pending work', async () => {
+  const controller = makeController();
+  const firstSocket = await connect(controller);
+  const firstResponse = controller.ping();
+  const firstRejected = assert.rejects(firstResponse, /Trezor WebSocket closed/);
+
+  const reconnecting = controller.connect();
+  const secondSocket = FakeWebSocket.instances.at(-1);
+  secondSocket.open({ type: 'current-client' });
+  await reconnecting;
+
+  await firstRejected;
+  assert.equal(firstSocket.closeCount, 1);
+  assert.deepEqual(await controller.getLastEvent(), { type: 'current-client' });
+  controller.closeWsConnection();
+});
+
+test('connecting again promptly retires an attempt that is still connecting', async () => {
+  const controller = makeController();
+  const firstConnecting = controller.connect();
+  const firstRejected = assert.rejects(firstConnecting, /superseded by a newer connection/);
+  const firstSocket = FakeWebSocket.instances.at(-1);
+
+  const secondConnecting = controller.connect();
+  const secondSocket = FakeWebSocket.instances.at(-1);
+  secondSocket.open();
+
+  await firstRejected;
+  await secondConnecting;
+  assert.equal(firstSocket.closeCount, 1);
+  controller.closeWsConnection();
+});
+
+test('pre-open error fails closed and ignores a late open or message', async () => {
+  const controller = makeController();
+  const connecting = controller.connect();
+  const rejected = assert.rejects(connecting, /pre-open failure/);
+  const failedSocket = FakeWebSocket.instances.at(-1);
+
+  failedSocket.onerror?.(new Error('pre-open failure'));
+  await rejected;
+  assert.equal(failedSocket.closeCount, 1);
+
+  failedSocket.message({ type: 'late-stale-event' });
+  failedSocket.onopen?.();
+  const currentSocket = await connect(controller, { type: 'current-client' });
+
+  assert.deepEqual(await controller.getLastEvent(), { type: 'current-client' });
+  currentSocket.close();
+});
+
+test('late activity from a replaced socket cannot affect the current session', async () => {
+  const controller = makeController();
+  const firstSocket = await connect(controller, { type: 'stale-client' });
+
+  const reconnecting = controller.connect();
+  const secondSocket = FakeWebSocket.instances.at(-1);
+  secondSocket.open({ type: 'current-client' });
+  await reconnecting;
+
+  const response = controller.ping();
+  const requestId = secondSocket.sent.at(-1).id;
+  firstSocket.message({ type: 'late-stale-event' });
+  firstSocket.onerror?.(new Error('late stale error'));
+  firstSocket.onclose?.();
+  secondSocket.message({ id: requestId, success: true });
+
+  assert.deepEqual(await response, { id: requestId, success: true });
+  assert.deepEqual(await controller.getLastEvent(), { type: 'current-client' });
+  controller.closeWsConnection();
+});
+
 test('bounds exit when the controller service does not close the socket', async () => {
   const controller = makeController(10);
   const socket = await connect(controller);

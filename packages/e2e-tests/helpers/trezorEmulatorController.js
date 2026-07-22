@@ -20,6 +20,8 @@ export class TrezorEmulatorController {
     this.pendingResponses = new Map();
     this.pendingEvents = [];
     this.queuedEvents = [];
+    this.connectionGeneration = 0;
+    this.connectionAttempt = null;
   }
 
   isModelT = () => this.model === TrezorModels.ModelT;
@@ -94,6 +96,18 @@ export class TrezorEmulatorController {
     this._rejectPending(reason);
   }
 
+  _cancelConnectionAttempt(error) {
+    const attempt = this.connectionAttempt;
+    if (!attempt) return;
+
+    this.connectionAttempt = null;
+    clearTimeout(attempt.timer);
+    attempt.reject(error);
+    if (attempt.server.readyState === this.WebSocketImpl.CONNECTING || attempt.server.readyState === this.WebSocketImpl.OPEN) {
+      attempt.server.close();
+    }
+  }
+
   _customPromise(json, functionName) {
     if (!this._isSocketOpen()) {
       return Promise.reject(this._socketError(`${functionName}: Trezor WebSocket is not open`));
@@ -116,35 +130,64 @@ export class TrezorEmulatorController {
     });
   }
 
-  _innerConnect(websocketUrl, logger) {
+  _innerConnect(websocketUrl, logger, generation) {
     return new Promise((resolve, reject) => {
       const server = new this.WebSocketImpl(websocketUrl);
       let connected = false;
+      const isCurrentConnection = () => generation === this.connectionGeneration;
       const connectTimer = setTimeout(() => {
         if (connected) return;
-        reject(this._socketError(`connect: no connection after ${this.responseTimeout}ms`));
+        const error = isCurrentConnection()
+          ? this._socketError(`connect: no connection after ${this.responseTimeout}ms`)
+          : this._socketError('connect: superseded by a newer connection');
+        if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
+        reject(error);
         if (server.readyState === this.WebSocketImpl.CONNECTING || server.readyState === this.WebSocketImpl.OPEN) {
           server.close();
         }
       }, this.responseTimeout);
-      server.onmessage = event => this._handleIncomingMessage(event);
+      this.connectionAttempt = { server, timer: connectTimer, reject };
+      server.onmessage = event => {
+        if (isCurrentConnection()) this._handleIncomingMessage(event);
+      };
       server.onopen = () => {
+        if (!isCurrentConnection()) {
+          clearTimeout(connectTimer);
+          server.close();
+          reject(this._socketError('connect: superseded by a newer connection'));
+          return;
+        }
         connected = true;
         clearTimeout(connectTimer);
+        if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
         logger.info(`_innerConnect: Connection is open`);
         resolve(server);
       };
       server.onerror = err => {
+        if (!isCurrentConnection()) return;
         logger.error(`_innerConnect: Connection is rejected. Reason: ${JSON.stringify(err)}`);
         if (!connected) {
           clearTimeout(connectTimer);
+          if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
+          this.connectionGeneration += 1;
+          this.queuedEvents = [];
           reject(err);
+          if (server.readyState === this.WebSocketImpl.CONNECTING || server.readyState === this.WebSocketImpl.OPEN) {
+            server.close();
+          }
+          return;
         }
         this._handleSocketFailure(err);
       };
       server.onclose = () => {
+        if (!isCurrentConnection()) return;
         clearTimeout(connectTimer);
-        if (this.ws === server) this.ws = null;
+        if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
+        if (this.ws === server) {
+          this.ws = null;
+          this.queuedEvents = [];
+        }
+        this.connectionGeneration += 1;
         const error = this._socketError('Trezor WebSocket closed');
         if (!connected) reject(error);
         this._handleSocketFailure(error);
@@ -154,7 +197,17 @@ export class TrezorEmulatorController {
 
   async connect() {
     this.logger.info(`connect: Connecting to websocket ${this.websocketUrl}`);
-    this.ws = await this._innerConnect(this.websocketUrl, this.logger);
+    if (this.ws) this.closeWsConnection();
+
+    const generation = ++this.connectionGeneration;
+    this._cancelConnectionAttempt(this._socketError('connect: superseded by a newer connection'));
+    this.queuedEvents = [];
+    const server = await this._innerConnect(this.websocketUrl, this.logger, generation);
+    if (generation !== this.connectionGeneration) {
+      server.close();
+      throw this._socketError('connect: superseded by a newer connection');
+    }
+    this.ws = server;
 
     return this;
   }
@@ -206,6 +259,8 @@ export class TrezorEmulatorController {
   closeWsConnection() {
     this.logger.info(`closeWsConnection: Closing the connection`);
     const server = this.ws;
+    this.connectionGeneration += 1;
+    this._cancelConnectionAttempt(this._socketError('Trezor WebSocket closed'));
     this.ws = null;
     this.queuedEvents = [];
     this._rejectPending(this._socketError('Trezor WebSocket closed'));
