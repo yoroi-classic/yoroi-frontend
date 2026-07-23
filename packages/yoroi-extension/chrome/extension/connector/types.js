@@ -90,6 +90,7 @@ export type TxSignErrorCode = $Values<typeof TxSignErrorCodes>;
 export type TxSignError = {|
   code: TxSignErrorCode,
   info: string,
+  index?: number,
 |};
 
 export const DataSignErrorCodes = Object.freeze({
@@ -168,6 +169,11 @@ export type PendingSignData =
       type: 'tx/cardano',
       uid: RpcUid,
       tx: CardanoTx,
+    |}
+  | {|
+      type: 'txs/cardano',
+      uid: RpcUid,
+      txs: Array<CardanoTx>,
     |}
   | {|
       type: 'tx-reorg/cardano',

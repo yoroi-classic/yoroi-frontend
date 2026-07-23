@@ -1537,7 +1537,7 @@ describe('extension dependency smoke', () => {
       ['get_stake_key', [], 'json'],
       ['get_stake_key', [], 'json'],
       ['cip95_sign_data', ['addr-hex', 'payload-hex'], 'json'],
-      ['sign_tx/cardano', [{ tx: 'bulk-body-hex', partialSign: false, returnTx: false }], 'cbor'],
+      ['sign_txs/cardano', [[{ tx: 'bulk-body-hex', partialSign: false, returnTx: false }]], 'cbor'],
       ['submit_tx', ['bulk-tx-hex'], 'cbor'],
     ]);
   });

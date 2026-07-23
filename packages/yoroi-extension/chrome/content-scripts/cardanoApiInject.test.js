@@ -1,6 +1,5 @@
 describe('CardanoAPI CIP-0103 extension', () => {
   const disconnectListeners = [];
-  const maxCip103Txs = 20;
 
   const loadApi = rpc => {
     jest.resetModules();
@@ -53,7 +52,7 @@ describe('CardanoAPI CIP-0103 extension', () => {
   });
 
   test('signTxs returns witness sets in input order', async () => {
-    const rpc = jest.fn((func, params) => Promise.resolve(`witness-${params[0].tx}`));
+    const rpc = jest.fn((func, params) => Promise.resolve(params[0].map(({ tx }) => `witness-${tx}`)));
     const api = loadApi(rpc);
 
     await expect(
@@ -63,30 +62,45 @@ describe('CardanoAPI CIP-0103 extension', () => {
       ])
     ).resolves.toEqual(['witness-tx-0', 'witness-tx-1']);
 
-    expect(rpc.mock.calls).toEqual([
-      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
-      ['sign_tx/cardano', [{ tx: 'tx-1', partialSign: true, returnTx: false }], 'cbor'],
-    ]);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith(
+      'sign_txs/cardano',
+      [
+        [
+          { tx: 'tx-0', partialSign: false, returnTx: false },
+          { tx: 'tx-1', partialSign: true, returnTx: false },
+        ],
+      ],
+      'cbor'
+    );
   });
 
-  test('signTxs normalizes CIP-0103 requests into witness-only signTx RPC calls', async () => {
-    const rpc = jest.fn((func, params) => Promise.resolve(`witness-${params[0].tx}`));
+  test('signTxs normalizes CIP-0103 requests into one witness-only batch RPC call', async () => {
+    const rpc = jest.fn((func, params) => Promise.resolve(params[0].map(({ tx }) => `witness-${tx}`)));
     const api = loadApi(rpc);
 
     await expect(
       api.cip103.signTxs([{ cbor: 'tx-0' }, { cbor: 'tx-1', partialSign: true, tx: 'legacy-tx-field', returnTx: true }])
     ).resolves.toEqual(['witness-tx-0', 'witness-tx-1']);
 
-    expect(rpc.mock.calls).toEqual([
-      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
-      ['sign_tx/cardano', [{ tx: 'tx-1', partialSign: true, returnTx: false }], 'cbor'],
-    ]);
+    expect(rpc).toHaveBeenCalledWith(
+      'sign_txs/cardano',
+      [
+        [
+          { tx: 'tx-0', partialSign: false, returnTx: false },
+          { tx: 'tx-1', partialSign: true, returnTx: false },
+        ],
+      ],
+      'cbor'
+    );
   });
 
   test('CIP-0103 calls keep CBOR return type after the experimental return type changes', async () => {
-    const rpc = jest.fn((func, params) =>
-      Promise.resolve(func === 'submit_tx' ? `hash-${params[0]}` : `witness-${params[0].tx}`)
-    );
+    const rpc = jest.fn((func, params) => {
+      if (func === 'submit_tx') return Promise.resolve(`hash-${params[0]}`);
+      if (func === 'sign_txs/cardano') return Promise.resolve(params[0].map(({ tx }) => `witness-${tx}`));
+      return Promise.resolve(`witness-${params[0].tx}`);
+    });
     const api = loadApi(rpc);
 
     api.experimental.setReturnType('json');
@@ -97,21 +111,19 @@ describe('CardanoAPI CIP-0103 extension', () => {
 
     expect(rpc.mock.calls).toEqual([
       ['sign_tx/cardano', [{ tx: 'legacy-tx', partialSign: false, returnTx: false }], 'json'],
-      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
+      ['sign_txs/cardano', [[{ tx: 'tx-0', partialSign: false, returnTx: false }]], 'cbor'],
       ['submit_tx', ['tx-1'], 'cbor'],
     ]);
   });
 
   test('signTxs snapshots the batch before signing', async () => {
-    let resolveFirstSignature;
-    const rpc = jest.fn((func, params) => {
-      if (params[0].tx === 'tx-0') {
-        return new Promise(resolve => {
-          resolveFirstSignature = resolve;
-        });
-      }
-      return Promise.resolve(`witness-${params[0].tx}`);
-    });
+    let resolveSignatures;
+    const rpc = jest.fn(
+      () =>
+        new Promise(resolve => {
+          resolveSignatures = resolve;
+        })
+    );
     const api = loadApi(rpc);
     const txs = [
       { cbor: 'tx-0', partialSign: false },
@@ -120,25 +132,29 @@ describe('CardanoAPI CIP-0103 extension', () => {
 
     const signing = api.cip103.signTxs(txs);
     txs.push({ cbor: 'tx-2', partialSign: false });
-    resolveFirstSignature('witness-tx-0');
+    resolveSignatures(['witness-tx-0', 'witness-tx-1']);
 
     await expect(signing).resolves.toEqual(['witness-tx-0', 'witness-tx-1']);
-    expect(rpc.mock.calls).toEqual([
-      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
-      ['sign_tx/cardano', [{ tx: 'tx-1', partialSign: false, returnTx: false }], 'cbor'],
-    ]);
+    expect(rpc).toHaveBeenCalledWith(
+      'sign_txs/cardano',
+      [
+        [
+          { tx: 'tx-0', partialSign: false, returnTx: false },
+          { tx: 'tx-1', partialSign: false, returnTx: false },
+        ],
+      ],
+      'cbor'
+    );
   });
 
   test('signTxs snapshots transaction request fields before signing', async () => {
-    let resolveFirstSignature;
-    const rpc = jest.fn((func, params) => {
-      if (params[0].tx === 'tx-0') {
-        return new Promise(resolve => {
-          resolveFirstSignature = resolve;
-        });
-      }
-      return Promise.resolve(`witness-${params[0].tx}`);
-    });
+    let resolveSignatures;
+    const rpc = jest.fn(
+      () =>
+        new Promise(resolve => {
+          resolveSignatures = resolve;
+        })
+    );
     const api = loadApi(rpc);
     const txs = [
       { cbor: 'tx-0', partialSign: false },
@@ -148,13 +164,19 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const signing = api.cip103.signTxs(txs);
     txs[1].cbor = 'tx-mutated';
     txs[1].partialSign = true;
-    resolveFirstSignature('witness-tx-0');
+    resolveSignatures(['witness-tx-0', 'witness-tx-1']);
 
     await expect(signing).resolves.toEqual(['witness-tx-0', 'witness-tx-1']);
-    expect(rpc.mock.calls).toEqual([
-      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
-      ['sign_tx/cardano', [{ tx: 'tx-1', partialSign: false, returnTx: false }], 'cbor'],
-    ]);
+    expect(rpc).toHaveBeenCalledWith(
+      'sign_txs/cardano',
+      [
+        [
+          { tx: 'tx-0', partialSign: false, returnTx: false },
+          { tx: 'tx-1', partialSign: false, returnTx: false },
+        ],
+      ],
+      'cbor'
+    );
   });
 
   test('signTxs preserves the transaction index when request snapshotting fails', async () => {
@@ -175,12 +197,15 @@ describe('CardanoAPI CIP-0103 extension', () => {
 
   test('signTxs rejects with the failing transaction index', async () => {
     const signError = { code: 1, info: 'invalid tx' };
-    const rpc = jest.fn((func, params) => {
-      if (params[0].tx === 'tx-1') {
-        return Promise.reject(signError);
-      }
-      return Promise.resolve(`witness-${params[0].tx}`);
-    });
+    const rpc = jest.fn(() =>
+      // Connector RPC errors are API error records rather than JavaScript Error instances.
+      // eslint-disable-next-line prefer-promise-reject-errors
+      Promise.reject({
+        ...signError,
+        index: 1,
+        info: 'invalid tx (transaction index 1)',
+      })
+    );
     const api = loadApi(rpc);
 
     await expect(
@@ -191,10 +216,39 @@ describe('CardanoAPI CIP-0103 extension', () => {
       ])
     ).rejects.toEqual({ code: 1, info: 'invalid tx (transaction index 1)', index: 1 });
 
-    expect(rpc.mock.calls).toEqual([
-      ['sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: false }], 'cbor'],
-      ['sign_tx/cardano', [{ tx: 'tx-1', partialSign: false, returnTx: false }], 'cbor'],
-    ]);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith(
+      'sign_txs/cardano',
+      [
+        [
+          { tx: 'tx-0', partialSign: false, returnTx: false },
+          { tx: 'tx-1', partialSign: false, returnTx: false },
+          { tx: 'tx-2', partialSign: false, returnTx: false },
+        ],
+      ],
+      'cbor'
+    );
+  });
+
+  test('signTxs preserves an indexless batch rejection', async () => {
+    const rejection = { code: 2, info: 'User rejected' };
+    const rpc = jest.fn(() => {
+      // Connector RPC errors are API error records rather than JavaScript Error instances.
+      // eslint-disable-next-line prefer-promise-reject-errors
+      return Promise.reject(rejection);
+    });
+    const api = loadApi(rpc);
+
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, { cbor: 'tx-1' }])).rejects.toBe(rejection);
+    expect(rejection).toEqual({ code: 2, info: 'User rejected' });
+  });
+
+  test('signTxs returns an empty result without opening an approval flow', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+
+    await expect(api.cip103.signTxs([])).resolves.toEqual([]);
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   test('signTxs preserves request validation messages with the failing transaction index', async () => {
@@ -202,6 +256,7 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const api = loadApi(rpc);
 
     await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, { partialSign: false }])).rejects.toEqual({
+      code: -1,
       index: 1,
       info: '.cip103.signTxs transaction request requires a cbor string! (transaction index 1)',
     });
@@ -245,20 +300,30 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const api = loadApi(rpc);
 
     await expect(api.cip103.signTxs([{ tx: 'tx-0' }])).rejects.toEqual({
+      code: -1,
       index: 0,
       info: '.cip103.signTxs transaction request requires a cbor string! (transaction index 0)',
     });
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  test('signTxs rejects batches above the CIP-0103 transaction limit', async () => {
+  test('signTxs does not impose a non-standard batch-size limit', async () => {
+    const rpc = jest.fn((func, params) => Promise.resolve(params[0].map(({ tx }) => `witness-${tx}`)));
+    const api = loadApi(rpc);
+    const txs = Array.from({ length: 21 }, (_, index) => ({ cbor: `tx-${index}` }));
+
+    await expect(api.cip103.signTxs(txs)).resolves.toEqual(txs.map(({ cbor }) => `witness-${cbor}`));
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  test('signTxs rejects a non-array batch as InvalidRequest without prompting', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
-    const txs = Array.from({ length: maxCip103Txs + 1 }, (_, index) => ({ cbor: `tx-${index}` }));
 
-    await expect(api.cip103.signTxs(txs)).rejects.toThrow(
-      `.cip103.signTxs supports at most ${maxCip103Txs} transactions per request!`
-    );
+    await expect(api.cip103.signTxs('tx-0')).rejects.toEqual({
+      code: -1,
+      info: '.cip103.signTxs argument is expected to be an array!',
+    });
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -326,14 +391,28 @@ describe('CardanoAPI CIP-0103 extension', () => {
     ]);
   });
 
-  test('submitTxs rejects batches above the CIP-0103 transaction limit', async () => {
+  test('submitTxs does not impose a non-standard batch-size limit', async () => {
+    const rpc = jest.fn((func, params) => Promise.resolve(`hash-${params[0]}`));
+    const api = loadApi(rpc);
+    const txs = Array.from({ length: 21 }, (_, index) => `tx-${index}`);
+
+    await expect(api.cip103.submitTxs(txs)).resolves.toEqual(txs.map(tx => `hash-${tx}`));
+    expect(rpc).toHaveBeenCalledTimes(txs.length);
+  });
+
+  test('submitTxs preflights the whole batch as InvalidRequest', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
-    const txs = Array.from({ length: maxCip103Txs + 1 }, (_, index) => `tx-${index}`);
 
-    await expect(api.cip103.submitTxs(txs)).rejects.toThrow(
-      `.cip103.submitTxs supports at most ${maxCip103Txs} transactions per request!`
-    );
+    await expect(api.cip103.submitTxs(['tx-0', null])).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: '.cip103.submitTxs transaction must be a cbor string! (transaction index 1)',
+    });
+    await expect(api.cip103.submitTxs(null)).rejects.toEqual({
+      code: -1,
+      info: '.cip103.submitTxs argument is expected to be an array!',
+    });
     expect(rpc).not.toHaveBeenCalled();
   });
 });

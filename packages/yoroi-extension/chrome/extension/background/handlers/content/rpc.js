@@ -253,6 +253,57 @@ const Handlers = Object.freeze({
     );
   }),
 
+  'sign_txs/cardano': NewHandler.basic<
+    [
+      Array<{|
+        tx: string,
+        partialSign: boolean,
+        returnTx: false,
+      |}>,
+    ],
+    void,
+  >(async ({ message, tabId }) => {
+    const connection = await getConnectedSite(tabId);
+    if (connection == null) {
+      Logger.error(`ERR - sign_txs could not find connection with tabId = ${tabId}`);
+      return undefined;
+    }
+    const txs = message.params[0];
+    if (!Array.isArray(txs) || txs.length === 0) {
+      throw ConnectorError.invalidRequest('sign_txs/cardano expects a non-empty transaction array');
+    }
+    const normalizedTxs = txs.map((tx, index) => {
+      if (
+        tx == null ||
+        typeof tx !== 'object' ||
+        typeof tx.tx !== 'string' ||
+        typeof tx.partialSign !== 'boolean' ||
+        tx.returnTx !== false
+      ) {
+        throw ConnectorError.invalidRequest(`invalid CIP-0103 transaction at index ${index}`);
+      }
+      return {
+        tx: tx.tx,
+        partialSign: tx.partialSign,
+        tabId,
+      };
+    });
+    await confirmSign(
+      tabId,
+      {
+        type: 'txs/cardano',
+        txs: normalizedTxs,
+        uid: message.uid,
+      },
+      connection,
+      {
+        type: 'cardano-txs',
+        txs: normalizedTxs.map(({ tx }) => tx),
+      },
+      message.uid
+    );
+  }),
+
   sign_data: signDataHandler,
   cip95_sign_data: signDataHandler,
 

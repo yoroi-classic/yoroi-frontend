@@ -1,6 +1,6 @@
 /* eslint-disable promise/always-return */
 // @flow
-import type { ConnectingMessage, SigningMessage, WhitelistEntry } from '../../../chrome/extension/connector/types';
+import type { CardanoTx, ConnectingMessage, SigningMessage, WhitelistEntry } from '../../../chrome/extension/connector/types';
 import type { StoresMap } from './index';
 import type { Anchor, CardanoConnectorSignRequest, SignSubmissionErrorType, TxDataInput, TxDataOutput } from '../types';
 import { LoadingWalletStates } from '../types';
@@ -116,9 +116,12 @@ export default class ConnectorStore extends Store<StoresMap> {
   @observable signingMessage: ?SigningMessage = null;
 
   @observable adaTransaction: ?CardanoConnectorSignRequest = null;
+  @observable adaTransactions: Array<CardanoConnectorSignRequest> = [];
+  @observable bulkSigningProgress: ?{| current: number, total: number |} = null;
 
   // store the transaction body for hw wallet signing
   rawTx: ?string = null;
+  rawTxs: Array<string> = [];
   addressedUtxos: ?Array<CardanoAddressedUtxo> = null;
 
   reorgTxSignRequest: ?HaskellShelleyTxSignRequest = null;
@@ -176,6 +179,9 @@ export default class ConnectorStore extends Store<StoresMap> {
         if (response) {
           if (response.sign.type === 'tx/cardano') {
             this.createAdaTransaction();
+          }
+          if (response.sign.type === 'txs/cardano') {
+            this.createAdaTransactions();
           }
           if (response.sign.type === 'tx-reorg/cardano') {
             this.generateReorgTransaction();
@@ -261,6 +267,58 @@ export default class ConnectorStore extends Store<StoresMap> {
         });
       }
       captureEvent('Dapp Connector Transaction Signed');
+    } else if (signingMessage.sign.type === 'txs/cardano') {
+      if (wallet.type === 'mnemonic') {
+        userSignConfirm({
+          tx: null,
+          uid: signingMessage.sign.uid,
+          tabId: signingMessage.tabId,
+          password,
+        });
+      } else {
+        const txs = toJS(signingMessage.sign.txs);
+        if (this.rawTxs.length !== txs.length) {
+          throw new Error('unexpected incomplete bulk transaction state');
+        }
+        const witnessSetHexes = [];
+        for (let index = 0; index < txs.length; index++) {
+          runInAction(() => {
+            this.bulkSigningProgress = { current: index + 1, total: txs.length };
+          });
+          try {
+            const additionalRequiredSigners = RustModule.WasmScope(Module => {
+              const { witnessSet } = resolveTxOrTxBody((txs[index]: any), Module);
+              return witnessSet == null ? [] : [...getScriptRequiredSigningKeys(witnessSet, Module)];
+            });
+            witnessSetHexes.push(
+              transactionHexToWitnessSet(await this.hwSignTxHex(wallet, this.rawTxs[index], additionalRequiredSigners))
+            );
+          } catch (_error) {
+            await signFail({
+              errorType: 'hardware_signing_failed',
+              data: 'device rejected or failed to sign transaction',
+              index,
+              uid: signingMessage.sign.uid,
+              tabId: signingMessage.tabId,
+            });
+            runInAction(() => {
+              this.isSignInExecuted = true;
+              this.bulkSigningProgress = null;
+            });
+            return;
+          }
+        }
+        userSignConfirm({
+          tx: null,
+          uid: signingMessage.sign.uid,
+          tabId: signingMessage.tabId,
+          witnessSetHexes,
+          password: '',
+        });
+      }
+      captureEvent('Dapp Connector Bulk Transactions Signed', {
+        transaction_count: signingMessage.sign.txs.length,
+      });
     } else if (signingMessage.sign.type === 'data') {
       const { payload } = signingMessage.sign;
 
@@ -413,6 +471,9 @@ export default class ConnectorStore extends Store<StoresMap> {
       if (this.signingMessage?.sign.type === 'tx/cardano') {
         this.createAdaTransaction();
       }
+      if (this.signingMessage?.sign.type === 'txs/cardano') {
+        this.createAdaTransactions();
+      }
       if (this.signingMessage?.sign.type === 'tx-reorg/cardano') {
         this.generateReorgTransaction();
       }
@@ -424,15 +485,86 @@ export default class ConnectorStore extends Store<StoresMap> {
     }
   };
 
+  createAdaTransactions: void => Promise<void> = async () => {
+    const { signingMessage } = this;
+    if (signingMessage?.sign.type !== 'txs/cardano') return;
+    const connectedWallet = this.connectedWallet;
+    if (connectedWallet == null) return;
+
+    const transactions = [];
+    const rawTxs = [];
+    const batchOutputs: Map<string, TxDataInput> = new Map();
+    const chainedAddressedUtxos: Array<CardanoAddressedUtxo> = [];
+    for (let index = 0; index < signingMessage.sign.txs.length; index++) {
+      runInAction(() => {
+        this.adaTransaction = null;
+        this.unrecoverableError = null;
+      });
+      this.rawTx = null;
+      await this.createAdaTransaction(signingMessage.sign.txs[index], index, batchOutputs);
+      if (this.adaTransaction == null || this.rawTx == null || this.unrecoverableError != null) {
+        return;
+      }
+      transactions.push(this.adaTransaction);
+      rawTxs.push(this.rawTx);
+      const txHash = transactionHexToHash(this.rawTx);
+      this.adaTransaction.outputs.forEach((output, outputIndex) => {
+        const utxoId = txHash + String(outputIndex);
+        batchOutputs.set(utxoId, {
+          address: output.address,
+          value: output.value,
+        });
+        const ownAddress = [
+          ...connectedWallet.allAddresses.utxoAddresses,
+          ...connectedWallet.allAddresses.accountingAddresses,
+        ].find(({ address }) => address.Hash === output.address);
+        if (ownAddress != null) {
+          chainedAddressedUtxos.push({
+            amount: output.value.getDefault().toString(),
+            assets: output.value.nonDefaultEntries().map(({ identifier, amount }) => {
+              const [policyId, name] = identifier.split('.');
+              return {
+                amount: amount.toString(),
+                assetId: identifier,
+                policyId,
+                name,
+              };
+            }),
+            receiver: output.address,
+            tx_hash: txHash,
+            tx_index: outputIndex,
+            utxo_id: utxoId,
+            addressing: {
+              startLevel: connectedWallet.publicDeriverLevel,
+              path: ownAddress.path,
+            },
+          });
+        }
+      });
+    }
+    runInAction(() => {
+      this.adaTransactions = transactions;
+      this.adaTransaction = transactions[0] ?? null;
+      this.rawTxs = rawTxs;
+      this.addressedUtxos = [...(this.addressedUtxos ?? []), ...chainedAddressedUtxos];
+    });
+  };
+
   // De-serialize the tx so that the signing dialog could show the tx info (
   // inputs, outputs, fee, ...) to the user.
-  createAdaTransaction: void => Promise<void> = async () => {
+  createAdaTransaction: (?CardanoTx, ?number, ?Map<string, TxDataInput>) => Promise<void> = async (
+    batchTx,
+    batchIndex,
+    batchOutputs
+  ) => {
     const { signingMessage, connectedWallet } = this;
     if (connectedWallet == null || signingMessage == null) return undefined;
-    if (!signingMessage.sign.tx) return undefined;
-    // Invoked only for Cardano, so we know the type of `tx` must be `CardanoTx`.
-    // $FlowFixMe[prop-missing]
-    const { tx, partialSign /* tabId */ } = signingMessage.sign.tx;
+    let cardanoTx = batchTx;
+    if (cardanoTx == null && signingMessage.sign.type === 'tx/cardano') {
+      cardanoTx = signingMessage.sign.tx;
+    }
+    if (cardanoTx == null) return undefined;
+    const { tx, partialSign /* tabId */ } = cardanoTx;
 
     const network = getNetworkById(connectedWallet.networkId);
 
@@ -465,6 +597,16 @@ export default class ConnectorStore extends Store<StoresMap> {
         runInAction(() => {
           this.unrecoverableError = 'Unable to parse input transaction.';
         });
+        if (batchIndex != null) {
+          await signFail({
+            errorType: 'invalid_transaction',
+            data: 'unable to parse transaction CBOR',
+            index: batchIndex,
+            uid: signingMessage.sign.uid,
+            tabId: signingMessage.tabId,
+          });
+          this.closeWindow();
+        }
         return;
       }
     }
@@ -480,9 +622,10 @@ export default class ConnectorStore extends Store<StoresMap> {
       const txHash = input.transaction_id().to_hex();
       const txIndex = input.index();
       if (allUsedUtxoIdsSet.has(`${txHash}${txIndex}`)) {
-        signFail({
+        await signFail({
           errorType: 'spent_utxo',
           data: `${txHash}${txIndex}`,
+          ...(batchIndex == null ? {} : { index: batchIndex }),
           uid: signingMessage.sign.uid,
           tabId: signingMessage.tabId,
         });
@@ -540,13 +683,22 @@ export default class ConnectorStore extends Store<StoresMap> {
     );
 
     const foreignInputDetails = [];
-    if (foreignInputs.length) {
+    const unresolvedForeignInputs = [];
+    for (const foreignInput of foreignInputs) {
+      const priorOutput = batchOutputs?.get(`${foreignInput.txHash}${foreignInput.txIndex}`);
+      if (priorOutput != null) {
+        foreignInputDetails.push(priorOutput);
+      } else {
+        unresolvedForeignInputs.push(foreignInput);
+      }
+    }
+    if (unresolvedForeignInputs.length) {
       const foreignUtxos = await this.stores.substores.ada.stateFetchStore.fetcher.getUtxoData({
         network,
-        utxos: foreignInputs,
+        utxos: unresolvedForeignInputs,
       });
       for (let i = 0; i < foreignUtxos.length; i++) {
-        const foreignUtxoId = `${foreignInputs[i].txHash}${foreignInputs[i].txIndex}`;
+        const foreignUtxoId = `${unresolvedForeignInputs[i].txHash}${unresolvedForeignInputs[i].txIndex}`;
         const foreignUtxo = foreignUtxos[i];
         if (foreignUtxo == null || typeof foreignUtxo !== 'object') {
           if (partialSign) {
@@ -555,9 +707,10 @@ export default class ConnectorStore extends Store<StoresMap> {
             console.error(
               `Foreign utxo '${foreignUtxoId}' cannot be resolved, this is a critical failure in a NON-partial sign mode.`
             );
-            signFail({
+            await signFail({
               errorType: 'missing_utxo',
               data: foreignUtxoId,
+              ...(batchIndex == null ? {} : { index: batchIndex }),
               uid: signingMessage.sign.uid,
               tabId: signingMessage.tabId,
             });
@@ -572,9 +725,10 @@ export default class ConnectorStore extends Store<StoresMap> {
               console.error(
                 `Foreign utxo '${foreignUtxoId}' is already spent, this is a critical failure in a NON-partial sign mode.`
               );
-              signFail({
+              await signFail({
                 errorType: 'spent_utxo',
                 data: foreignUtxoId,
+                ...(batchIndex == null ? {} : { index: batchIndex }),
                 uid: signingMessage.sign.uid,
                 tabId: signingMessage.tabId,
               });

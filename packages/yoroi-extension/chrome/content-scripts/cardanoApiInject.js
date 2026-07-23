@@ -1,5 +1,4 @@
 (() => {
-  const MAX_CIP103_TXS = 20;
   const API_INVALID_REQUEST = -1;
 
   class CardanoAuth {
@@ -82,10 +81,9 @@
     cip103 = Object.freeze({
       signTxs: async txs => {
         if (!Array.isArray(txs)) {
-          throw new Error('.cip103.signTxs argument is expected to be an array!');
+          throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs argument is expected to be an array!');
         }
         const batch = txs.slice();
-        CardanoAPI._assertCip103BatchSize(batch, 'signTxs');
         const requests = batch.map((txRequest, index) => {
           try {
             return CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(txRequest));
@@ -94,23 +92,32 @@
           }
         });
 
-        const witnesses = [];
-        for (let index = 0; index < requests.length; index++) {
-          try {
-            witnesses.push(await CardanoAPI._cardano_rpc_cbor_call('sign_tx/cardano', [requests[index]]));
-          } catch (error) {
-            throw CardanoAPI._withCip103FailureIndex(error, index);
-          }
+        if (requests.length === 0) {
+          return [];
         }
-        return witnesses;
+        try {
+          return await CardanoAPI._cardano_rpc_cbor_call('sign_txs/cardano', [requests]);
+        } catch (error) {
+          if (error != null && typeof error === 'object' && Number.isInteger(error.index)) {
+            throw CardanoAPI._withCip103FailureIndex(error, error.index);
+          }
+          throw error;
+        }
       },
 
       submitTxs: async txs => {
         if (!Array.isArray(txs)) {
-          throw new Error('.cip103.submitTxs argument is expected to be an array!');
+          throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs argument is expected to be an array!');
         }
         const batch = txs.slice();
-        CardanoAPI._assertCip103BatchSize(batch, 'submitTxs');
+        batch.forEach((tx, index) => {
+          if (typeof tx !== 'string') {
+            throw CardanoAPI._withCip103FailureIndex(
+              CardanoAPI._cip103InvalidRequest('.cip103.submitTxs transaction must be a cbor string!'),
+              index
+            );
+          }
+        });
 
         const results = [];
         for (const tx of batch) {
@@ -132,12 +139,6 @@
       },
     });
 
-    static _assertCip103BatchSize(txs, methodName) {
-      if (txs.length > MAX_CIP103_TXS) {
-        throw new Error(`.cip103.${methodName} supports at most ${MAX_CIP103_TXS} transactions per request!`);
-      }
-    }
-
     static _snapshotCip103SignRequest(txRequest) {
       if (txRequest == null || typeof txRequest !== 'object') {
         return txRequest;
@@ -149,6 +150,15 @@
     }
 
     static _withCip103FailureIndex(error, index) {
+      if (
+        error != null &&
+        typeof error === 'object' &&
+        error.index === index &&
+        typeof error.info === 'string' &&
+        error.info.includes(`transaction index ${index}`)
+      ) {
+        return error;
+      }
       const hasErrorInfo = error != null && typeof error === 'object' && typeof error.info === 'string';
       const hasErrorMessage = error != null && typeof error === 'object' && typeof error.message === 'string';
       let info = `Transaction at index ${index} failed`;
@@ -203,11 +213,11 @@
 
     static _normalizeCip103SignRequest(txRequest) {
       if (txRequest == null || typeof txRequest !== 'object') {
-        throw new Error('.cip103.signTxs transaction request is expected to be an object!');
+        throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs transaction request is expected to be an object!');
       }
       const tx = txRequest.cbor;
       if (typeof tx !== 'string') {
-        throw new Error('.cip103.signTxs transaction request requires a cbor string!');
+        throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs transaction request requires a cbor string!');
       }
       if (txRequest.partialSign !== undefined && typeof txRequest.partialSign !== 'boolean') {
         throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs transaction request partialSign must be a boolean!');
