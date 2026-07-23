@@ -11,8 +11,9 @@ import { getTestString, handlesEndpoints } from '../../../helpers/constants.js';
 import { ADA_HANDLE_UNEXPECTED_ERROR, RECEIVER_DOESNT_EXIST } from '../../../helpers/messages.js';
 import { WebDriver } from 'selenium-webdriver';
 import { Logger } from 'simple-node-logger';
+import { describeQuarantinedLiveProvider } from '../../../utils/quarantine.js';
 
-describe('Handle handles', function () {
+describeQuarantinedLiveProvider('Handle handles', function () {
   this.timeout(2 * oneMinute);
   /** @type {WebDriver} */
   let webdriver = null;
