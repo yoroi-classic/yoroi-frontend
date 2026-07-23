@@ -68,7 +68,11 @@ function mapCardanoWalletBackendAdaPrice(response: any): CurrentCoinPriceRespons
   }
 
   const timestamp = asOf * 1000;
-  if (Date.now() - timestamp > CONFIG.app.coinPriceFreshnessThreshold) {
+  const now = Date.now();
+  if (timestamp > now) {
+    throw new Error('Future ADA price timestamp');
+  }
+  if (now - timestamp > CONFIG.app.coinPriceFreshnessThreshold) {
     throw new Error('Stale ADA prices');
   }
 

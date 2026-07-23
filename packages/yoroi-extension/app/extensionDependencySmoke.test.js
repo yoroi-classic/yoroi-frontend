@@ -921,6 +921,7 @@ describe('extension dependency smoke', () => {
     ['missing asOf', { ...currentAdaPriceFixture(), asOf: undefined }],
     ['nonpositive asOf', { ...currentAdaPriceFixture(), asOf: 0 }],
     ['fractional asOf', { ...currentAdaPriceFixture(), asOf: Date.now() / 1000 }],
+    ['future asOf', currentAdaPriceFixture(Math.floor(Date.now() / 1000) + 60)],
     [
       'stale asOf',
       currentAdaPriceFixture(Math.floor((Date.now() - (global: any).CONFIG.app.coinPriceFreshnessThreshold - 1000) / 1000)),
