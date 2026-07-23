@@ -725,7 +725,11 @@ export class RemoteFetcher implements IFetcher {
     })
       .then(response => response.json())
       .then((pools: Array<CardanoWalletBackendPoolInfo>) =>
-        Object.fromEntries(pools.map(pool => cardanoWalletPoolInfoToRemote(pool, requestedPoolIds)))
+        pools.reduce((result: PoolInfoResponse, pool) => {
+          const [poolId, poolInfo] = cardanoWalletPoolInfoToRemote(pool, requestedPoolIds);
+          result[poolId] = poolInfo;
+          return result;
+        }, {})
       )
       .catch(error => {
         Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getPoolInfo)} error: ` + stringifyError(error));

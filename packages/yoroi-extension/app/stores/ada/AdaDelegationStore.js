@@ -177,7 +177,7 @@ export default class AdaDelegationStore extends Store<StoresMap> {
             },
             history: poolInfo.history,
           },
-          poolRemoteInfo: poolInfo.display,
+          poolRemoteInfo: poolInfo.display ?? null,
         });
       }
     });

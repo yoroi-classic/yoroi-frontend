@@ -446,7 +446,7 @@ export type RemotePool = {|
     +cert_ordinal: number,
     +payload: any, // TODO: how to store this since different networks have different cert types
   |}>,
-  +display: RemotePoolDisplayInfo,
+  +display?: RemotePoolDisplayInfo,
 |};
 export type PoolInfoResponse = {|
   [key: string]: RemotePool | null,
