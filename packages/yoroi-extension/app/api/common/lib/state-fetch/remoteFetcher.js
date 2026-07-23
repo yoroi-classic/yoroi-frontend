@@ -52,6 +52,49 @@ function getCardanoWalletBackendEndpoint(networkId: number): null | string {
   return endpoint === '' ? null : endpoint.replace(/\/+$/, '');
 }
 
+const ADA_PRICE_CURRENCIES = ['USD', 'JPY', 'EUR', 'CNY', 'KRW', 'BTC', 'ETH', 'BRL'];
+
+function mapCardanoWalletBackendAdaPrice(response: any): CurrentCoinPriceResponse {
+  if (response == null || typeof response !== 'object' || Array.isArray(response)) {
+    throw new Error('Invalid ADA price response');
+  }
+
+  const { prices, asOf } = response;
+  if (prices == null || typeof prices !== 'object' || Array.isArray(prices)) {
+    throw new Error('Invalid ADA prices');
+  }
+  if (!Number.isSafeInteger(asOf) || asOf <= 0) {
+    throw new Error('Invalid ADA price timestamp');
+  }
+
+  const timestamp = asOf * 1000;
+  const now = Date.now();
+  if (timestamp > now) {
+    throw new Error('Future ADA price timestamp');
+  }
+  if (now - timestamp > CONFIG.app.coinPriceFreshnessThreshold) {
+    throw new Error('Stale ADA prices');
+  }
+
+  const validatedPrices = {};
+  for (const currency of ADA_PRICE_CURRENCIES) {
+    const price = prices[currency];
+    if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+      throw new Error('Invalid ADA price');
+    }
+    validatedPrices[currency] = price;
+  }
+
+  return {
+    error: null,
+    ticker: {
+      from: 'ADA',
+      timestamp,
+      prices: validatedPrices,
+    },
+  };
+}
+
 /**
  * Makes calls to Yoroi backend service
  * https://github.com/Emurgo/yoroi-backend-service/
@@ -132,6 +175,27 @@ export class RemoteFetcher implements IFetcher {
   };
 
   getCurrentCoinPrice: CurrentCoinPriceRequest => Promise<CurrentCoinPriceResponse> = body => {
+    const cardanoWalletBackend = getCardanoWalletBackendEndpoint(this.getCurrentNetworkId());
+    if (cardanoWalletBackend != null) {
+      if (body.from !== 'ADA') {
+        return Promise.reject(new CurrentCoinPriceError());
+      }
+      return fetchAndEnsureSuccess(`${cardanoWalletBackend}/v1/price/ada?currencies=${ADA_PRICE_CURRENCIES.join(',')}`, {
+        method: 'GET',
+        signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
+        headers: {
+          'yoroi-version': this.getLastLaunchVersion(),
+          'yoroi-locale': this.getCurrentLocale(),
+        },
+      })
+        .then(response => response.json())
+        .then(mapCardanoWalletBackendAdaPrice)
+        .catch(() => {
+          Logger.error('RemoteFetcher::getCurrentCoinPrice v1 error');
+          throw new CurrentCoinPriceError();
+        });
+    }
+
     const backendUrl = getPriceBackendUrl(this.getCurrentNetworkId());
     return fetchAndEnsureSuccess(`${backendUrl}/api/price/${body.from}/current`, {
       method: 'GET',
