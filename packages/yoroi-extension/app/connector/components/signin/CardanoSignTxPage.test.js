@@ -167,4 +167,6 @@ test('follows hardware signing progress in the displayed transaction', () => {
 
   expect(html).toContain('Transaction 2 of 2');
   expect(html).toContain('Confirming transaction 2 of 2 on your hardware wallet');
+  expect(html).toContain('<button disabled="" id="previousTransactionButton"');
+  expect(html).toContain('<button disabled="" id="nextTransactionButton"');
 });

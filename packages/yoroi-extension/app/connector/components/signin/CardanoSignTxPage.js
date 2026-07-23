@@ -507,7 +507,7 @@ class SignTxPage extends Component<Props, State> {
               <Button
                 size="small"
                 variant="outlined"
-                disabled={selectedTransactionIndex === 0 || isSubmitting}
+                disabled={selectedTransactionIndex === 0 || isSubmitting || this.props.bulkSigningProgress != null}
                 onClick={() => this.setState({ selectedTransactionIndex: selectedTransactionIndex - 1 })}
                 id="previousTransactionButton"
               >
@@ -522,7 +522,9 @@ class SignTxPage extends Component<Props, State> {
               <Button
                 size="small"
                 variant="outlined"
-                disabled={selectedTransactionIndex === txDataBatch.length - 1 || isSubmitting}
+                disabled={
+                  selectedTransactionIndex === txDataBatch.length - 1 || isSubmitting || this.props.bulkSigningProgress != null
+                }
                 onClick={() => this.setState({ selectedTransactionIndex: selectedTransactionIndex + 1 })}
                 id="nextTransactionButton"
               >
