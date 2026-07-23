@@ -208,6 +208,38 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  test('signTxs rejects a non-boolean partialSign before prompting for any transaction', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, { cbor: 'tx-1', partialSign: 'true' }])).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: '.cip103.signTxs transaction request partialSign must be a boolean! (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['positional', api => api.signTx('tx-0', 'false')],
+    ['object', api => api.signTx({ tx: 'tx-0', partialSign: 'false' })],
+    ['object null', api => api.signTx({ tx: 'tx-0', partialSign: null })],
+  ])('signTx rejects a non-boolean %s partialSign before prompting', (_description, sign) => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+
+    expect(() => sign(api)).toThrow('.signTx partialSign must be a boolean!');
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('signTx defaults an omitted object partialSign to false', async () => {
+    const rpc = jest.fn().mockResolvedValue('witness-tx-0');
+    const api = loadApi(rpc);
+
+    await expect(api.signTx({ tx: 'tx-0' })).resolves.toEqual('witness-tx-0');
+    expect(rpc).toHaveBeenCalledWith('sign_tx/cardano', [{ tx: 'tx-0', partialSign: false, returnTx: undefined }], 'cbor');
+  });
+
   test('signTxs rejects non-spec tx requests', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
