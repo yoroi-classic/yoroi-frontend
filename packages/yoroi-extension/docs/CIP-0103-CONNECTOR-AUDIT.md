@@ -31,6 +31,6 @@ The connector runtime now handles bulk signing end to end:
 - Mnemonic and hardware wallets sign in input order. Owned outputs from earlier transactions are available to later chained transactions, and hardware progress is shown by transaction index.
 - Signing is fail-fast and never returns a partial witness array. Transaction-specific failures carry the failing input index; batch-level rejection remains an indexless `TxSignError`.
 - Submission remains attempt-all and returns or throws an input-aligned array of hashes and `TxSendError` objects.
-- Local request-shape validation uses CIP-30 `APIError.InvalidRequest` semantics before any connector RPC.
+- Local request-shape validation returns code `-1` before any connector RPC; normalization of indexed per-item failures to plain CIP-30 `APIError.InvalidRequest` remains tracked by issue #84.
 
 Regression coverage lives in the injector contract tests, the connector batch-ordering tests, the bulk review rendering test, and the extension dependency smoke suite.

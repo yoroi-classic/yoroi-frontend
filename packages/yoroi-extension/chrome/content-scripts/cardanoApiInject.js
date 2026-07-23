@@ -84,13 +84,14 @@
           throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs argument is expected to be an array!');
         }
         const batch = txs.slice();
-        const requests = batch.map((txRequest, index) => {
+        const requests = [];
+        for (let index = 0; index < batch.length; index++) {
           try {
-            return CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(txRequest));
+            requests.push(CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(batch[index])));
           } catch (error) {
             throw CardanoAPI._withCip103FailureIndex(error, index);
           }
-        });
+        }
 
         if (requests.length === 0) {
           return [];
@@ -110,14 +111,14 @@
           throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs argument is expected to be an array!');
         }
         const batch = txs.slice();
-        batch.forEach((tx, index) => {
-          if (typeof tx !== 'string') {
+        for (let index = 0; index < batch.length; index++) {
+          if (typeof batch[index] !== 'string') {
             throw CardanoAPI._withCip103FailureIndex(
               CardanoAPI._cip103InvalidRequest('.cip103.submitTxs transaction must be a cbor string!'),
               index
             );
           }
-        });
+        }
 
         const results = [];
         for (const tx of batch) {

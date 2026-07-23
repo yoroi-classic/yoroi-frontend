@@ -268,6 +268,14 @@ export const UserSignConfirm: HandlerType<
           }
         }
         if (witnessSetHexes == null) {
+          if (!request.password) {
+            rpcResponse(request.tabId, request.uid, {
+              err: {
+                code: TxSignErrorCodes.PROOF_GENERATION,
+                info: 'Missing witness sets from connector dialog',
+              },
+            });
+          }
           break;
         }
         if (witnessSetHexes.length !== txs.length) {

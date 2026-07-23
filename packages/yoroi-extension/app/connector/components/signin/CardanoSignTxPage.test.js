@@ -121,3 +121,50 @@ test('renders one explicit approval for a navigable multi-transaction review', (
   expect(html).toContain('Sign 2 transactions');
   expect(html.match(/id="confirmButton"/g) || []).toHaveLength(1);
 });
+
+test('follows hardware signing progress in the displayed transaction', () => {
+  const html = renderToStaticMarkup(
+    <IntlProvider locale="en">
+      <CardanoSignTxPage
+        addressToDisplayString={value => value}
+        bulkSigningProgress={{ current: 2, total: 2 }}
+        connectedWebsite={null}
+        defaultToken={defaults}
+        getCurrentPrice={() => null}
+        getTokenInfo={() => ({
+          Identifier: '',
+          IsDefault: true,
+          Metadata: {
+            type: 'Cardano',
+            policyId: '',
+            assetName: '',
+            numberOfDecimals: 6,
+            ticker: 'ADA',
+            longName: null,
+          },
+        })}
+        hwWalletError={null}
+        isHwWalletErrorRecoverable={null}
+        network={{}}
+        notification={null}
+        onCancel={() => {}}
+        onConfirm={() => Promise.resolve()}
+        onCopyAddressTooltip={() => {}}
+        selectedExplorer={null}
+        selectedWallet={{}}
+        shouldHideBalance={false}
+        signData={null}
+        submissionError={null}
+        tx=""
+        txData={transactionData()}
+        txDataBatch={[transactionData(), transactionData()]}
+        txs={['tx-0', 'tx-1']}
+        unitOfAccountSetting={{ enabled: false, currency: null }}
+        walletType="ledger"
+      />
+    </IntlProvider>
+  );
+
+  expect(html).toContain('Transaction 2 of 2');
+  expect(html).toContain('Confirming transaction 2 of 2 on your hardware wallet');
+});

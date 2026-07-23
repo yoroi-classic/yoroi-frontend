@@ -415,4 +415,25 @@ describe('CardanoAPI CIP-0103 extension', () => {
     });
     expect(rpc).not.toHaveBeenCalled();
   });
+
+  test('preflights sparse signing and submission batches before any RPC', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const sparseSignBatch = Array(2);
+    sparseSignBatch[0] = { cbor: 'tx-0' };
+    const sparseSubmitBatch = Array(2);
+    sparseSubmitBatch[0] = 'tx-0';
+
+    await expect(api.cip103.signTxs(sparseSignBatch)).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: '.cip103.signTxs transaction request is expected to be an object! (transaction index 1)',
+    });
+    await expect(api.cip103.submitTxs(sparseSubmitBatch)).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: '.cip103.submitTxs transaction must be a cbor string! (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });

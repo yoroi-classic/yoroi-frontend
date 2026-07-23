@@ -378,7 +378,11 @@ class SignTxPage extends Component<Props, State> {
     const txDataBatch = this.props.txDataBatch ?? [];
     const isBulk = txDataBatch.length > 0;
     const selectedTransactionIndex = Math.min(this.state.selectedTransactionIndex, Math.max(txDataBatch.length - 1, 0));
-    const txData = isBulk ? txDataBatch[selectedTransactionIndex] : this.props.txData;
+    const activeTransactionIndex =
+      this.props.bulkSigningProgress == null
+        ? selectedTransactionIndex
+        : Math.min(Math.max(this.props.bulkSigningProgress.current - 1, 0), Math.max(txDataBatch.length - 1, 0));
+    const txData = isBulk ? txDataBatch[activeTransactionIndex] : this.props.txData;
 
     const { isSubmitting } = this.state;
 
@@ -388,14 +392,14 @@ class SignTxPage extends Component<Props, State> {
       return (
         <>
           <ErrorBlock error={hwWalletError} />
-          {Boolean(isBulk ? this.props.txs?.[selectedTransactionIndex] : this.props.tx) && (
+          {Boolean(isBulk ? this.props.txs?.[activeTransactionIndex] : this.props.tx) && (
             <Box>
               <Typography component="div">Transaction:</Typography>
               <textarea
                 rows="10"
                 style={{ width: '100%' }}
                 disabled
-                value={isBulk ? this.props.txs?.[selectedTransactionIndex] : this.props.tx}
+                value={isBulk ? this.props.txs?.[activeTransactionIndex] : this.props.tx}
               />
             </Box>
           )}
@@ -511,7 +515,7 @@ class SignTxPage extends Component<Props, State> {
               </Button>
               <Typography variant="body2" fontWeight={500} id="bulkTransactionPosition">
                 {intl.formatMessage(messages.bulkSignPosition, {
-                  current: selectedTransactionIndex + 1,
+                  current: activeTransactionIndex + 1,
                   total: txDataBatch.length,
                 })}
               </Typography>
