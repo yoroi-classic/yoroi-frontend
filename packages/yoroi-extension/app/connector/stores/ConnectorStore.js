@@ -488,6 +488,7 @@ export default class ConnectorStore extends Store<StoresMap> {
   createAdaTransactions: void => Promise<void> = async () => {
     const { signingMessage } = this;
     if (signingMessage == null || signingMessage.sign.type !== 'txs/cardano') return;
+    const { txs } = signingMessage.sign;
     const connectedWallet = this.connectedWallet;
     if (connectedWallet == null) return;
 
@@ -495,13 +496,13 @@ export default class ConnectorStore extends Store<StoresMap> {
     const rawTxs = [];
     const batchOutputs: Map<string, TxDataInput> = new Map();
     const chainedAddressedUtxos: Array<CardanoAddressedUtxo> = [];
-    for (let index = 0; index < signingMessage.sign.txs.length; index++) {
+    for (let index = 0; index < txs.length; index++) {
       runInAction(() => {
         this.adaTransaction = null;
         this.unrecoverableError = null;
       });
       this.rawTx = null;
-      await this.createAdaTransaction(signingMessage.sign.txs[index], index, batchOutputs);
+      await this.createAdaTransaction(txs[index], index, batchOutputs);
       const transaction = this.adaTransaction;
       const rawTx = this.rawTx;
       if (transaction == null || rawTx == null || this.unrecoverableError != null) {
