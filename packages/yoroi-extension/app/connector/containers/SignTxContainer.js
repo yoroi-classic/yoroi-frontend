@@ -160,7 +160,9 @@ export default class SignTxContainer extends Component<ConnectorStoresProps> {
         const txDataBatch = isBulk ? this.props.stores.connector.adaTransactions : null;
         const txData = isBulk ? txDataBatch?.[0] : this.props.stores.connector.adaTransaction;
         if (txData == null && signData == null) return this.renderLoading();
-        if (isBulk && txDataBatch?.length !== signingMessage.sign.txs.length) return this.renderLoading();
+        if (signingMessage.sign.type === 'txs/cardano' && txDataBatch?.length !== signingMessage.sign.txs.length) {
+          return this.renderLoading();
+        }
         let tx;
         let txs = null;
         if (signingMessage.sign.type === 'tx/cardano') {

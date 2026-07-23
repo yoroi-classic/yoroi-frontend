@@ -487,7 +487,7 @@ export default class ConnectorStore extends Store<StoresMap> {
 
   createAdaTransactions: void => Promise<void> = async () => {
     const { signingMessage } = this;
-    if (signingMessage?.sign.type !== 'txs/cardano') return;
+    if (signingMessage == null || signingMessage.sign.type !== 'txs/cardano') return;
     const connectedWallet = this.connectedWallet;
     if (connectedWallet == null) return;
 
@@ -502,13 +502,15 @@ export default class ConnectorStore extends Store<StoresMap> {
       });
       this.rawTx = null;
       await this.createAdaTransaction(signingMessage.sign.txs[index], index, batchOutputs);
-      if (this.adaTransaction == null || this.rawTx == null || this.unrecoverableError != null) {
+      const transaction = this.adaTransaction;
+      const rawTx = this.rawTx;
+      if (transaction == null || rawTx == null || this.unrecoverableError != null) {
         return;
       }
-      transactions.push(this.adaTransaction);
-      rawTxs.push(this.rawTx);
-      const txHash = transactionHexToHash(this.rawTx);
-      this.adaTransaction.outputs.forEach((output, outputIndex) => {
+      transactions.push(transaction);
+      rawTxs.push(rawTx);
+      const txHash = transactionHexToHash(rawTx);
+      transaction.outputs.forEach((output, outputIndex) => {
         const utxoId = txHash + String(outputIndex);
         batchOutputs.set(utxoId, {
           address: output.address,
@@ -625,7 +627,7 @@ export default class ConnectorStore extends Store<StoresMap> {
         await signFail({
           errorType: 'spent_utxo',
           data: `${txHash}${txIndex}`,
-          ...(batchIndex == null ? {} : { index: batchIndex }),
+          index: batchIndex ?? undefined,
           uid: signingMessage.sign.uid,
           tabId: signingMessage.tabId,
         });
@@ -710,7 +712,7 @@ export default class ConnectorStore extends Store<StoresMap> {
             await signFail({
               errorType: 'missing_utxo',
               data: foreignUtxoId,
-              ...(batchIndex == null ? {} : { index: batchIndex }),
+              index: batchIndex ?? undefined,
               uid: signingMessage.sign.uid,
               tabId: signingMessage.tabId,
             });
@@ -728,7 +730,7 @@ export default class ConnectorStore extends Store<StoresMap> {
               await signFail({
                 errorType: 'spent_utxo',
                 data: foreignUtxoId,
-                ...(batchIndex == null ? {} : { index: batchIndex }),
+                index: batchIndex ?? undefined,
                 uid: signingMessage.sign.uid,
                 tabId: signingMessage.tabId,
               });
