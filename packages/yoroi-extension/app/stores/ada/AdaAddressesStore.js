@@ -9,6 +9,7 @@ import type { StoresMap } from '../index';
 import { isResolvableDomain, resolverApiMaker } from '@yoroi/resolver';
 import { Api, Resolver } from '@yoroi/types';
 import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
+import { isValidMainnetPaymentAddress } from './domainResolverUtils';
 
 export async function filterMangledAddresses(request: {|
   +publicDeriver: { stakingAddress: string, ... },
@@ -104,7 +105,7 @@ export default class AdaAddressesStore extends Store<StoresMap> {
     let resultUnexpected: ?DomainResolverResponse = null;
     for (const { nameServer, address, error } of res) {
       const resolvedNameServer = resolveAddressDomainNameServerName(nameServer);
-      if (address != null) {
+      if (address != null && isValidMainnetPaymentAddress(address)) {
         // Return success right away
         const resultSuccess: DomainResolverResponse = { nameServer: resolvedNameServer, address, error: null };
         return Promise.resolve(resultSuccess);
