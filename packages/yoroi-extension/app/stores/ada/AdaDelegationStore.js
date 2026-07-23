@@ -2,7 +2,6 @@
 import type { NetworkRow } from '../../api/ada/lib/storage/database/primitives/tables';
 import type { MangledAmountFunc } from '../stateless/mangledAddresses';
 import type { StoresMap } from '../index';
-import type { ExplorerPoolInfo as PoolInfo } from '@emurgo/yoroi-lib';
 import type { PoolInfoResponse, RemotePool } from '../../api/ada/lib/state-fetch/types';
 import type { WalletState } from '../../../chrome/extension/background/types';
 import type { GetDelegatedBalanceFunc, RewardHistoryFunc } from '../../api/ada/lib/storage/bridge/delegationUtils';
@@ -16,8 +15,6 @@ import { getDelegatedBalance } from '../../api/ada/lib/storage/bridge/delegation
 import { getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import { getUnmangleAmounts } from '../stateless/mangledAddresses';
 import { MultiToken } from '../../api/common/lib/MultiToken';
-import { PoolInfoApi } from '@emurgo/yoroi-lib';
-import { entriesIntoMap, forceNonNull } from '../../coreUtils';
 // $FlowIgnore: suppressing this error
 import { NotificationTopics } from '../../UI/features/notifications/module/NotificationsProvider';
 
@@ -159,24 +156,13 @@ export default class AdaDelegationStore extends Store<StoresMap> {
     );
     const poolsToQuery = request.allPoolIds.filter(pool => !poolsCachedForNetwork.has(pool));
     const stateFetcher = this.stores.substores.ada.stateFetchStore.fetcher;
-    const poolInfoPromise: Promise<PoolInfoResponse> = stateFetcher.getPoolInfo({
+    const poolInfoResp: PoolInfoResponse = await stateFetcher.getPoolInfo({
       network: request.network,
       poolIds: poolsToQuery,
     });
-
-    const { BackendService } = request.network.Backend;
-    const remotePoolInfoPromises: Array<Promise<[string, PoolInfo | null]>> = poolsToQuery.map(id =>
-      new PoolInfoApi(forceNonNull(BackendService) + '/api').getPool(id).then(res => [id, res])
-    );
-    const [poolInfoResp, remotePoolInfoResps]: [PoolInfoResponse, Array<[string, PoolInfo | null]>] = await Promise.all([
-      poolInfoPromise,
-      Promise.all(remotePoolInfoPromises),
-    ]);
-    const remoteInfoMap = entriesIntoMap<string, PoolInfo | null>(remotePoolInfoResps);
     runInAction(() => {
       for (const poolId of Object.keys(poolInfoResp)) {
         const poolInfo: RemotePool | null = poolInfoResp[poolId];
-        const poolRemoteInfo = remoteInfoMap[poolId];
         if (poolInfo == null) continue;
         this.stores.delegation.poolInfo.push({
           networkId: request.network.NetworkId,
@@ -191,7 +177,7 @@ export default class AdaDelegationStore extends Store<StoresMap> {
             },
             history: poolInfo.history,
           },
-          poolRemoteInfo,
+          poolRemoteInfo: poolInfo.display,
         });
       }
     });
