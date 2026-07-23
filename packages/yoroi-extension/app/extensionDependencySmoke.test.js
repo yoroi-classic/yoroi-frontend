@@ -1121,9 +1121,12 @@ describe('extension dependency smoke', () => {
       path.join(PACKAGE_ROOT, 'chrome/extension/background/handlers/yoroi/transaction.js'),
       'utf8'
     );
+    const swapStoreSource = fs.readFileSync(path.join(PACKAGE_ROOT, 'app/stores/ada/SwapStore.js'), 'utf8');
 
     expect(remoteFetcherSource).not.toContain('/api/txs/signed');
     expect(transactionHandlerSource).not.toContain('signedTxHexArray');
+    expect(transactionHandlerSource).not.toContain('SignedBatchRequest');
+    expect(swapStoreSource).not.toContain('executeTransactionHexes');
   });
 
   test('routes remote config through the selected cardano-wallet-backend deployment', () => {
