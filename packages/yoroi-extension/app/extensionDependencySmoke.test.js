@@ -910,30 +910,45 @@ describe('extension dependency smoke', () => {
   });
 
   test.each([
-    ['malformed response', null],
-    ['missing prices', { asOf: Math.floor(Date.now() / 1000) }],
-    ['missing currency', { ...currentAdaPriceFixture(), prices: { ...currentAdaPriceFixture().prices, USD: undefined } }],
-    ['nonpositive price', { ...currentAdaPriceFixture(), prices: { ...currentAdaPriceFixture().prices, USD: 0 } }],
+    ['malformed response', () => null],
+    ['missing prices', () => ({ asOf: Math.floor(Date.now() / 1000) })],
+    [
+      'missing currency',
+      () => ({
+        ...currentAdaPriceFixture(),
+        prices: { ...currentAdaPriceFixture().prices, USD: undefined },
+      }),
+    ],
+    [
+      'nonpositive price',
+      () => ({
+        ...currentAdaPriceFixture(),
+        prices: { ...currentAdaPriceFixture().prices, USD: 0 },
+      }),
+    ],
     [
       'nonfinite price',
-      { ...currentAdaPriceFixture(), prices: { ...currentAdaPriceFixture().prices, USD: Number.POSITIVE_INFINITY } },
+      () => ({
+        ...currentAdaPriceFixture(),
+        prices: { ...currentAdaPriceFixture().prices, USD: Number.POSITIVE_INFINITY },
+      }),
     ],
-    ['missing asOf', { ...currentAdaPriceFixture(), asOf: undefined }],
-    ['nonpositive asOf', { ...currentAdaPriceFixture(), asOf: 0 }],
-    ['fractional asOf', { ...currentAdaPriceFixture(), asOf: Date.now() / 1000 }],
-    ['future asOf', currentAdaPriceFixture(Math.floor(Date.now() / 1000) + 60)],
+    ['missing asOf', () => ({ ...currentAdaPriceFixture(), asOf: undefined })],
+    ['nonpositive asOf', () => ({ ...currentAdaPriceFixture(), asOf: 0 })],
+    ['fractional asOf', () => ({ ...currentAdaPriceFixture(), asOf: Date.now() / 1000 })],
+    ['future asOf', () => currentAdaPriceFixture(Math.floor(Date.now() / 1000) + 60)],
     [
       'stale asOf',
-      currentAdaPriceFixture(Math.floor((Date.now() - (global: any).CONFIG.app.coinPriceFreshnessThreshold - 1000) / 1000)),
+      () => currentAdaPriceFixture(Math.floor((Date.now() - (global: any).CONFIG.app.coinPriceFreshnessThreshold - 1000) / 1000)),
     ],
-  ])('rejects cardano-wallet-backend ADA prices with a %s', async (_, response) => {
+  ])('rejects cardano-wallet-backend ADA prices with a %s', async (_, createResponse) => {
     const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
     (global: any).CONFIG.cardanoWalletBackend = {
       enabled: true,
       mainnet: 'http://localhost:3010',
       preprod: 'http://localhost:3011',
     };
-    (global: any).fetch = jest.fn(() => successfulJsonResponse(response));
+    (global: any).fetch = jest.fn(() => successfulJsonResponse(createResponse()));
     (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
     try {
