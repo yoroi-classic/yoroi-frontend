@@ -4,8 +4,9 @@ const { create, bodyParser, defaults } = jsonServerPkg;
 export const mockedServerPorts = 21000;
 export const mockDAppUrl = `http://localhost:${mockedServerPorts}/mock-dapp`;
 
-export const getMockServer = settings => {
+export const getMockServer = (settings = {}) => {
   const middlewares = [...defaults({ logger: !!settings.outputLog }), bodyParser];
+  const port = settings.port ?? mockedServerPorts;
 
   const server = create();
   console.log(`JSON Server Created`);
@@ -65,13 +66,32 @@ export const getMockServer = settings => {
   });
 
   return new Promise((resolve, reject) => {
-    const mockServer = server.listen(mockedServerPorts, () => {
-      console.log(`JSON Server is running at http://localhost:${mockedServerPorts}`);
-      resolve(mockServer);
-    });
+    const mockServer = server.listen(port);
+    const handleStartupError = error => {
+      reject(error);
+    };
 
-    mockServer.on('error', err => {
-      reject(err);
+    mockServer.once('error', handleStartupError);
+    mockServer.once('listening', () => {
+      mockServer.off('error', handleStartupError);
+      console.log(`JSON Server is running at http://localhost:${mockServer.address().port}`);
+      resolve(mockServer);
     });
   });
 };
+
+export const closeMockServer = mockServer =>
+  new Promise((resolve, reject) => {
+    if (!mockServer?.listening) {
+      resolve();
+      return;
+    }
+
+    mockServer.close(error => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });

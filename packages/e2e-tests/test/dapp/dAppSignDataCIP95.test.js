@@ -4,7 +4,7 @@ import { expect } from 'chai';
 import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { WindowManager, mockDAppName, popupConnectorName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import DAppSignData from '../../pages/dapp/dAppSignData.page.js';
@@ -211,6 +211,6 @@ describe('dApp, CIP-95, signData', function () {
 
   after(async function () {
     await dappSignDataPage.closeBrowser();
-    mockServer.close();
+    await closeMockServer(mockServer);
   });
 });
