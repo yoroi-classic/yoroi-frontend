@@ -312,6 +312,21 @@ class CachedValue {
   }
 }
 
+function invalidateCachedPath(root: CacheModel, path: Path): void {
+  let visit = root;
+  // todo: more sophisticated patching when event.newValue is present
+  for (const pathComponent of ['cache', ...path]) {
+    if (visit[pathComponent] === undefined) {
+      break;
+    } else if (visit[pathComponent] instanceof CachedValue) {
+      visit[pathComponent] = undefined;
+      break;
+    } else {
+      visit = visit[pathComponent];
+    }
+  }
+}
+
 class CacheModel extends ModelHelper implements Model {
   model: Model;
   cache: any;
@@ -322,19 +337,7 @@ class CacheModel extends ModelHelper implements Model {
     this.cache = undefined;
     model.listen([], event => {
       this.dispatchEvent(event);
-
-      let visit = this;
-      // todo: more sophisticated patching when event.newValue is present
-      for (let pathComponent of ['cache', ...event.path]) {
-        if (visit[pathComponent] === undefined) {
-          break;
-        } else if (visit[pathComponent] instanceof CachedValue) {
-          visit[pathComponent] = undefined;
-          break;
-        } else {
-          visit = visit[pathComponent];
-        }
-      }
+      invalidateCachedPath(this, event.path);
     });
   }
 

@@ -247,7 +247,7 @@ module.exports = defineConfig([
       'no-unused-vars': 'off',
       'no-dupe-class-members': 'off',
       'no-redeclare': 'off',
-      // These 23 recommended rules have a zero-error whole-tree baseline.
+      // These 24 recommended rules have a zero-error whole-tree baseline.
       // The non-clean recommended/type-aware families are staged in #99.
       'no-array-constructor': 'off',
       '@typescript-eslint/await-thenable': 'error',
@@ -265,6 +265,7 @@ module.exports = defineConfig([
       '@typescript-eslint/no-namespace': 'error',
       '@typescript-eslint/no-non-null-asserted-optional-chain': 'error',
       '@typescript-eslint/no-require-imports': 'error',
+      '@typescript-eslint/no-this-alias': 'error',
       '@typescript-eslint/no-unnecessary-type-constraint': 'error',
       '@typescript-eslint/no-unsafe-declaration-merging': 'error',
       '@typescript-eslint/no-unsafe-function-type': 'error',

@@ -4,7 +4,6 @@
   "@typescript-eslint/no-floating-promises": 49,
   "@typescript-eslint/no-misused-promises": 31,
   "@typescript-eslint/no-redundant-type-constituents": 18,
-  "@typescript-eslint/no-this-alias": 1,
   "@typescript-eslint/no-unnecessary-type-assertion": 9,
   "@typescript-eslint/no-unsafe-argument": 263,
   "@typescript-eslint/no-unsafe-assignment": 1656,
