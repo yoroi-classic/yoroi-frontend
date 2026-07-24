@@ -237,14 +237,23 @@
     }
 
     static _asCip103InvalidRequest(error) {
-      if (error != null && typeof error === 'object' && error.code === API_INVALID_REQUEST && typeof error.info === 'string') {
-        return error;
-      }
-      if (error != null && typeof error === 'object' && typeof error.info === 'string') {
-        return CardanoAPI._cip103InvalidRequest(error.info);
-      }
-      if (error != null && typeof error === 'object' && typeof error.message === 'string') {
-        return CardanoAPI._cip103InvalidRequest(error.message);
+      if (error != null && typeof error === 'object') {
+        try {
+          const info = error.info;
+          if (typeof info === 'string') {
+            return CardanoAPI._cip103InvalidRequest(info);
+          }
+        } catch (_error) {
+          // A thrown object can expose hostile accessors. Fall through to other safe metadata.
+        }
+        try {
+          const message = error.message;
+          if (typeof message === 'string') {
+            return CardanoAPI._cip103InvalidRequest(message);
+          }
+        } catch (_error) {
+          // Use the generic request error below when no metadata can be read safely.
+        }
       }
       if (typeof error === 'string') {
         return CardanoAPI._cip103InvalidRequest(error);

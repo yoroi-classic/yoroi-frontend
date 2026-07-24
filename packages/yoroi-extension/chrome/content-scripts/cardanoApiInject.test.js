@@ -214,6 +214,41 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  test('signTxs normalizes hostile thrown error accessors as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const hostileError = {};
+    Object.defineProperties(hostileError, {
+      code: {
+        get() {
+          throw new Error('code getter failed');
+        },
+      },
+      info: {
+        get() {
+          throw new Error('info getter failed');
+        },
+      },
+      message: {
+        get() {
+          throw new Error('message getter failed');
+        },
+      },
+    });
+    const brokenRequest = {
+      get cbor() {
+        throw hostileError;
+      },
+    };
+
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, brokenRequest])).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: 'Invalid CIP-0103 transaction request (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('signTxs rejects with the failing transaction index', async () => {
     const signError = { code: 1, info: 'invalid tx' };
     const rpc = jest.fn(() =>
@@ -449,6 +484,42 @@ describe('CardanoAPI CIP-0103 extension', () => {
       code: -1,
       index: 1,
       info: 'batch getter failed (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('submitTxs normalizes hostile thrown error accessors as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const hostileError = {};
+    Object.defineProperties(hostileError, {
+      code: {
+        get() {
+          throw new Error('code getter failed');
+        },
+      },
+      info: {
+        get() {
+          throw new Error('info getter failed');
+        },
+      },
+      message: {
+        get() {
+          throw new Error('message getter failed');
+        },
+      },
+    });
+    const txs = ['tx-0', 'tx-1'];
+    Object.defineProperty(txs, 1, {
+      get() {
+        throw hostileError;
+      },
+    });
+
+    await expect(api.cip103.submitTxs(txs)).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: 'Invalid CIP-0103 transaction request (transaction index 1)',
     });
     expect(rpc).not.toHaveBeenCalled();
   });
