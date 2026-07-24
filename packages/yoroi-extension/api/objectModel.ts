@@ -196,7 +196,7 @@ class BasicModel extends ModelHelper implements Model {
 
 class ExtendedProperty {
   deps: Accessor[];
-  func: Function;
+  func: (...args: unknown[]) => unknown;
 
   constructor(deps, func) {
     this.deps = deps;
@@ -344,7 +344,7 @@ class CacheModel extends ModelHelper implements Model {
     }
 
     let cache = this.cache;
-    let setCacheDuo: [Object, string] = [this, 'cache'];
+    let setCacheDuo: [object, string] = [this, 'cache'];
     let i = 0;
     for (;;) {
       if (cache instanceof CachedValue) {
@@ -415,7 +415,7 @@ type GetUserType<SourceT> =
       ? (...args: ArgsT) => GetUserType<RetT>
       : SourceT extends (infer U)[]
         ? GetUserType<U>[]
-        : SourceT extends Object
+        : SourceT extends object
           ? { [K in keyof SourceT]: GetUserType<SourceT[K]> }
           : SourceT; // todo: be more restrict
 

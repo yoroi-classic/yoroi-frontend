@@ -18,7 +18,6 @@ const baselineParserMode = process.env.TSESTREE_SINGLE_RUN;
 
 const EXPECTED_RULE_IDS = [
   '@typescript-eslint/ban-ts-comment',
-  '@typescript-eslint/no-empty-object-type',
   '@typescript-eslint/no-explicit-any',
   '@typescript-eslint/no-floating-promises',
   '@typescript-eslint/no-misused-promises',
@@ -29,11 +28,9 @@ const EXPECTED_RULE_IDS = [
   '@typescript-eslint/no-unsafe-assignment',
   '@typescript-eslint/no-unsafe-call',
   '@typescript-eslint/no-unsafe-enum-comparison',
-  '@typescript-eslint/no-unsafe-function-type',
   '@typescript-eslint/no-unsafe-member-access',
   '@typescript-eslint/no-unsafe-return',
   '@typescript-eslint/no-unused-expressions',
-  '@typescript-eslint/no-wrapper-object-types',
   '@typescript-eslint/only-throw-error',
   '@typescript-eslint/prefer-promise-reject-errors',
   '@typescript-eslint/require-await',
@@ -41,12 +38,12 @@ const EXPECTED_RULE_IDS = [
   '@typescript-eslint/unbound-method',
 ];
 
-test('locks the exact authoritative 22-rule baseline inventory', () => {
+test('locks the exact authoritative 19-rule baseline inventory', () => {
   assert.deepEqual(configuredRuleIds, EXPECTED_RULE_IDS);
   assert.deepEqual(Object.keys(baseline), EXPECTED_RULE_IDS);
   assert.equal(
     Object.values(baseline).reduce((sum, count) => sum + count, 0),
-    5397
+    5386
   );
 });
 
