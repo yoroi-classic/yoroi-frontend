@@ -82,13 +82,13 @@ export const getMockServer = (settings = {}) => {
 
 export const closeMockServer = mockServer =>
   new Promise((resolve, reject) => {
-    if (!mockServer?.listening) {
+    if (!mockServer) {
       resolve();
       return;
     }
 
     mockServer.close(error => {
-      if (error) {
+      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
         reject(error);
         return;
       }
