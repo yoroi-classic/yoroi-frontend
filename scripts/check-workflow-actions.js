@@ -8,12 +8,12 @@ const ACTIONS = Object.freeze({
   checkout: Object.freeze({
     sha: '9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0',
     version: 'v7.0.0',
-    count: 16,
+    count: 17,
   }),
   'setup-node': Object.freeze({
     sha: '820762786026740c76f36085b0efc47a31fe5020',
     version: 'v7.0.0',
-    count: 11,
+    count: 12,
   }),
   cache: Object.freeze({
     sha: '55cc8345863c7cc4c66a329aec7e433d2d1c52a9',

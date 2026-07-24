@@ -111,7 +111,7 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  Extension:
+  E2E-Fixtures:
     if: (github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.test_type == 'all' ||
       github.event.inputs.test_type == 'extension')) ||
@@ -121,11 +121,58 @@ jobs:
       contains(github.event.review.body, '/check')
       ))
     runs-on: ubuntu-24.04
-    needs: [Build-Extension]
+    outputs:
+      available: ${{ steps.fixtures.outputs.available }}
+      matrix: ${{ steps.fixtures.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Read .nvmrc
+        id: nvm
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '${{ steps.nvm.outputs.NVMRC }}'
+
+      - name: Test fixture contract
+        working-directory: ./packages/e2e-tests
+        run: npm run test:fixture-contract
+
+      - name: Report protected wallet fixtures
+        id: fixtures
+        working-directory: ./packages/e2e-tests
+        env:
+          FIRST_SMOKE_TEST_WALLET: ${{ secrets.FIRST_SMOKE_TEST_WALLET }}
+          TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
+          SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
+          SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
+        run: node scripts/check-protected-fixtures.mjs --report-only
+
+      - name: Require protected wallet fixtures
+        if: steps.fixtures.outputs.available != 'true'
+        run: |
+          echo '::error::Protected wallet fixtures are unavailable; see the E2E-Fixtures job summary'
+          exit 1
+
+  Extension:
+    if: always() &&
+      needs.Build-Extension.result == 'success' &&
+      needs.E2E-Fixtures.outputs.matrix != '' &&
+      ((github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.test_type == 'all' ||
+      github.event.inputs.test_type == 'extension')) ||
+      (github.event.review &&
+      (
+      github.event.review.state == 'approved' ||
+      contains(github.event.review.body, '/check')
+      )))
+    runs-on: ubuntu-24.04
+    needs: [Build-Extension, E2E-Fixtures]
     continue-on-error: true
     strategy:
-      matrix:
-        suite: [cashback, general, governance, nft, portfolio, receive, send, settings, transactions]
+      matrix: ${{ fromJSON(needs.E2E-Fixtures.outputs.matrix) }}
 
     steps:
       - uses: browser-actions/setup-chrome@v2
@@ -187,7 +234,6 @@ jobs:
           TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
-          SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
         run: npm run test:ext:${{ matrix.suite }}
 
       - name: Archive tests screenshots and logs
@@ -271,7 +317,6 @@ jobs:
           TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
-          SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
           RUN_QUARANTINED_DAPP_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_quarantined_dapp_tests == 'true' }}
         run: xvfb-run -a -e /dev/stdout -s "-screen 0 1600x900x24" npm run test:dapp
 

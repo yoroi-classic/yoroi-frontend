@@ -62,6 +62,7 @@
     "test:ledger:one": "npm run test:ledger:base:one",
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
     "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one",
+    "test:fixture-contract": "node --test scripts/check-protected-fixtures.test.mjs",
     "test:wallet-backend-preflight": "node --test helpers/walletBackendPreflight.test.mjs"
   },
   "author": "Yoroi Classic Contributors",
