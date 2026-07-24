@@ -264,10 +264,9 @@ const OrderCancelation = ({ order }: { order: Swap.Order }) => {
           password: passswordInput,
         });
 
-        const signedTransactionHexes: any = [signedCancelTx];
-        await stores.substores.ada.swapStore.executeTransactionHexes({
+        await stores.substores.ada.swapStore.executeTransactionHex({
           wallet,
-          signedTransactionHexes,
+          signedTransactionHex: signedCancelTx,
         });
 
         showTxResultModal(TransactionResult.SUCCESS);

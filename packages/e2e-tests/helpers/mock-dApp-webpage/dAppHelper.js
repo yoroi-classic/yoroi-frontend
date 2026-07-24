@@ -20,7 +20,7 @@ import {
  * @param {MockDAppWebpage} mockedDApp
  * @param {{name: string, plate: string, mnemonic: string}} testWalettObj
  * @param {boolean} checkBalance
- * @returns {Promise<void>}
+ * @returns {Promise<{walletBalance: number, walletName: string, walletPlate: string}>}
  */
 export const connectNonAuth = async (webdriver, logger, windowManager, mockedDApp, testWalettObj, checkBalance = true) => {
   await mockedDApp.requestAccess();
@@ -43,6 +43,7 @@ export const connectNonAuth = async (webdriver, logger, windowManager, mockedDAp
   await windowManager.switchTo(mockDAppName);
   const requestAccessResult = await mockedDApp.checkAccessRequest();
   expect(requestAccessResult.success, `Request access failed: ${requestAccessResult.errMsg}`).to.be.true;
+  return walletInfo;
 };
 
 /**
