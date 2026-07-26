@@ -7,10 +7,10 @@ export const RECEIVER_DOESNT_EXIST =
   "Receiver address, ADA Handle or domain you entered doesn't exist. Please double-check it and try again";
 export const INVALID_ADDRESS = 'Please enter a valid receiver address, ADA Handle or domain';
 export const NOT_ENOUGH_BALANCE = 'Not enough balance';
+export const INSUFFICIENT_FUNDS = 'Insufficient funds to complete this transaction.';
 export const NO_NFTS_ADDED = 'No NFTs added to your wallet';
 export const NO_NFTS_FOUND = 'No NFTs found';
 export const WRONG_PASSWORD_TX_REVIEW = 'Wrong password';
-export const ADA_HANDLE_UNEXPECTED_ERROR = 'ADA Handle: unexpected error';
 export const CASHBACK_ANOTHER_WALLET = 'Your cashback rewards are currently linked to another wallet';
 export const CASHBACK_SWITCH_WALLET = 'Switch wallet to access your rewards or set this wallet as your cashback wallet';
 export const PORTFOLIO_NO_RESULTS = 'No results for this search';
