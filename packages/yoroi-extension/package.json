@@ -55,7 +55,7 @@
   "license": "MIT",
   "devDependencies": {
     "@amplitude/ampli": "^1.32.0",
-    "@babel/core": "7.24.5",
+    "@babel/core": "7.29.6",
     "@babel/eslint-parser": "7.27.1",
     "@babel/node": "7.27.1",
     "@babel/plugin-proposal-decorators": "7.27.1",
