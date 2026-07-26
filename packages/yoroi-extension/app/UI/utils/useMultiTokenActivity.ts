@@ -29,7 +29,7 @@ export const useMultiTokenActivity = (
     try {
       const errorData = await response.json();
       errorMessage = errorData.message || errorData;
-    } catch (e) {
+    } catch {
       errorMessage = response.statusText || `Request failed with status ${response.status}`;
     }
 
