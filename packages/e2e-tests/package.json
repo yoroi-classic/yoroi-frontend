@@ -57,10 +57,12 @@
     "test:ext:smoke:dry-run": "npm run test:hooks && mocha --dry-run --require $npm_package_config_hooks $npm_package_config_extAll -g \"_smoke_\" --reporter dot",
     "test:dapp": "env ISDAPP=true npm run test:dapp:base:sequintel",
     "test:dapp:one": "npm run test:dapp:base:one",
+    "test:dapp-server": "node --test helpers/mock-dApp-webpage/mockServer.test.mjs",
     "test:ledger": "npm run test:ledger:base:sequintel",
     "test:ledger:one": "npm run test:ledger:base:one",
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
     "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one",
+    "test:fixture-contract": "node --test scripts/check-protected-fixtures.test.mjs",
     "test:wallet-backend-preflight": "node --test helpers/walletBackendPreflight.test.mjs"
   },
   "author": "Yoroi Classic Contributors",
