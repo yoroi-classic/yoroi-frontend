@@ -64,6 +64,12 @@ jobs:
         run: |
           npm run test
 
+      - name: Test DApp backend fixtures
+        run: npm --prefix packages/e2e-tests run test:dapp-server
+
+      - name: Test Trezor controller lifecycle
+        run: node --test packages/e2e-tests/helpers/trezorEmulatorController.test.mjs
+
   Build_smoke:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
     runs-on: ubuntu-24.04
