@@ -188,7 +188,20 @@ jobs:
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
-        run: npm run test:ext:${{ matrix.suite }}
+        run: |
+          missing_fixtures=()
+          [ -n "$FIRST_SMOKE_TEST_WALLET" ] || missing_fixtures+=(FIRST_SMOKE_TEST_WALLET)
+          [ -n "$TEST_WALLET_MAINNET_1" ] || missing_fixtures+=(TEST_WALLET_MAINNET_1)
+          [ -n "$SECOND_STATIC_TEST_WALLET" ] || missing_fixtures+=(SECOND_STATIC_TEST_WALLET)
+          [ -n "$SECOND_SMOKE_TEST_WALLET" ] || missing_fixtures+=(SECOND_SMOKE_TEST_WALLET)
+
+          if [ "${{ matrix.suite }}" != "nft" ] && [ "${#missing_fixtures[@]}" -gt 0 ]; then
+            printf '::notice::Skipping Extension (%s): protected wallet fixtures are unavailable (%s).\n' \
+              '${{ matrix.suite }}' "${missing_fixtures[*]}"
+            exit 0
+          fi
+
+          npm run test:ext:${{ matrix.suite }}
 
       - name: Archive tests screenshots and logs
         if: ${{ failure() }}
