@@ -35,7 +35,6 @@ const NotificationsSettings = ({ openDurationDialog, selectedWalletId, duration 
       const notifEnabled = notifSettings[selectedWalletId] ?? true;
       setNotificationsEnabled(notifEnabled);
     }
-    // eslint-disable-next-line
     noop(initialNotifStatus());
   }, []);
 

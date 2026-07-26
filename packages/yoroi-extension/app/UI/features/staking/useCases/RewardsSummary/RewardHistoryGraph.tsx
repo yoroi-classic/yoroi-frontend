@@ -56,7 +56,6 @@ export const RewardHistoryItem: React.FC<RewardHistoryItemProps> = ({ poolId, po
       <AccordionDetails>
         <Stack spacing="22px">
           {historyList.map(({ type, date, balance }, idx) => (
-            // eslint-disable-next-line react/no-array-index-key
             <Box key={idx} display="flex" justifyContent="space-between" alignItems="center">
               <Box>
                 <Typography component="div" mb="2px" color="var(--yoroi-palette-gray-900)">

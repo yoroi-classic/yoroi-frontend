@@ -13,6 +13,7 @@ import { useStrings } from '../../../common/hooks/useStrings';
 import { usePortfolio } from '../../../module/PortfolioContextProvider';
 import { usePortfolioTokenActivity } from '../../../module/PortfolioTokenActivityProvider';
 import { bigNumberToBigInt } from '../../TokensTable/TableColumnsChip';
+import type { TokenInfoType } from '../../../../../types/tokenInfo';
 
 interface Props {
   tokenInfo: TokenInfoType;

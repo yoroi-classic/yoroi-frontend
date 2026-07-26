@@ -59,7 +59,7 @@ const ReviewSwap = ({ stores }: ReviewSwapProps) => {
         callback: () => stores.wallets.refreshWalletFromRemote(wallet.publicDeriverId),
       });
       showTxResultModal(TransactionResult.SUCCESS);
-    } catch (e) {
+    } catch {
       showTxResultModal(TransactionResult.FAIL);
     } finally {
       closeTxReviewModal();

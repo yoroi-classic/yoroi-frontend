@@ -6,6 +6,7 @@ import { useStrings } from '../../../common/hooks/useStrings';
 import { SubMenuOption } from '../../../common/types/index';
 import TokenDetailOverview from './Overview';
 import TokenDetailPerformance from './Performance';
+import type { TokenInfoType } from '../../../../../types/tokenInfo';
 
 const TabContent = styled(Box)({
   flex: 1,

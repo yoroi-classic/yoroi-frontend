@@ -9,6 +9,7 @@ import { formatPriceChange, priceChange } from '../../../common/helpers/priceCha
 import { useStrings } from '../../../common/hooks/useStrings';
 import { usePortfolio } from '../../../module/PortfolioContextProvider';
 import { usePortfolioTokenActivity } from '../../../module/PortfolioTokenActivityProvider';
+import type { TokenInfoType } from '../../../../../types/tokenInfo';
 
 interface Props {
   chartData: any;

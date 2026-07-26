@@ -111,7 +111,7 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  Extension:
+  E2E-Fixtures:
     if: (github.event_name == 'workflow_dispatch' &&
       (github.event.inputs.test_type == 'all' ||
       github.event.inputs.test_type == 'extension')) ||
@@ -121,14 +121,60 @@ jobs:
       contains(github.event.review.body, '/check')
       ))
     runs-on: ubuntu-24.04
-    needs: [Build-Extension]
+    outputs:
+      available: ${{ steps.fixtures.outputs.available }}
+      matrix: ${{ steps.fixtures.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Read .nvmrc
+        id: nvm
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '${{ steps.nvm.outputs.NVMRC }}'
+
+      - name: Test fixture contract
+        working-directory: ./packages/e2e-tests
+        run: npm run test:fixture-contract
+
+      - name: Report protected wallet fixtures
+        id: fixtures
+        working-directory: ./packages/e2e-tests
+        env:
+          FIRST_SMOKE_TEST_WALLET: ${{ secrets.FIRST_SMOKE_TEST_WALLET }}
+          TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
+          SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
+          SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
+        run: node scripts/check-protected-fixtures.mjs --report-only
+
+      - name: Note unavailable protected wallet fixtures
+        if: steps.fixtures.outputs.available != 'true'
+        run: |
+          echo '::notice::Protected wallet fixtures are unavailable; secret-backed extension suites will not start, and the public NFT suite will still run. See the E2E-Fixtures job summary.'
+
+  Extension:
+    if: always() &&
+      needs.Build-Extension.result == 'success' &&
+      needs.E2E-Fixtures.outputs.matrix != '' &&
+      ((github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.test_type == 'all' ||
+      github.event.inputs.test_type == 'extension')) ||
+      (github.event.review &&
+      (
+      github.event.review.state == 'approved' ||
+      contains(github.event.review.body, '/check')
+      )))
+    runs-on: ubuntu-24.04
+    needs: [Build-Extension, E2E-Fixtures]
     continue-on-error: true
     strategy:
-      matrix:
-        suite: [cashback, general, governance, nft, portfolio, receive, send, settings, transactions]
+      matrix: ${{ fromJSON(needs.E2E-Fixtures.outputs.matrix) }}
 
     steps:
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
@@ -187,21 +233,7 @@ jobs:
           TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
-          SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
-        run: |
-          missing_fixtures=()
-          [ -n "$FIRST_SMOKE_TEST_WALLET" ] || missing_fixtures+=(FIRST_SMOKE_TEST_WALLET)
-          [ -n "$TEST_WALLET_MAINNET_1" ] || missing_fixtures+=(TEST_WALLET_MAINNET_1)
-          [ -n "$SECOND_STATIC_TEST_WALLET" ] || missing_fixtures+=(SECOND_STATIC_TEST_WALLET)
-          [ -n "$SECOND_SMOKE_TEST_WALLET" ] || missing_fixtures+=(SECOND_SMOKE_TEST_WALLET)
-
-          if [ "${{ matrix.suite }}" != "nft" ] && [ "${#missing_fixtures[@]}" -gt 0 ]; then
-            printf '::notice::Skipping Extension (%s): protected wallet fixtures are unavailable (%s).\n' \
-              '${{ matrix.suite }}' "${missing_fixtures[*]}"
-            exit 0
-          fi
-
-          npm run test:ext:${{ matrix.suite }}
+        run: npm run test:ext:${{ matrix.suite }}
 
       - name: Archive tests screenshots and logs
         if: ${{ failure() }}
@@ -225,7 +257,7 @@ jobs:
     needs: [Build-Extension]
 
     steps:
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
@@ -284,7 +316,6 @@ jobs:
           TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
           SECOND_SMOKE_TEST_WALLET: ${{ secrets.SECOND_SMOKE_TEST_WALLET }}
-          SECOND_SMOKE_TEST_WALLET_FF: ${{ secrets.SECOND_SMOKE_TEST_WALLET_FF }}
           RUN_QUARANTINED_DAPP_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_quarantined_dapp_tests == 'true' }}
         run: xvfb-run -a -e /dev/stdout -s "-screen 0 1600x900x24" npm run test:dapp
 
@@ -319,7 +350,7 @@ jobs:
             -p 127.0.0.1:21325:21326 \
             -d ghcr.io/trezor/trezor-user-env:4c194889610c3f21f1da3799e7ddb82004fd4e91
 
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
@@ -427,7 +458,7 @@ jobs:
       - name: Pull Speculos Docker image
         run: docker pull ghcr.io/ledgerhq/speculos:0.25.9
 
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
