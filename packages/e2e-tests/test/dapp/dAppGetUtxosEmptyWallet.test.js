@@ -15,7 +15,7 @@ import { WebDriver } from 'selenium-webdriver';
 import WalletCommonBase from '../../pages/walletCommonBase.page.js';
 
 describe('dApp, getUtxos, empty wallet', function () {
-  beforeQuarantinedDApp('empty wallet creation waits indefinitely in CI; see yoroi-frontend#55');
+  beforeQuarantinedDApp('empty wallet creation still times out after 60 seconds in gated CI; see yoroi-frontend#55');
 
   const testWalletName = getTestWalletName();
   let newTestWallet = {

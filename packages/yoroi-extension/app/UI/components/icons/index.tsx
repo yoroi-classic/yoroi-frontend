@@ -345,7 +345,7 @@ export function IconWrapper({
   iconProps = {},
   asButton = false,
   buttonProps = {},
-  iconButtonId = '',
+  iconButtonId,
   ...props
 }: Readonly<IconWrapperProps>): React.ReactNode {
   const IconComponent = typeof icon === 'string' ? Icon[icon] : icon;
@@ -354,7 +354,7 @@ export function IconWrapper({
   }
   if (asButton) {
     return (
-      <IconButton {...buttonProps} id={props.iconButtonId ?? 'icon-button'}>
+      <IconButton {...buttonProps} id={iconButtonId ?? 'icon-button'}>
         <Box component="span" display="inline-flex" color="ds.el_gray_medium" {...props}>
           <IconComponent {...iconProps} />
         </Box>

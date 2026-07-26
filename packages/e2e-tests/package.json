@@ -58,6 +58,7 @@
     "test:dapp": "env ISDAPP=true npm run test:dapp:base:sequintel",
     "test:dapp:one": "npm run test:dapp:base:one",
     "test:dapp-server-lifecycle": "node --test helpers/mock-dApp-webpage/mockServer.lifecycle.test.mjs",
+    "test:dapp-server": "node --test helpers/mock-dApp-webpage/mockServer.test.mjs",
     "test:ledger": "npm run test:ledger:base:sequintel",
     "test:ledger:one": "npm run test:ledger:base:one",
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",

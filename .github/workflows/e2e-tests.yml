@@ -175,7 +175,7 @@ jobs:
       matrix: ${{ fromJSON(needs.E2E-Fixtures.outputs.matrix) }}
 
     steps:
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
@@ -258,7 +258,7 @@ jobs:
     needs: [Build-Extension]
 
     steps:
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
@@ -351,7 +351,7 @@ jobs:
             -p 127.0.0.1:21325:21326 \
             -d ghcr.io/trezor/trezor-user-env:4c194889610c3f21f1da3799e7ddb82004fd4e91
 
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
@@ -459,7 +459,7 @@ jobs:
       - name: Pull Speculos Docker image
         run: docker pull ghcr.io/ledgerhq/speculos:0.25.9
 
-      - uses: browser-actions/setup-chrome@v2
+      - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
         with:
           chrome-version: 'stable'
