@@ -30,6 +30,7 @@ import type {
   MultiAssetSupplyResponse,
   PoolInfoRequest,
   PoolInfoResponse,
+  RemotePool,
   RemoteTransaction,
   RewardHistoryRequest,
   RewardHistoryResponse,
@@ -61,7 +62,7 @@ import type { ConfigType } from '../../../../../config/config-types';
 import { bech32 } from 'bech32';
 import { addressBech32ToHex, addressHexToBech32 } from '../cardanoCrypto/utils';
 import { addressToDisplayString } from '../storage/bridge/utils';
-import { bytesToHex } from '../../../../coreUtils';
+import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 import { makeTimeoutAbortSignal, fetchAndEnsureSuccess, type ServerError } from '../../../utils';
 
 // populated by ConfigWebpackPlugin
@@ -96,6 +97,19 @@ type CardanoWalletBackendUtxo = {|
     assetName: string,
     quantity: string,
   |}>,
+|};
+
+type CardanoWalletBackendPoolInfo = {|
+  poolId: string,
+  poolIdHex: string,
+  liveStake: string,
+  saturation: number,
+  metadata?: {|
+    name?: string,
+    ticker?: string,
+    homepage?: string,
+    description?: string,
+  |},
 |};
 
 const toCardanoWalletBackendAddress = (address: string, network: $ReadOnly<NetworkRow>): string => {
@@ -153,6 +167,45 @@ export const cardanoWalletTipToBestBlock = (tip: CardanoWalletBackendTipResponse
 });
 
 const withoutTrailingSlash = (url: string): string => url.replace(/\/+$/, '');
+
+const poolIdHexToBech32 = (poolId: string): string => {
+  if (!/^[0-9a-f]{56}$/i.test(poolId)) {
+    throw new Error('cardano-wallet-backend pool lookup requires a 28-byte pool key hash');
+  }
+  return bech32.encode('pool', bech32.toWords(hexToBytes(poolId)), 1000);
+};
+
+export const cardanoWalletPoolInfoToRemote = (
+  pool: CardanoWalletBackendPoolInfo,
+  requestedPoolIds: Map<string, string>
+): [string, RemotePool] => {
+  const requestedPoolIdHex = requestedPoolIds.get(pool.poolId);
+  if (
+    requestedPoolIdHex == null ||
+    pool.poolIdHex.toLowerCase() !== requestedPoolIdHex.toLowerCase() ||
+    typeof pool.liveStake !== 'string' ||
+    !/^\d+$/.test(pool.liveStake) ||
+    typeof pool.saturation !== 'number' ||
+    !Number.isFinite(pool.saturation) ||
+    pool.saturation < 0
+  ) {
+    throw new Error('cardano-wallet-backend returned invalid pool information');
+  }
+  return [
+    requestedPoolIdHex,
+    {
+      info: pool.metadata ?? {},
+      // The store keeps this legacy field, but pool registration history has no consumers.
+      history: [],
+      display: {
+        // ROA and hosted avatars are optional presentation fields. Do not fabricate them when
+        // the owned backend supplies only live stake and saturation.
+        stake: pool.liveStake,
+        saturation: String(pool.saturation),
+      },
+    },
+  ];
+};
 
 const getCardanoWalletBackendService = (network: $ReadOnly<NetworkRow>): null | string => {
   if (!CONFIG.cardanoWalletBackend.enabled) return null;
@@ -654,12 +707,16 @@ export class RemoteFetcher implements IFetcher {
   };
 
   getPoolInfo: PoolInfoRequest => Promise<PoolInfoResponse> = body => {
-    const { BackendService } = body.network.Backend;
-    if (BackendService == null) throw new Error(`${nameof(this.getPoolInfo)} missing backend url`);
-    return fetchAndEnsureSuccess(`${BackendService}/api/pool/info`, {
+    if (body.poolIds.length === 0) return Promise.resolve({});
+    const cardanoWalletBackendService = getCardanoWalletBackendService(body.network);
+    if (cardanoWalletBackendService == null) {
+      return Promise.reject(new GetPoolInfoApiError());
+    }
+    const requestedPoolIds = new Map(body.poolIds.map(poolId => [poolIdHexToBech32(poolId), poolId]));
+    return fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/pools/info`, {
       method: 'POST',
       signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-      body: JSON.stringify({ poolIds: body.poolIds }),
+      body: JSON.stringify({ poolIds: Array.from(requestedPoolIds.keys()) }),
       headers: {
         'content-type': 'application/json',
         'yoroi-version': this.getLastLaunchVersion(),
@@ -667,6 +724,13 @@ export class RemoteFetcher implements IFetcher {
       },
     })
       .then(response => response.json())
+      .then((pools: Array<CardanoWalletBackendPoolInfo>) =>
+        pools.reduce((result: PoolInfoResponse, pool) => {
+          const [poolId, poolInfo] = cardanoWalletPoolInfoToRemote(pool, requestedPoolIds);
+          result[poolId] = poolInfo;
+          return result;
+        }, {})
+      )
       .catch(error => {
         Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getPoolInfo)} error: ` + stringifyError(error));
         throw new GetPoolInfoApiError();
