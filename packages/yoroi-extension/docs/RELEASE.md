@@ -8,7 +8,7 @@ See [BUILD.md](./BUILD.md) for how to build the code.
 
 Update the version number in `chrome/constants.js` for the version you want to release.
 
-1) Create a new [release on Github](https://github.com/Emurgo/yoroi-frontend/releases/)
+1) Create a new [release on GitHub](https://github.com/yoroi-classic/yoroi-frontend/releases/)
 1) Upload to [Chrome store](https://chrome.google.com/webstore/developer/dashboard)
 
 ## Yoroi Nightly
