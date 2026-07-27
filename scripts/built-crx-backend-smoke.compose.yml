@@ -1,0 +1,16 @@
+services:
+  wallet-backend:
+    image: alpine/socat:1.8.0.3
+    command:
+      - tcp-listen:3010,fork,reuseaddr
+      - tcp-connect:host.docker.internal:${BACKEND_NODE_PORT:?BACKEND_NODE_PORT is required}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+
+  selenium:
+    image: selenium/standalone-chromium:4.34.0-20250727
+    depends_on:
+      - wallet-backend
+    shm_size: 2gb
+    ports:
+      - 127.0.0.1:${SELENIUM_PORT:-4444}:4444

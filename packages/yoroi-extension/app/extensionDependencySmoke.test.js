@@ -28,6 +28,7 @@ import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
 import developmentConfig from '../config/development.json';
 import dappTestConfig from '../config/dapp-test.json';
+import backendSmokeConfig from '../config/backend-smoke.json';
 import testConfig from '../config/test.json';
 import extensionPackage from '../package.json';
 
@@ -1399,6 +1400,9 @@ describe('extension dependency smoke', () => {
     expect(dappTestConfig.cardanoWalletBackend.enabled).toEqual(true);
     expect(dappTestConfig.cardanoWalletBackend.mainnet).toEqual('http://localhost:21000');
     expect(dappTestConfig.cardanoWalletBackend.preprod).toEqual('http://localhost:21000');
+    expect(backendSmokeConfig.cardanoWalletBackend.enabled).toEqual(true);
+    expect(backendSmokeConfig.cardanoWalletBackend.mainnet).toEqual('http://wallet-backend:3010');
+    expect(backendSmokeConfig.cardanoWalletBackend.preprod).toEqual('http://wallet-backend:3010');
     expect(mainnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(shelleyTestnetConfig.cardanoWalletBackend.enabled).toEqual(false);
     expect(extensionPackage.scripts['dev:wallet-backend']).toEqual('CARDANO_NETWORK=development npm run dev:stable');
@@ -1549,6 +1553,7 @@ describe('extension dependency smoke', () => {
       ['development', developmentConfig],
       ['test', testConfig],
       ['dapp-test', dappTestConfig],
+      ['backend-smoke', backendSmokeConfig],
     ];
 
     for (const [, config] of activeConfigs) {
@@ -1561,7 +1566,7 @@ describe('extension dependency smoke', () => {
 
 function isOwnedOrLocalBackendUrl(rawUrl: string): boolean {
   const { hostname, protocol } = new URL(rawUrl);
-  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'wallet-backend';
   const isOwned = hostname === 'blinklabs.cloud' || hostname.endsWith('.blinklabs.cloud');
   return (protocol === 'https:' && isOwned) || (protocol === 'http:' && isLocal);
 }
