@@ -35,6 +35,38 @@ async function main() {
     throw new Error(`Type-aware unsafe operations must fail ESLint: ${JSON.stringify(unsafeMessages)}`);
   }
 
+  const wrapperObjectMessages = messagesForRule(
+    await lintText("export const fixture: String = 'value';\n"),
+    '@typescript-eslint/no-wrapper-object-types'
+  );
+  if (wrapperObjectMessages.length !== 1 || wrapperObjectMessages[0].severity !== 2) {
+    throw new Error(`TypeScript wrapper object types must fail ESLint: ${JSON.stringify(wrapperObjectMessages)}`);
+  }
+
+  const emptyObjectMessages = messagesForRule(
+    await lintText('export type Fixture = {};\n'),
+    '@typescript-eslint/no-empty-object-type'
+  );
+  if (emptyObjectMessages.length !== 1 || emptyObjectMessages[0].severity !== 2) {
+    throw new Error(`TypeScript empty object types must fail ESLint: ${JSON.stringify(emptyObjectMessages)}`);
+  }
+
+  const unsafeFunctionMessages = messagesForRule(
+    await lintText('export type Fixture = Function;\n'),
+    '@typescript-eslint/no-unsafe-function-type'
+  );
+  if (unsafeFunctionMessages.length !== 1 || unsafeFunctionMessages[0].severity !== 2) {
+    throw new Error(`TypeScript unsafe function types must fail ESLint: ${JSON.stringify(unsafeFunctionMessages)}`);
+  }
+
+  const thisAliasMessages = messagesForRule(
+    await lintText('export class Fixture { value = 1; read(): number { const alias = this; return alias.value; } }\n'),
+    '@typescript-eslint/no-this-alias'
+  );
+  if (thisAliasMessages.length !== 1 || thisAliasMessages[0].severity !== 2) {
+    throw new Error(`TypeScript this aliases must fail ESLint: ${JSON.stringify(thisAliasMessages)}`);
+  }
+
   const unusedMessages = messagesForRule(
     await lintText('const unusedSymbol = 1;\nexport {};\n'),
     '@typescript-eslint/no-unused-vars'

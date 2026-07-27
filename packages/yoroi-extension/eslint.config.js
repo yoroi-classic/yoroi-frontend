@@ -11,6 +11,7 @@ const prettier = require('eslint-plugin-prettier');
 const simpleImportSort = require('eslint-plugin-simple-import-sort');
 const typescriptEslint = require('@typescript-eslint/eslint-plugin');
 const typescriptParser = require('@typescript-eslint/parser');
+const typescriptEslintBaselineRules = require('./scripts/typescript-eslint-baseline-rules');
 
 const { fixupPluginRules } = require('@eslint/compat');
 
@@ -31,6 +32,9 @@ const projectGlobals = {
 };
 
 const { FlatCompat } = require('@eslint/eslintrc');
+
+const enforceTypescriptEslintBaseline = process.env.YOROI_TYPESCRIPT_ESLINT_BASELINE === '1';
+const typescriptEslintDebtRules = Object.fromEntries(typescriptEslintBaselineRules.map(ruleId => [ruleId, 'warn']));
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
@@ -243,7 +247,7 @@ module.exports = defineConfig([
       'no-unused-vars': 'off',
       'no-dupe-class-members': 'off',
       'no-redeclare': 'off',
-      // These 20 recommended rules have a zero-error whole-tree baseline.
+      // These 24 recommended rules have a zero-error whole-tree baseline.
       // The non-clean recommended/type-aware families are staged in #99.
       'no-array-constructor': 'off',
       '@typescript-eslint/await-thenable': 'error',
@@ -252,6 +256,7 @@ module.exports = defineConfig([
       '@typescript-eslint/no-base-to-string': 'error',
       '@typescript-eslint/no-duplicate-enum-values': 'error',
       '@typescript-eslint/no-duplicate-type-constituents': 'error',
+      '@typescript-eslint/no-empty-object-type': 'error',
       '@typescript-eslint/no-extra-non-null-assertion': 'error',
       '@typescript-eslint/no-for-in-array': 'error',
       'no-implied-eval': 'off',
@@ -260,13 +265,19 @@ module.exports = defineConfig([
       '@typescript-eslint/no-namespace': 'error',
       '@typescript-eslint/no-non-null-asserted-optional-chain': 'error',
       '@typescript-eslint/no-require-imports': 'error',
+      '@typescript-eslint/no-this-alias': 'error',
       '@typescript-eslint/no-unnecessary-type-constraint': 'error',
       '@typescript-eslint/no-unsafe-declaration-merging': 'error',
+      '@typescript-eslint/no-unsafe-function-type': 'error',
       '@typescript-eslint/no-unsafe-unary-minus': 'error',
+      '@typescript-eslint/no-wrapper-object-types': 'error',
       '@typescript-eslint/prefer-as-const': 'error',
       '@typescript-eslint/prefer-namespace-keyword': 'error',
       '@typescript-eslint/restrict-plus-operands': 'error',
       '@typescript-eslint/triple-slash-reference': 'error',
+      // The baseline checker activates the remaining non-clean recommended
+      // rules through this same authoritative flat-config block.
+      ...(enforceTypescriptEslintBaseline ? typescriptEslintDebtRules : {}),
       '@typescript-eslint/no-unused-vars': [
         'error',
         {

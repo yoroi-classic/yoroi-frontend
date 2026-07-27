@@ -196,7 +196,7 @@ class BasicModel extends ModelHelper implements Model {
 
 class ExtendedProperty {
   deps: Accessor[];
-  func: Function;
+  func: (...args: unknown[]) => unknown;
 
   constructor(deps, func) {
     this.deps = deps;
@@ -312,6 +312,21 @@ class CachedValue {
   }
 }
 
+function invalidateCachedPath(root: CacheModel, path: Path): void {
+  let visit = root;
+  // todo: more sophisticated patching when event.newValue is present
+  for (const pathComponent of ['cache', ...path]) {
+    if (visit[pathComponent] === undefined) {
+      break;
+    } else if (visit[pathComponent] instanceof CachedValue) {
+      visit[pathComponent] = undefined;
+      break;
+    } else {
+      visit = visit[pathComponent];
+    }
+  }
+}
+
 class CacheModel extends ModelHelper implements Model {
   model: Model;
   cache: any;
@@ -322,19 +337,7 @@ class CacheModel extends ModelHelper implements Model {
     this.cache = undefined;
     model.listen([], event => {
       this.dispatchEvent(event);
-
-      let visit = this;
-      // todo: more sophisticated patching when event.newValue is present
-      for (let pathComponent of ['cache', ...event.path]) {
-        if (visit[pathComponent] === undefined) {
-          break;
-        } else if (visit[pathComponent] instanceof CachedValue) {
-          visit[pathComponent] = undefined;
-          break;
-        } else {
-          visit = visit[pathComponent];
-        }
-      }
+      invalidateCachedPath(this, event.path);
     });
   }
 
@@ -344,7 +347,7 @@ class CacheModel extends ModelHelper implements Model {
     }
 
     let cache = this.cache;
-    let setCacheDuo: [Object, string] = [this, 'cache'];
+    let setCacheDuo: [object, string] = [this, 'cache'];
     let i = 0;
     for (;;) {
       if (cache instanceof CachedValue) {
@@ -415,7 +418,7 @@ type GetUserType<SourceT> =
       ? (...args: ArgsT) => GetUserType<RetT>
       : SourceT extends (infer U)[]
         ? GetUserType<U>[]
-        : SourceT extends Object
+        : SourceT extends object
           ? { [K in keyof SourceT]: GetUserType<SourceT[K]> }
           : SourceT; // todo: be more restrict
 
