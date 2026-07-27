@@ -59,6 +59,14 @@ async function main() {
     throw new Error(`TypeScript unsafe function types must fail ESLint: ${JSON.stringify(unsafeFunctionMessages)}`);
   }
 
+  const thisAliasMessages = messagesForRule(
+    await lintText('export class Fixture { value = 1; read(): number { const alias = this; return alias.value; } }\n'),
+    '@typescript-eslint/no-this-alias'
+  );
+  if (thisAliasMessages.length !== 1 || thisAliasMessages[0].severity !== 2) {
+    throw new Error(`TypeScript this aliases must fail ESLint: ${JSON.stringify(thisAliasMessages)}`);
+  }
+
   const unusedMessages = messagesForRule(
     await lintText('const unusedSymbol = 1;\nexport {};\n'),
     '@typescript-eslint/no-unused-vars'

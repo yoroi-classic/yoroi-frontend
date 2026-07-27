@@ -4,7 +4,6 @@ module.exports = Object.freeze([
   '@typescript-eslint/no-floating-promises',
   '@typescript-eslint/no-misused-promises',
   '@typescript-eslint/no-redundant-type-constituents',
-  '@typescript-eslint/no-this-alias',
   '@typescript-eslint/no-unnecessary-type-assertion',
   '@typescript-eslint/no-unsafe-argument',
   '@typescript-eslint/no-unsafe-assignment',

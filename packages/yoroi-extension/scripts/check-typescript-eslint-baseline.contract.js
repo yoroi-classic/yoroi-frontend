@@ -22,7 +22,6 @@ const EXPECTED_RULE_IDS = [
   '@typescript-eslint/no-floating-promises',
   '@typescript-eslint/no-misused-promises',
   '@typescript-eslint/no-redundant-type-constituents',
-  '@typescript-eslint/no-this-alias',
   '@typescript-eslint/no-unnecessary-type-assertion',
   '@typescript-eslint/no-unsafe-argument',
   '@typescript-eslint/no-unsafe-assignment',
@@ -38,12 +37,12 @@ const EXPECTED_RULE_IDS = [
   '@typescript-eslint/unbound-method',
 ];
 
-test('locks the exact authoritative 19-rule baseline inventory', () => {
+test('locks the exact authoritative 18-rule baseline inventory', () => {
   assert.deepEqual(configuredRuleIds, EXPECTED_RULE_IDS);
   assert.deepEqual(Object.keys(baseline), EXPECTED_RULE_IDS);
   assert.equal(
     Object.values(baseline).reduce((sum, count) => sum + count, 0),
-    5386
+    5385
   );
 });
 
