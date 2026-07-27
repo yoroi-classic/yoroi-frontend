@@ -1,7 +1,14 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { detectNpmVersion, parseNpmVersionFromUserAgent } = require('./check-toolchain');
+const { detectNpmVersion, parseNpmConfig, parseNpmVersionFromUserAgent } = require('./check-toolchain');
+
+test('parseNpmConfig reads committed install semantics', () => {
+  assert.deepEqual(parseNpmConfig('# install contract\nengine-strict = true\nlegacy-peer-deps=true\n'), {
+    'engine-strict': 'true',
+    'legacy-peer-deps': 'true',
+  });
+});
 
 test('detectNpmVersion trims npm output', () => {
   const result = detectNpmVersion({ runCommand: () => ' 10.9.7\n', env: {} });
