@@ -1,7 +1,7 @@
 import '../../../api/ada/lib/test-config.forTests';
 
 import BigNumber from 'bignumber.js';
-import ConnectorStore from './ConnectorStore';
+import ConnectorStore, { addPriorBatchOutput } from './ConnectorStore';
 import { MultiToken } from '../../../api/common/lib/MultiToken';
 
 const defaults = { defaultIdentifier: '', defaultNetworkId: 0 };
@@ -37,4 +37,13 @@ test('counts an owned chained output as an input in the transaction summary', as
   expect(total.get('').toString()).toBe('-99');
   expect(total.get('policy.asset').toString()).toBe('-1');
   expect(amount.get('').toString()).toBe('-98');
+});
+
+test('labels a chained output to a foreign address as foreign', () => {
+  const inputs = [];
+  const foreignInputDetails = [];
+  addPriorBatchOutput({ address: 'foreign-address', value: value(1) }, new Set(['owned-address']), inputs, foreignInputDetails);
+
+  expect(inputs).toHaveLength(0);
+  expect(foreignInputDetails).toHaveLength(1);
 });

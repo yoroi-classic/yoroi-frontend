@@ -97,6 +97,19 @@ async function sendMsgSigningTx(): Promise<?SigningMessage> {
 type GetWhitelistFunc = void => Promise<?Array<WhitelistEntry>>;
 type SetWhitelistFunc = ({| whitelist: Array<WhitelistEntry> | void |}) => Promise<void>;
 
+export function addPriorBatchOutput(
+  priorOutput: TxDataInput,
+  ownAddresses: Set<string>,
+  inputs: Array<TxDataInput>,
+  foreignInputDetails: Array<TxDataInput>
+): void {
+  if (ownAddresses.has(priorOutput.address)) {
+    inputs.push(priorOutput);
+  } else {
+    foreignInputDetails.push(priorOutput);
+  }
+}
+
 export default class ConnectorStore extends Store<StoresMap> {
   @observable unrecoverableError: string | null = null;
   @observable connectingMessage: ?ConnectingMessage = null;
@@ -682,13 +695,8 @@ export default class ConnectorStore extends Store<StoresMap> {
       const priorOutput = batchOutputs?.get(`${foreignInput.txHash}${foreignInput.txIndex}`);
       if (priorOutput != null) {
         // Outputs from an earlier transaction in this batch are not in the
-        // wallet UTxO set yet. Treat outputs to our addresses as wallet-owned
-        // inputs so the review summary accounts for chained spending.
-        if (ownAddresses.has(priorOutput.address)) {
-          inputs.push(priorOutput);
-        } else {
-          foreignInputDetails.push(priorOutput);
-        }
+        // wallet UTxO set yet, so classify them explicitly.
+        addPriorBatchOutput(priorOutput, ownAddresses, inputs, foreignInputDetails);
       } else {
         unresolvedForeignInputs.push(foreignInput);
       }
