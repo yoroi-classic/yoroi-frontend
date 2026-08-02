@@ -42,7 +42,12 @@ test('counts an owned chained output as an input in the transaction summary', as
 test('labels a chained output to a foreign address as foreign', () => {
   const inputs = [];
   const foreignInputDetails = [];
-  addPriorBatchOutput({ address: 'foreign-address', value: value(1) }, new Set(['owned-address']), inputs, foreignInputDetails);
+  addPriorBatchOutput(
+    { address: 'foreign-address', value: value(1) },
+    new Set(['owned-address']),
+    inputs,
+    foreignInputDetails
+  );
 
   expect(inputs).toHaveLength(0);
   expect(foreignInputDetails).toHaveLength(1);
