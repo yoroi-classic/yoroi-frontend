@@ -5,6 +5,7 @@ import tokenPng from '../../../common/assets/images/token.png';
 import { isPrimaryToken } from '../../../common/helpers/isPrimary';
 import { useStrings } from '../../../common/hooks/useStrings';
 import { usePortfolio } from '../../../module/PortfolioContextProvider';
+import type { TokenInfoType } from '../../../../../types/tokenInfo';
 
 interface Props {
   tokenInfo: TokenInfoType;
@@ -111,7 +112,7 @@ const TokenOverviewSection = ({
               href={
                 isNetworkUrl != null
                   ? isPrimary
-                    ? explorer.tokenInfo.baseUrl.replace(/^(https?:\/\/[^\/]+)\/.*/, '$1')
+                    ? explorer.tokenInfo.baseUrl.replace(/^(https?:\/\/[^/]+)\/.*/, '$1')
                     : `${explorer.tokenInfo.baseUrl}${value}`
                   : ''
               }

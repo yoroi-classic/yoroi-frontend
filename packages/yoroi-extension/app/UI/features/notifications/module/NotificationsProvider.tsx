@@ -77,7 +77,7 @@ export default function NotificationsProvider({
   tokenInfoStore,
 }: Props) {
   const lsApi = new LocalStorageApi();
-  const [notifLimitSlots] = React.useState<Object>(appLoadedSlots);
+  const [notifLimitSlots] = React.useState<Props['appLoadedSlots']>(appLoadedSlots);
   const [toastQueue, setToastQueue] = React.useState<any>([]);
   const strings = useStrings();
   const navigate = useNavigate();
@@ -234,13 +234,13 @@ export default function NotificationsProvider({
       const epoch = data.reward[0];
       const network = getNetworkById(data.networkId);
       const config = getCardanoHaskellBaseConfig(network);
-      const localTimeSlot = notifLimitSlots[data.networkId];
+      const localTimeSlot = notifLimitSlots[data.networkId]!;
       const relativeSlot = TimeUtils.toRelativeSlotNumber(config, localTimeSlot);
       // If the local epoch is greater, reward is old and we don't show it
       if (relativeSlot.epoch > epoch) {
         return;
       }
-    } else if (data.slot < notifLimitSlots[data.networkId]) {
+    } else if (data.slot < notifLimitSlots[data.networkId]!) {
       return;
     } else if (topic === NotificationTopics.NEW_TX) {
       const txType = data.tx.type as TransactionType;
@@ -258,7 +258,7 @@ export default function NotificationsProvider({
 
   const handleToastChanges = props => {
     // event is expired, trigger callback
-    if (props.status === 'removed' && !Boolean(props.data.event)) {
+    if (props.status === 'removed' && !props.data.event) {
       handleToastExpired();
       return;
     }

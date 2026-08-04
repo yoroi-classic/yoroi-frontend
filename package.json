@@ -4,6 +4,10 @@
   "packageManager": "npm@10.9.7",
   "scripts": {
     "check:toolchain": "node scripts/check-toolchain.js",
+    "check:workflow-actions": "node scripts/check-workflow-actions.js",
+    "test:toolchain": "node --test scripts/check-toolchain.test.js",
+    "test:workflow-actions": "node --test scripts/check-workflow-actions.test.js",
+    "test:built-crx-backend-smoke": "node --test scripts/built-crx-backend-smoke.test.mjs",
     "eslint": "lerna run eslint --stream",
     "flow": "lerna run flow --stream",
     "tsc": "lerna run tsc --stream",

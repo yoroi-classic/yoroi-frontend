@@ -5,17 +5,20 @@ import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { collectInfo, restoreWallet } from '../../helpers/restoreWalletHelper.js';
 import { WindowManager, mockDAppName, popupConnectorName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { adaInLovelaces, getPassword } from '../../helpers/constants.js';
 import DAppSignTx from '../../pages/dapp/dAppSignTx.page.js';
 import { TxSignErrorCode } from '../../helpers/mock-dApp-webpage/cip30Errors.js';
 import driversPoolsManager from '../../utils/driversPool.js';
+import { beforeQuarantinedDApp } from '../../utils/quarantine.js';
 import { Logger } from 'simple-node-logger';
 import { WebDriver } from 'selenium-webdriver';
 
 describe('dApp, signTx, intrawallet Tx', function () {
+  beforeQuarantinedDApp('spendable wallet restore path has stale setup assumptions; see yoroi-frontend#55');
+
   this.timeout(2 * oneMinute);
   /** @type {WebDriver} */
   let webdriver = null;
@@ -226,7 +229,11 @@ describe('dApp, signTx, intrawallet Tx', function () {
   });
 
   after(async function () {
-    await dappSingTxPage.closeBrowser();
-    mockServer.close();
+    if (dappSingTxPage) {
+      await dappSingTxPage.closeBrowser();
+    }
+    if (mockServer) {
+      await closeMockServer(mockServer);
+    }
   });
 });

@@ -124,10 +124,24 @@ for (const model in TrezorModels) {
     });
 
     after(async function () {
-      await transactionsPage.closeBrowser();
-      await trezorController.bridgeStop();
-      await trezorController.emulatorStop();
-      trezorController.closeWsConnection();
+      try {
+        if (transactionsPage) await transactionsPage.closeBrowser();
+      } finally {
+        if (trezorController) {
+          try {
+            await trezorController.bridgeStop();
+          } catch (error) {
+            logger?.warn(`Unable to stop the Trezor bridge during cleanup: ${error}`);
+          }
+          try {
+            await trezorController.emulatorStop();
+          } catch (error) {
+            logger?.warn(`Unable to stop the Trezor emulator during cleanup: ${error}`);
+          } finally {
+            trezorController.closeWsConnection();
+          }
+        }
+      }
     });
   });
 }

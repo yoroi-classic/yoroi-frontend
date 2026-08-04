@@ -9,6 +9,7 @@ import { TokenChartInterval } from './ChartDetails/TokenChartInterval';
 import HeaderSection from './HeaderDetails/Header';
 import OverviewPerformance from './OverviewPerformanceDetails/OverviewPerformance';
 import { usePortfolio } from '../../module/PortfolioContextProvider';
+import type { TokenInfoType } from '../../../../types/tokenInfo';
 
 const Header = styled(Box)({
   display: 'flex',

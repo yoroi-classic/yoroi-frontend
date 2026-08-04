@@ -20,20 +20,23 @@ Before running the e2e tests, ensure you have completed the following setup:
 2. **Chrome Browser**: Chrome browser must be installed on your system. The tests use ChromeDriver which is included as a dependency.
 
 3. **Install Dependencies**: Install all project dependencies:
+
    ```bash
    # From project root
    . install-all.sh
-   
+
    # Or specifically for e2e-tests
    cd packages/e2e-tests
    npm install
    ```
 
 4. **Build the Extension**: The extension must be built before running tests. From the project root:
+
    ```bash
    cd packages/yoroi-extension
    npm run test:build
    ```
+
    This will create `Yoroi-test.crx` in the `packages/yoroi-extension` directory, which is required by the e2e tests.
 
 5. **Environment Variables** (for local testing): Some tests may require environment variables for test wallets. These are typically set as secrets in CI but may need to be configured locally:
@@ -41,7 +44,7 @@ Before running the e2e tests, ensure you have completed the following setup:
    - `TEST_WALLET_MAINNET_1`
    - `SECOND_STATIC_TEST_WALLET`
    - `SECOND_SMOKE_TEST_WALLET`
-   - `SECOND_SMOKE_TEST_WALLET_FF`
+   - `RUN_QUARANTINED_DAPP_TESTS=true` (optional, runs quarantined dApp cases)
    - `CHROME_PATH` (optional, defaults to system Chrome)
 
 6. **Hardware Wallet Emulators** (for hardware wallet tests):
@@ -93,6 +96,7 @@ The CI workflow consists of the following jobs:
 ### Test Artifacts
 
 On test failure, the following artifacts are archived:
+
 - `mochawesome-report/` - HTML test reports
 - `testRunsData/` - Screenshots and logs from test runs
 
@@ -101,6 +105,7 @@ On test failure, the following artifacts are archived:
 ### Running Extension Tests
 
 Navigate to the e2e-tests directory:
+
 ```bash
 cd packages/e2e-tests
 ```
@@ -142,6 +147,15 @@ npm run test:ext:settings
 npm run test:ext:transactions
 ```
 
+The test extension resolves ADA Handle, CNS, and Unstoppable Domains names from
+`packages/yoroi-extension/config/test.json`'s `app.domainResolverFixtures`. When that map is present, an
+unknown name returns not found without contacting a public resolver. Keep one
+positive fixture for every supported provider and let the send suite generate
+unknown names for negative coverage. Fixture addresses must be valid mainnet
+addresses; refresh them only when the product's provider labels or supported
+domain formats change. Development and production configs omit the map and use
+the real providers.
+
 #### Run Smoke Tests
 
 Tests with the tag `_smoke_` will be run
@@ -159,9 +173,53 @@ npm run test:ext:one "YOUR_TEST_NAME_HERE"
 npm run test:ext:one "Creating wallet _smoke_"
 ```
 
+#### Built CRX against a Kubernetes wallet backend
+
+From the repository root, use the checked-in smoke topology to verify the signed test CRX from the loaded
+extension context. The command accepts either `mainnet` or `preprod`, discovers
+the selected Kubernetes Service's NodePort, builds and signs the CRX with the
+Compose origin already present in its CSP and `host_permissions`, starts the
+containers, checks `/v1/status` and `/v1/chain/tip`, asserts the reported
+network, and tears the containers down automatically:
+
+```bash
+# SERVICE_PORT may be a Service port name or number; it defaults to http.
+./scripts/run-built-crx-backend-smoke.sh preprod wallet-backend cardano-wallet-backend
+./scripts/run-built-crx-backend-smoke.sh mainnet wallet-backend-mainnet cardano-wallet-backend api
+```
+
+Prerequisites are Docker with Compose, `kubectl` access to the cluster, `jq`,
+and the repository's pinned Node/npm toolchain with dependencies installed. The
+selected Service must expose the chosen port as a NodePort.
+
+The networking boundary is deliberate: Chromium runs in the Compose `selenium`
+container, so its localhost is not the Kubernetes host. The Compose-managed
+`wallet-backend` bridge forwards the stable origin
+`http://wallet-backend:3010` through Docker's `host.docker.internal` gateway to
+the discovered NodePort. The CRX is built against that stable origin before it
+is signed; the script never patches the artifact and never starts a forwarding
+process inside Selenium. `docker compose down --volumes --remove-orphans` runs
+from the script's exit trap on success, failure, or interruption. If a prior
+run was killed before the trap ran, clean it with:
+
+```bash
+COMPOSE_PROJECT_NAME=yoroi-built-crx-smoke \
+  docker compose --file scripts/built-crx-backend-smoke.compose.yml down --volumes --remove-orphans
+```
+
 ### Running Hardware Wallet Tests
 
+Ledger and Trezor CI build the backend-enabled extension artifact and start a pinned
+`yoroi-classic/cardano-wallet-backend` checkout on `http://127.0.0.1:21000` with `NETWORK=mainnet`.
+Before starting browser tests, CI requires both `/health` to report `status: ok` and `/v1/status`
+to report the mainnet chain as `ok` with a tip. Run the same preflight against a local backend with:
+
+```bash
+node helpers/walletBackendPreflight.mjs http://127.0.0.1:21000 mainnet
+```
+
 #### Trezor Tests
+
 ```bash
 # Start Trezor emulator (requires Docker)
 docker run -d \
@@ -179,6 +237,7 @@ npm run test:trezor:one "YOUR_TEST_NAME_HERE"
 ```
 
 #### Ledger Tests
+
 ```bash
 # Pull and run Speculos emulator (requires Docker)
 docker pull ghcr.io/ledgerhq/speculos:0.25.9
@@ -191,8 +250,12 @@ npm run test:ledger:one "YOUR_TEST_NAME_HERE"
 ```
 
 ### Running dApp Tests
+
 ```bash
 npm run test:dapp
+
+# Include quarantined dApp tests that depend on stale fixtures
+RUN_QUARANTINED_DAPP_TESTS=true npm run test:dapp
 
 # Run a single dApp test
 npm run test:dapp:one "YOUR_TEST_NAME_HERE"
@@ -212,6 +275,7 @@ But tests for DApp are running in the normal mode with UI. It is the limitation 
 ### Test Reports
 
 Test reports are generated using `mochawesome` and can be found in:
+
 - `mochawesome-report/` - HTML reports
 - `testRunsData/` - Screenshots and logs
 
@@ -259,13 +323,13 @@ The following diagram shows the inheritance and dependency structure of page obj
 ```mermaid
 graph TD
     BasePage[BasePage]
-    
+
     %% Base connections
     BasePage --> WalletCommonBase[WalletCommonBase]
     BasePage --> InitialStepsPage[InitialStepsPage]
     BasePage --> TrezorConnect[TrezorConnect]
     BasePage --> LedgerConnect[LedgerConnect]
-    
+
     %% WalletCommonBase children
     WalletCommonBase --> WalletTab[WalletTab]
     WalletCommonBase --> PortfolioTab[PortfolioTab]
@@ -275,25 +339,25 @@ graph TD
     WalletCommonBase --> Governance[Governance]
     WalletCommonBase --> SettingsTab[SettingsTab]
     WalletCommonBase --> StakingTab[StakingTab]
-    
+
     %% PortfolioTab children
     PortfolioTab --> PortfolioTokenDetails[PortfolioTokenDetails]
-    
+
     %% NftGalleryTab children
     NftGalleryTab --> NftDetails[NftDetails]
-    
+
     %% WalletTab children
     WalletTab --> TransactionsSubTab[TransactionsSubTab]
     WalletTab --> ReceiveSubTab[ReceiveSubTab]
     WalletTab --> SendSubTab[SendSubTab]
-    
+
     %% SettingsTab children
     SettingsTab --> GeneralSubTab[GeneralSubTab]
     SettingsTab --> BlockchainSubTab[BlockchainSubTab]
     SettingsTab --> WalletSubTab[WalletSubTab]
     SettingsTab --> SupportSubTab[SupportSubTab]
     SettingsTab --> TermOfServiceAgreementSubTab[TermOfServiceAgreementSubTab]
-    
+
     %% Modals (connected from BasePage)
     BasePage -.->|modals| BuySell[BuySell]
     BasePage -.->|modals| DisplayURIModal[DisplayURIModal]
@@ -306,14 +370,14 @@ graph TD
     BasePage -.->|modals| AddMemoDialog[AddMemoDialog]
     BasePage -.->|modals| EditMemoDialog[EditMemoDialog]
     BasePage -.->|modals| DeleteMemoModal[DeleteMemoModal]
-    
+
     %% Styling
     classDef basePage fill:#e1f5ff,stroke:#01579b,stroke-width:3px,color:#000000
     classDef walletBase fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000000
     classDef tab fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000000
     classDef subTab fill:#e8f5e9,stroke:#1b5e20,stroke-width:1px,color:#000000
     classDef modal fill:#fce4ec,stroke:#880e4f,stroke-width:1px,stroke-dasharray: 5 5,color:#000000
-    
+
     class BasePage basePage
     class WalletCommonBase walletBase
     class WalletTab,PortfolioTab,NftGalleryTab,ConnectorTab,AddNewWallet,Governance,SettingsTab,StakingTab tab
@@ -338,6 +402,7 @@ graph TD
 ### Test Organization
 
 Tests are organized by feature area:
+
 - `test/extension/` - Main extension functionality tests
 - `test/ledger/` - Ledger hardware wallet tests
 - `test/trezor/` - Trezor hardware wallet tests

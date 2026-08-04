@@ -189,6 +189,7 @@ export type GetChainAddressesForDisplayResponse = Array<AddressDetails>;
 
 export type AdaGetTransactionsRequest = {|
   checkAddressesInUse: FilterFunc,
+  getUTXOsForAddresses: AddressUtxoFunc,
   getBestBlock: BestBlockFunc,
   getTokenInfo: TokenInfoFunc,
   getMultiAssetMetadata: MultiAssetMintMetadataFunc,
@@ -558,6 +559,8 @@ export default class AdaApi {
             request.publicDeriver.getDb(),
             request.publicDeriver,
             request.checkAddressesInUse,
+            request.getUTXOsForAddresses,
+            request.getBestBlock,
             request.getTokenInfo,
             request.getMultiAssetMetadata,
             request.getMultiAssetSupply
@@ -810,17 +813,19 @@ export default class AdaApi {
           throw new Error(`${nameof(this.createUnsignedTxForUtxos)} needs exactly one change address`);
         }
         const changeAddr = changeAddresses[0];
-        const otherAddresses: Array<{| ...Address, +addressHandle?: {| handle: string, nameServer: string |} |}> =
-          request.receivers.reduce(
-            (arr, next) => {
-              if (next.addressing == null) {
-                arr.push({ address: next.address, addressHandle: next.addressHandle });
-                return arr;
-              }
+        const otherAddresses: Array<{|
+          ...Address,
+          +addressHandle?: {| handle: string, nameServer: string |},
+        |}> = request.receivers.reduce(
+          (arr, next) => {
+            if (next.addressing == null) {
+              arr.push({ address: next.address, addressHandle: next.addressHandle });
               return arr;
-            },
-            ([]: Array<{| ...Address, +addressHandle?: {| handle: string, nameServer: string |} |}>)
-          );
+            }
+            return arr;
+          },
+          ([]: Array<{| ...Address, +addressHandle?: {| handle: string, nameServer: string |} |}>)
+        );
         if (otherAddresses.length > 1) {
           throw new Error(`${nameof(this.createUnsignedTxForUtxos)} can't send to more than one address`);
         }

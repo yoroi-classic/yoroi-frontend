@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-// eslint-disable-next-line no-unused-vars
 import type { ReactNode } from 'react';
 import { Button } from '@mui/material';
 import PubSub from 'pubsub-js';
