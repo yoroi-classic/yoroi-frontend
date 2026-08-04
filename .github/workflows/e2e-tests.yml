@@ -103,6 +103,7 @@ jobs:
         id: setup-chrome
         with:
           chrome-version: 'stable'
+          install-chromedriver: true
 
       - uses: actions/checkout@v4
 
@@ -143,6 +144,7 @@ jobs:
         working-directory: ./packages/e2e-tests
         env:
           CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.setup-chrome.outputs.chromedriver-path }}
           FIRST_SMOKE_TEST_WALLET: ${{ secrets.FIRST_SMOKE_TEST_WALLET }}
           TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
@@ -176,6 +178,7 @@ jobs:
         id: setup-chrome
         with:
           chrome-version: 'stable'
+          install-chromedriver: true
 
       - uses: actions/checkout@v4
 
@@ -216,6 +219,7 @@ jobs:
         working-directory: ./packages/e2e-tests
         env:
           CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.setup-chrome.outputs.chromedriver-path }}
           FIRST_SMOKE_TEST_WALLET: ${{ secrets.FIRST_SMOKE_TEST_WALLET }}
           TEST_WALLET_MAINNET_1: ${{ secrets.TEST_WALLET_MAINNET_1 }}
           SECOND_STATIC_TEST_WALLET: ${{ secrets.SECOND_STATIC_TEST_WALLET }}
@@ -258,6 +262,7 @@ jobs:
         id: setup-chrome
         with:
           chrome-version: 'stable'
+          install-chromedriver: true
 
       - uses: actions/checkout@v4
 
@@ -298,6 +303,7 @@ jobs:
         working-directory: ./packages/e2e-tests
         env:
           CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.setup-chrome.outputs.chromedriver-path }}
         run: xvfb-run -a -e /dev/stdout -s "-screen 0 1600x900x24" npm run test:trezor
 
       - name: Archive tests screenshots and logs
@@ -328,6 +334,7 @@ jobs:
         id: setup-chrome
         with:
           chrome-version: 'stable'
+          install-chromedriver: true
 
       - uses: actions/checkout@v4
 
@@ -368,6 +375,7 @@ jobs:
         working-directory: ./packages/e2e-tests
         env:
           CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.setup-chrome.outputs.chromedriver-path }}
         run: xvfb-run -a -e /dev/stdout -s "-screen 0 1600x900x24" npm run test:ledger
 
       - name: Archive tests screenshots and logs
