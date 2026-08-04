@@ -40,6 +40,7 @@ const EXPECTED_LOCKFILE_EMURGO_PACKAGE_ENTRIES = [
   'packages/yoroi-extension:node_modules/@emurgo/cardano-message-signing-nodejs',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-serialization-lib-browser',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-serialization-lib-nodejs',
+  'packages/yoroi-extension:node_modules/@emurgo/cip4-js',
   'packages/yoroi-extension:node_modules/@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser',
   'packages/yoroi-extension:node_modules/@emurgo/cross-csl-core',
