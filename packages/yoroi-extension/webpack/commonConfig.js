@@ -209,7 +209,14 @@ const resolve = () /*: * */ => ({
     'react-native-mmkv': false,
     'process/browser': require.resolve('process/browser'),
   },
-  alias: { process: 'process/browser' },
+  // @yoroi/common includes React Native fixtures in its published bundle. The extension must
+  // exclude those imports even when a transitive dependency has installed react-native locally;
+  // fallback alone only applies when resolution fails and otherwise lets Flow syntax reach webpack.
+  alias: {
+    process: 'process/browser',
+    'react-native$': false,
+    'react-native-mmkv$': false,
+  },
 });
 
 const definePlugin = (
