@@ -8,18 +8,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout main repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Zip package 📦
         run: (cd . && zip -r ../yoroi-frontend-smoke-builds.${{ github.ref_name }}.zip ./* ./.??*)
 
       - name: Install Octopus CLI 🐙
-        uses: OctopusDeploy/install-octopus-cli-action@v3
+        uses: OctopusDeploy/install-octopus-cli-action@c635bb83aa1afb643e7132a1887aa517a9739fb0 # v3.1.4
         with:
           version: latest
 
       - name: Push package to Octopus Deploy 🐙
-        uses: OctopusDeploy/push-package-action@v3
+        uses: OctopusDeploy/push-package-action@e2050621dbc1f83e223b6a5ca7ff2ec3dd6809e8 # v3.2.5
         env:
           OCTOPUS_URL: https://emurgo.octopus.app
           OCTOPUS_API_KEY: ${{ secrets.OCTOPUS_API_KEY }}
@@ -28,7 +28,7 @@ jobs:
           packages: '../yoroi-frontend-smoke-builds.${{ github.ref_name }}.zip'
 
       - name: Create release
-        uses: OctopusDeploy/create-release-action@v3
+        uses: OctopusDeploy/create-release-action@1c58525ed52e1af84afa68eb495486a52661d6da # v3.3.0
         env:
           OCTOPUS_URL: https://emurgo.octopus.app
           OCTOPUS_API_KEY: ${{ secrets.OCTOPUS_API_KEY }}

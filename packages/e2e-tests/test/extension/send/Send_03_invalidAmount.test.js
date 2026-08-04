@@ -6,7 +6,7 @@ import { getTestLogger } from '../../../utils/utils.js';
 import { expect } from 'chai';
 import { oneMinute } from '../../../helpers/timeConstants.js';
 import { prepareWallet } from '../../../helpers/restoreWalletHelper.js';
-import { NOT_ENOUGH_BALANCE } from '../../../helpers/messages.js';
+import { INSUFFICIENT_FUNDS } from '../../../helpers/messages.js';
 import { testWallet1 } from '../../../utils/testWallets.js';
 import { WebDriver } from 'selenium-webdriver';
 import { Logger } from 'simple-node-logger';
@@ -45,7 +45,7 @@ describe('Invalid amount for sending', function () {
   });
   it(`Check displayed info`, async function () {
     const helperText = await sendSubTab.getAmountHelperText();
-    expect(helperText, 'A different error message is displayed').to.equal(NOT_ENOUGH_BALANCE);
+    expect(helperText, 'A different error message is displayed').to.equal(INSUFFICIENT_FUNDS);
   });
 
   afterEach(async function () {

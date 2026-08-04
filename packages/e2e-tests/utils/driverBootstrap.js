@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import { chromeBin, chromeExtIdUrl } from '../helpers/constants.js';
 import { getDownloadsDir, isHeadless, isTrezorTests } from './utils.js';
 import { defaultWaitTimeout } from '../helpers/timeConstants.js';
-import * as chromeDriver from 'chromedriver';
 
 const prefs = new logging.Preferences();
 prefs.setLevel(logging.Type.BROWSER, logging.Level.ALL);
@@ -23,13 +22,11 @@ export const getTransactionsURL = () => `${getExtensionUrl()}#/wallets/transacti
 // builders
 const getChromeBuilder = () => {
   const downloadsDir = getDownloadsDir();
-  const chromeServiceBuilder = new chrome.ServiceBuilder(chromeDriver.path);
   const chromeOpts = new chrome.Options({
     'goog:chromeOptions': {
       enableExtensionTargets: true,
     },
   })
-    .setChromeBinaryPath(chromeBin)
     .addExtensions(path.resolve(__extensionDir, 'Yoroi-test.crx'))
     .addArguments('--disable-dev-shm-usage')
     .addArguments('--no-sandbox')
@@ -46,17 +43,23 @@ const getChromeBuilder = () => {
     })
     .addArguments('disable-infobars')
     .addArguments('--enable-clipboard');
+  if (chromeBin && !process.env.SELENIUM_REMOTE_URL) {
+    chromeOpts.setChromeBinaryPath(chromeBin);
+  }
   if (isHeadless()) {
     chromeOpts.addArguments('--headless=new');
   }
   if (isTrezorTests()) {
     chromeOpts.addArguments('--disable-web-security');
   }
-  return new Builder()
-    .forBrowser('chrome')
-    .setLoggingPrefs(prefs)
-    .setChromeOptions(chromeOpts)
-    .setChromeService(chromeServiceBuilder);
+  const builder = new Builder().forBrowser('chrome').setLoggingPrefs(prefs).setChromeOptions(chromeOpts);
+  if (process.env.SELENIUM_REMOTE_URL) {
+    builder.usingServer(process.env.SELENIUM_REMOTE_URL);
+  }
+  if (process.env.CHROMEDRIVER_PATH) {
+    builder.setChromeService(new chrome.ServiceBuilder(process.env.CHROMEDRIVER_PATH));
+  }
+  return builder;
 };
 
 /**

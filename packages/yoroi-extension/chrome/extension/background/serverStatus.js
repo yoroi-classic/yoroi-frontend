@@ -40,7 +40,7 @@ async function updateServerStatus() {
       const startTime = Date.now();
       let resp;
       try {
-        resp = await fetcher.checkServerStatus({ backend });
+        resp = await fetcher.checkServerStatus({ backend, networkId: network.NetworkId });
       } catch {
         resp = {
           isServerOk: false,

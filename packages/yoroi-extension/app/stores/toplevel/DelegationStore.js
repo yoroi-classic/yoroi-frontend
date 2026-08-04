@@ -11,6 +11,7 @@ import { PoolMissingApiError, GetPoolInfoApiError } from '../../api/common/error
 import type { MangledAmountFunc, MangledAmountsResponse } from '../stateless/mangledAddresses';
 import type { StoresMap } from '../index';
 import type { ExplorerPoolInfo as PoolInfo } from '@emurgo/yoroi-lib';
+import type { RemotePoolDisplayInfo } from '../../api/ada/lib/state-fetch/types';
 import { PoolInfoApi } from '@emurgo/yoroi-lib';
 import { MultiToken } from '../../api/common/lib/MultiToken';
 import { forceNonNull, maybe } from '../../coreUtils';
@@ -115,7 +116,7 @@ export default class DelegationStore extends Store<StoresMap> {
     networkId: number,
     poolId: string,
     poolInfo: PoolMeta,
-    poolRemoteInfo: PoolInfo | null,
+    poolRemoteInfo: RemotePoolDisplayInfo | null,
   |}> = [];
 
   /**
@@ -218,7 +219,7 @@ export default class DelegationStore extends Store<StoresMap> {
     return find(this.poolInfo, { networkId, poolId })?.poolInfo;
   };
 
-  getLocalRemotePoolInfo: (number, string) => void | PoolInfo = (networkId, poolId) => {
+  getLocalRemotePoolInfo: (number, string) => void | RemotePoolDisplayInfo = (networkId, poolId) => {
     return find(this.poolInfo, { networkId, poolId })?.poolRemoteInfo ?? undefined;
   };
 

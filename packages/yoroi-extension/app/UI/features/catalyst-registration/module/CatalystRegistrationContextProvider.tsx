@@ -25,7 +25,7 @@ function stepReducer(state: StepStateType, action: StepAction): StepStateType {
         stepState: StepState.LOAD,
         error: null,
       };
-    case 'NEXT_STEP':
+    case 'NEXT_STEP': {
       if (state.currentStep === -1) return state;
 
       const stepsAmount = state.currentStep === ProgressStep.CONFIRM && action.selectedWallet.isHardware ? 2 : 1;
@@ -38,6 +38,7 @@ function stepReducer(state: StepStateType, action: StepAction): StepStateType {
         stepState: StepState.LOAD,
         error: null,
       };
+    }
     case 'PREVIOUS_STEP':
       if (state.currentStep <= ProgressStep.GENERATE) return state;
 
@@ -78,18 +79,18 @@ const defaultCatalystRegistrationValues = {
   votingMinAmount: new BigNumber(0),
   votingRegTx: {},
   // @ts-ignore
-  dispatch: (action: StepAction) => {},
+  dispatch: (_action: StepAction) => {},
 };
 
 const defaultCatalystRegistrationActions = {
   generatePin: async () => {},
   resetRegistration: () => {},
   // @ts-ignore
-  createTransaction: async (password: string | null) => {},
+  createTransaction: async (_password: string | null) => {},
   // @ts-ignore
-  signTransaction: async (password: string | null) => {},
+  signTransaction: async (_password: string | null) => {},
   // @ts-ignore
-  setError: (error: string | null) => {},
+  setError: (_error: string | null) => {},
 };
 
 const defaultCatalystRegistrationState = {

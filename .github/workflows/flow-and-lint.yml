@@ -14,21 +14,25 @@ jobs:
   Check:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
     runs-on: ubuntu-24.04
-    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         suite: [flow, eslint, tsc]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Read .nvmrc
         id: nvm
-        run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+        run: echo "NVMRC=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            packages/yoroi-extension/package-lock.json
+            packages/e2e-tests/package-lock.json
       - name: Setup npm
         run: |
           corepack enable npm
@@ -36,19 +40,7 @@ jobs:
           npm --version
       - name: Check toolchain baseline
         run: npm run check:toolchain
-      - name: Cache node modules
-        uses: actions/cache@v4
-        id: node-modules-cache
-        with:
-          path: |
-            **/node_modules
-            ~/.npm
-          key: ${{ runner.os }}-node-${{ steps.nvm.outputs.NVMRC }}-modules-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-${{ steps.nvm.outputs.NVMRC }}-modules-
-            ${{ runner.os }}-node-modules-
       - name: Install packages
-        if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: |
           ./ci-install-all.sh
       - name: ${{ matrix.suite }}

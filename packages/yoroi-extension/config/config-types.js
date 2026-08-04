@@ -9,6 +9,7 @@ export type ConfigType = {|
   fcm: FCMConfig,
   notifications: NotificationsConfigType,
   yoroiBackend: YoroiBackendType,
+  cardanoWalletBackend: CardanoWalletBackendType,
   tokenMetadata: TokenMetadataType,
 |};
 
@@ -19,9 +20,24 @@ export type YoroiBackendType = {|
   zeroPreprod: string,
 |};
 
+export type CardanoWalletBackendType = {|
+  enabled: boolean,
+  mainnet: string,
+  preprod: string,
+|};
+
 export type TokenMetadataType = {|
   mainnet: string,
   preprod: string,
+|};
+
+export type DomainResolverFixture = {|
+  address: string,
+  nameServer: string,
+|};
+
+export type DomainResolverFixtures = {|
+  [domain: string]: DomainResolverFixture,
 |};
 
 export type NotificationsConfigType = {|
@@ -57,6 +73,7 @@ export type AppConfigType = {|
   pubKeyData: string,
   /** Public key to make sure that the ticker signing key change really does come from EMURGO */
   pubKeyMaster: string,
+  domainResolverFixtures?: DomainResolverFixtures,
 |};
 
 export type NetworkConfigType = {|

@@ -2,6 +2,8 @@ name: Tests
 
 on:
   workflow_dispatch:
+  push:
+    branches: [develop]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
@@ -12,17 +14,17 @@ permissions:
 
 jobs:
   Unit_tests:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Read .nvmrc
         id: nvm
         run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
 
       - name: Setup node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
       - name: Setup npm
@@ -34,13 +36,16 @@ jobs:
       - name: Check toolchain baseline
         run: npm run check:toolchain
 
+      - name: Check workflow action contracts
+        run: npm run test:workflow-actions
+
       - name: Check EMURGO dependency inventory
         working-directory: ./packages/yoroi-extension
         run: |
           npm run check:emurgo-dependencies
 
       - name: Cache npm downloads
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         env:
           cache-name: cache-npm-downloads
         with:
@@ -59,18 +64,24 @@ jobs:
         run: |
           npm run test
 
+      - name: Test DApp backend fixtures
+        run: npm --prefix packages/e2e-tests run test:dapp-server
+
+      - name: Test Trezor controller lifecycle
+        run: node --test packages/e2e-tests/helpers/trezorEmulatorController.test.mjs
+
   Build_smoke:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'pull_request_review' && github.event.review && (github.event.review.state == 'approved' || contains(github.event.review.body, '/check') || contains(github.event.review.body, '/release-check')))
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Read .nvmrc
         id: nvm
         run: echo "NVMRC=$(cat .nvmrc)" >> $GITHUB_OUTPUT
 
       - name: Setup node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '${{ steps.nvm.outputs.NVMRC }}'
       - name: Setup npm
@@ -83,7 +94,7 @@ jobs:
         run: npm run check:toolchain
 
       - name: Cache npm downloads
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         env:
           cache-name: cache-npm-downloads
         with:
@@ -97,6 +108,10 @@ jobs:
       - name: Install packages
         run: |
           ./ci-install-all.sh
+
+      - name: Test DApp mock server lifecycle
+        working-directory: ./packages/e2e-tests
+        run: npm run test:dapp-server-lifecycle
 
       - name: Check e2e smoke specs
         working-directory: ./packages/e2e-tests

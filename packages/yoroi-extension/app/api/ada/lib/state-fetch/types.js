@@ -52,13 +52,6 @@ export type SignedRequest = {|
   id: string,
   encodedTx: Uint8Array,
 |};
-export type SignedBatchRequest = {|
-  ...BackendNetworkInfo,
-  txs: Array<{|
-    id: string,
-    encodedTx: Uint8Array,
-  |}>,
-|};
 export type SignedResponse = {| txId: string |};
 export type SendFunc = (body: SignedRequest) => Promise<SignedResponse>;
 
@@ -438,6 +431,12 @@ export type RemotePoolInfo = {|
   +ticker?: string,
   +homepage?: string,
 |};
+export type RemotePoolDisplayInfo = {|
+  +stake: string,
+  +saturation: string,
+  +roa?: string,
+  +pic?: string,
+|};
 export type RemotePool = {|
   +info: RemotePoolInfo,
   +history: Array<{|
@@ -447,6 +446,7 @@ export type RemotePool = {|
     +cert_ordinal: number,
     +payload: any, // TODO: how to store this since different networks have different cert types
   |}>,
+  +display?: RemotePoolDisplayInfo,
 |};
 export type PoolInfoResponse = {|
   [key: string]: RemotePool | null,

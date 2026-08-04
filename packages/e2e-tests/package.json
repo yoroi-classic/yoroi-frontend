@@ -53,13 +53,18 @@
     "test:ext:transactions": "env HEADLESS=true npm run test:ext:transactions:base",
     "test:ext:one": "npm run test:base:one",
     "test:ext:smoke": "env HEADLESS=true npm run test:ext:base:tag \"_smoke_\"",
-    "test:ext:smoke:dry-run": "mocha --dry-run --require $npm_package_config_hooks $npm_package_config_extAll -g \"_smoke_\" --reporter dot",
+    "test:hooks": "node --test utils/hooks.test.mjs",
+    "test:ext:smoke:dry-run": "npm run test:hooks && mocha --dry-run --require $npm_package_config_hooks $npm_package_config_extAll -g \"_smoke_\" --reporter dot",
     "test:dapp": "env ISDAPP=true npm run test:dapp:base:sequintel",
     "test:dapp:one": "npm run test:dapp:base:one",
+    "test:dapp-server-lifecycle": "node --test helpers/mock-dApp-webpage/mockServer.lifecycle.test.mjs",
+    "test:dapp-server": "node --test helpers/mock-dApp-webpage/mockServer.test.mjs",
     "test:ledger": "npm run test:ledger:base:sequintel",
     "test:ledger:one": "npm run test:ledger:base:one",
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
-    "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one"
+    "test:trezor:one": "env IS_TREZOR=true npm run test:trezor:base:one",
+    "test:fixture-contract": "node --test scripts/check-protected-fixtures.test.mjs",
+    "test:wallet-backend-preflight": "node --test helpers/walletBackendPreflight.test.mjs"
   },
   "author": "Yoroi Classic Contributors",
   "license": "ISC",
@@ -67,7 +72,6 @@
     "@emurgo/cardano-serialization-lib-nodejs": "13.2.1",
     "bignumber.js": "^9.1.2",
     "chai": "^4.3.10",
-    "chromedriver": "145.0.1",
     "cross-env": "^7.0.3",
     "dockerode": "^4.0.5",
     "json-server": "^0.17.4",
@@ -77,7 +81,7 @@
     "simple-node-logger": "^21.8.12"
   },
   "dependencies": {
-    "axios": "^1.6.8",
+    "axios": "^1.18.0",
     "balanced-match": "^1.0.2",
     "brace-expansion": "^1.1.11",
     "concat-map": "^0.0.1",
@@ -103,7 +107,7 @@
     "tmp": "^0.2.1",
     "util-deprecate": "^1.0.2",
     "wrappy": "^1.0.2",
-    "ws": "^8.14.2"
+    "ws": "^8.21.1"
   },
   "keywords": [],
   "engines": {

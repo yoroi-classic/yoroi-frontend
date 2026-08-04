@@ -84,8 +84,8 @@ export const TxStep = () => {
             value={passwd}
             onChange={handleSetPasswd}
             id="confirm-passwd"
-            error={!!error}
-            helperText={!!error ? stringifyError(error) : ''}
+            error={error != null}
+            helperText={error != null ? stringifyError(error) : ''}
             variant="outlined"
           />
         )}

@@ -16,7 +16,21 @@
     "coinPriceRefreshInterval": 60000,
     "coinPriceFreshnessThreshold": 900000,
     "pubKeyData": "0e011fe7149bff8e3802168261aec6da54febee37da6a41d6179fa545868421e",
-    "pubKeyMaster": "ab9e4f1c4d996a0e9cdda8546bf5ee1dd8397fd7ab287c331ff171c7e4e0e9e2"
+    "pubKeyMaster": "ab9e4f1c4d996a0e9cdda8546bf5ee1dd8397fd7ab287c331ff171c7e4e0e9e2",
+    "domainResolverFixtures": {
+      "$svinkopepo": {
+        "nameServer": "ADA Handle",
+        "address": "addr1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgtpv9skzctpv9skzctpv9skzctpv9skzctpv9skzctpv9sj5qe6w"
+      },
+      "rahul.ada": {
+        "nameServer": "Cardano Name Service (CNS)",
+        "address": "addr1qypqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrqvpsxqmh5agv"
+      },
+      "stackchain.blockchain": {
+        "nameServer": "Unstoppable Domains",
+        "address": "addr1qypsxqcrqvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcdp5xs6rgdp5xs6rgdp5xs6rgdp5xs6rgdp5xs6rgdp5xsjld0cj"
+      }
+    }
   },
   "bring": {
     "baseUrl": "https://api.bringweb3.io/v1/extension/",
@@ -45,6 +59,11 @@
     "preprod": "http://localhost:8082",
     "zeroMainnet": "https://yoroi-zero.blinklabs.cloud",
     "zeroPreprod": "http://localhost:8082"
+  },
+  "cardanoWalletBackend": {
+    "enabled": false,
+    "mainnet": "http://localhost:3010",
+    "preprod": "http://localhost:3010"
   },
   "tokenMetadata": {
     "mainnet": "https://tokens.cardano.org",

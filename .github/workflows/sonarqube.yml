@@ -22,7 +22,7 @@ jobs:
         if: ${{ env.SONAR_TOKEN == '' || env.SONAR_HOST_URL == '' }}
         run: echo "Skipping SonarQube scan because SONAR_TOKEN or SONAR_HOST_URL is not configured."
 
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
         with:
           # Disabling shallow clone is recommended for improving relevancy of reporting

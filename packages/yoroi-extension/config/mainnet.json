@@ -45,6 +45,11 @@
     "zeroMainnet": "https://yoroi-zero.blinklabs.cloud",
     "zeroPreprod": "https://yoroi-preprod-zero.blinklabs.cloud"
   },
+  "cardanoWalletBackend": {
+    "enabled": false,
+    "mainnet": "https://cardano-wallet-api.blinklabs.cloud",
+    "preprod": "https://cardano-wallet-preprod-api.blinklabs.cloud"
+  },
   "tokenMetadata": {
     "mainnet": "https://yoroi-metadata.blinklabs.cloud",
     "preprod": "https://yoroi-preprod-metadata.blinklabs.cloud"

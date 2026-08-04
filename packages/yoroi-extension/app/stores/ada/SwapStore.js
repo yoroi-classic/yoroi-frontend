@@ -200,13 +200,13 @@ export default class SwapStore extends Store<StoresMap> {
     });
   };
 
-  executeTransactionHexes: ({| wallet: WalletState, signedTransactionHexes: Array<string> |}) => Promise<void> = async ({
+  executeTransactionHex: ({| wallet: WalletState, signedTransactionHex: string |}) => Promise<void> = async ({
     wallet,
-    signedTransactionHexes,
+    signedTransactionHex,
   }) => {
     await broadcastTransaction({
       publicDeriverId: wallet.publicDeriverId,
-      signedTxHexArray: signedTransactionHexes,
+      signedTxHex: signedTransactionHex,
     });
 
     // refresh call is non-blocking
@@ -221,8 +221,9 @@ export default class SwapStore extends Store<StoresMap> {
       return {};
     }
     const network = getNetworkById(wallet.networkId);
-    const globalSlotMap: { [string]: string } =
-      await this.stores.substores.ada.stateFetchStore.fetcher.getTransactionSlotsByHashes({ network, txHashes });
+    const globalSlotMap: {
+      [string]: string,
+    } = await this.stores.substores.ada.stateFetchStore.fetcher.getTransactionSlotsByHashes({ network, txHashes });
     const timeCalcRequests = this.stores.substores.ada.time.getTimeCalcRequests(wallet);
     const { toRealTime } = timeCalcRequests.requests;
     const slotToTimestamp: string => Date = s => toRealTime({ absoluteSlotNum: Number(s) });

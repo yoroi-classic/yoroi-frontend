@@ -4,7 +4,7 @@ import { expect } from 'chai';
 import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { WindowManager, extensionTabName, mockDAppName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import ConnectorTab from '../../pages/wallet/connectorTab/connectorTab.page.js';
@@ -26,6 +26,7 @@ describe('dApp, mainnet, connection in extension', function () {
   let mockedDApp = null;
   /** @type {ConnectorTab} */
   let connectorTabPage = null;
+  let popupWalletInfo = null;
 
   before(async function () {
     try {
@@ -51,7 +52,7 @@ describe('dApp, mainnet, connection in extension', function () {
   });
 
   it('Connect the wallet to the dapp', async function () {
-    await connectNonAuth(webdriver, logger, windowManager, mockedDApp, testWallet1Mainnet);
+    popupWalletInfo = await connectNonAuth(webdriver, logger, windowManager, mockedDApp, testWallet1Mainnet, false);
   });
 
   it('Connection is displayed in the extension', async function () {
@@ -61,7 +62,7 @@ describe('dApp, mainnet, connection in extension', function () {
     await connectorTabPage.goToConnectorTab();
     // check displayed info
     const connectedWalletInfo = await connectorTabPage.getConnectedWalletInfo(testWallet1Mainnet.name);
-    expect(connectedWalletInfo.walletBalance).to.equal(testWallet1Mainnet.balance);
+    expect(connectedWalletInfo.walletBalance).to.equal(popupWalletInfo.walletBalance);
     expect(connectedWalletInfo.dappUrl).to.equal('localhost');
   });
 
@@ -82,7 +83,11 @@ describe('dApp, mainnet, connection in extension', function () {
   });
 
   after(async function () {
-    await connectorTabPage.closeBrowser();
-    mockServer.close();
+    if (connectorTabPage) {
+      await connectorTabPage.closeBrowser();
+    }
+    if (mockServer) {
+      await closeMockServer(mockServer);
+    }
   });
 });
