@@ -10,6 +10,7 @@
 .*/.*\.tsx
 <PROJECT_ROOT>/dev/.*
 <PROJECT_ROOT>/build/.*
+<PROJECT_ROOT>/node_modules/react-native/.*
 <PROJECT_ROOT>/node_modules/@emurgo/cross-csl-browser/node_modules/resolve/test/resolver/malformed_package_json/package.json
 <PROJECT_ROOT>/node_modules/@emurgo/yoroi-lib/node_modules/resolve/test/resolver/malformed_package_json/package.json
 <PROJECT_ROOT>/node_modules/trezor-connect-flow/node_modules/resolve/test/resolver/malformed_package_json/package.json
