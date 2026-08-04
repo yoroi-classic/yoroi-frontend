@@ -91,8 +91,9 @@ describe('dApp, general functions, without pop-up', function () {
       const extensionsResponse = await mockedDApp.getExtensions();
       expect(extensionsResponse.success, 'The request getExtensions failed').to.be.true;
       expect(extensionsResponse.retValue).to.be.an('array').that.is.not.empty;
-      expect(extensionsResponse.retValue.length).to.equal(1);
-      expect(extensionsResponse.retValue[0].cip).to.equal(95);
+      const cips = extensionsResponse.retValue.map(({ cip }) => cip);
+      expect(cips).to.include(95);
+      expect(cips).to.include(103);
     });
   });
 
