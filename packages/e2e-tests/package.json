@@ -104,7 +104,7 @@
     "safe-buffer": "^5.1.2",
     "setimmediate": "^1.0.5",
     "string_decoder": "^1.1.1",
-    "tmp": "^0.2.1",
+    "tmp": "^0.2.7",
     "util-deprecate": "^1.0.2",
     "wrappy": "^1.0.2",
     "ws": "^8.21.1"
