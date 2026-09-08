@@ -99,6 +99,20 @@ test('ignores background and wrong-id messages until the matching response arriv
   controller.closeWsConnection();
 });
 
+test('a response arriving after its request timed out is dropped, not queued as an event', async () => {
+  const controller = makeController(10);
+  const socket = await connect(controller);
+
+  await assert.rejects(controller.ping(), /ping: no response after 10ms/);
+
+  // The late response is still a response. It must not become the next getLastEvent() result, or a
+  // correlation bug would surface as a nonsense event rather than as the warning it is.
+  socket.message({ id: 0, success: true });
+  await assert.rejects(controller.getLastEvent(), /getLastEvent: no event after 10ms/);
+
+  controller.closeWsConnection();
+});
+
 test('rejects a command when its bounded response timeout expires', async () => {
   const controller = makeController(10);
   await connect(controller);
