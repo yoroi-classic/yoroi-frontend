@@ -72,12 +72,12 @@ export class TrezorEmulatorController {
       return;
     }
 
-    if (dataObject.id !== undefined) {
+    // Correlate by id only when the id actually matches a request we sent. The emulator's greeting
+    // frame carries a literal `id: "TODO"` alongside `type: "client"`, and our own request ids are
+    // numbers from `this.id++`, so an id-bearing frame is not necessarily a response. Dropping the
+    // unmatched ones swallowed that greeting, which is the frame `getLastEvent()` exists to return.
+    if (dataObject.id !== undefined && this.pendingResponses.has(dataObject.id)) {
       const pending = this._clearPendingResponse(dataObject.id);
-      if (!pending) {
-        this.logger.warn(`Ignoring response with unexpected id ${dataObject.id}`);
-        return;
-      }
       pending.resolve(dataObject);
       return;
     }

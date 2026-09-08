@@ -63,10 +63,14 @@ test.beforeEach(() => {
 
 test('queues the initial event and correlates a successful response by id', async () => {
   const controller = makeController();
-  const socket = await connect(controller, { type: 'client' });
+  // The real trezor-user-env greeting carries a literal `id: "TODO"` alongside `type: "client"`.
+  // Omitting it here made this fixture disagree with the emulator, and the suite stayed green while
+  // every hardware-wallet run timed out waiting for an event that had been discarded as a response.
+  const greeting = { type: 'client', id: 'TODO' };
+  const socket = await connect(controller, greeting);
 
   await assert.doesNotReject(async () => {
-    assert.deepEqual(await controller.getLastEvent(), { type: 'client' });
+    assert.deepEqual(await controller.getLastEvent(), greeting);
   });
 
   const response = controller.ping();
