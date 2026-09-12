@@ -5,6 +5,7 @@ import ConnectorStore, { addPriorBatchOutput } from './ConnectorStore';
 import { MultiToken } from '../../api/common/lib/MultiToken';
 import { loadSubmittedTransactions } from '../../api/localStorage';
 import { multiTokenFromCardanoValue } from '../../api/ada/transactions/utils';
+import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 
 jest.mock('../../api/thunk', () => ({}));
 jest.mock('../../api/localStorage', () => ({ loadSubmittedTransactions: jest.fn() }));
@@ -17,6 +18,14 @@ jest.mock('../../utils/hwConnectHandler', () => ({}));
 jest.mock('../../stores/lib/TrezorWrapper', () => ({}));
 jest.mock('../../api/ada/lib/cardanoCrypto/rustLoader', () => ({ RustModule: {} }));
 jest.mock('../../../posthog', () => ({ captureEvent: jest.fn() }));
+
+const originalRustModule = { ...RustModule };
+
+afterEach(() => {
+  jest.resetAllMocks();
+  for (const key of Object.keys(RustModule)) delete RustModule[key];
+  Object.assign(RustModule, originalRustModule);
+});
 
 const defaults = { defaultIdentifier: '', defaultNetworkId: 0 };
 
@@ -128,7 +137,6 @@ test('includes an owned chained input when creating the transaction summary', as
   const transaction = {
     body: () => txBody,
   };
-  const { RustModule } = require('../../api/ada/lib/cardanoCrypto/rustLoader');
   RustModule.WalletV4 = {
     FixedTransaction: { from_hex: () => transaction },
   };
@@ -150,4 +158,11 @@ test('labels a chained output to a foreign address as foreign', () => {
 
   expect(inputs).toHaveLength(0);
   expect(foreignInputDetails).toHaveLength(1);
+});
+
+test('does not leak transaction-summary fixtures between tests', () => {
+  expect(loadSubmittedTransactions).not.toHaveBeenCalled();
+  expect(multiTokenFromCardanoValue).not.toHaveBeenCalled();
+  expect(RustModule.WasmScope).toBeUndefined();
+  expect(RustModule.WalletV4).toBeUndefined();
 });
