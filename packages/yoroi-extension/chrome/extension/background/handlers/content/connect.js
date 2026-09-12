@@ -44,6 +44,10 @@ export type SignContinuationDataType =
       tx: string,
     |}
   | {|
+      type: 'cardano-txs',
+      txs: Array<string>,
+    |}
+  | {|
       type: 'cardano-tx-input',
     |}
   | {|

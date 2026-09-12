@@ -15,7 +15,9 @@ import { sendToInjector } from '../content/utils';
 import { getPublicDeriverById } from './utils';
 import { asGetPublicKey } from '../../../../../app/api/ada/lib/storage/models/PublicDeriver/traits';
 import {
+  ConnectorBatchSignError,
   connectorSignCardanoTx,
+  connectorSignCardanoTxs,
   transformCardanoUtxos,
 } from '../../../connector/api';
 import { createAuthEntry } from '../../../../../app/connector/api';
@@ -143,12 +145,38 @@ type ConfirmedSignData = {|
   password: string,
   // hardware wallet:
   witnessSetHex?: ?string,
+  witnessSetHexes?: Array<string>,
   signedMessageData?: {|
     signatureHex: string;
     signingPublicKeyHex: string;
     addressFieldHex: string;
   |},
 |};
+
+function signedTxWitnessResult(tx: string, witnessSetHex: string): string {
+  const fullTxHex: string = RustModule.WasmScope(Scope => {
+    // tx string is either a transaction hex or transaction body hex
+    try {
+      return Scope.WalletV4.FixedTransaction.from_hex(tx).to_hex();
+    } catch {
+      return Scope.WalletV4.FixedTransaction.new_from_body_bytes(hexToBytes(tx)).to_hex();
+    }
+  });
+  const signedTxHex = transactionHexAddSignaturesFromWitnessSetHex(fullTxHex, witnessSetHex);
+  return transactionHexToWitnessSet(signedTxHex);
+}
+
+function cip103SignError(index: number): {|
+  code: $Values<typeof TxSignErrorCodes>,
+  index: number,
+  info: string,
+|} {
+  return {
+    code: TxSignErrorCodes.PROOF_GENERATION,
+    index,
+    info: `Transaction signing failed (transaction index ${index})`,
+  };
+}
 
 export const UserSignConfirm: HandlerType<
   ConfirmedSignData,
@@ -198,26 +226,83 @@ export const UserSignConfirm: HandlerType<
         const { tx, returnTx } = responseData.continuationData;
         if (resp?.ok == null) {
           rpcResponse(request.tabId, request.uid, resp);
-        } else {
-          const resultWitnessSetHex: string = resp.ok;
-          const fullTxHex: string = RustModule.WasmScope(Scope => {
-            // tx string is either a transaction hex or transaction body hex
+        } else if (returnTx) {
+          const witnessSetHex = (resp.ok: string);
+          const fullTxHex = RustModule.WasmScope(Scope => {
             try {
-              // Try parsing as transaction
               return Scope.WalletV4.FixedTransaction.from_hex(tx).to_hex();
             } catch {
-              // Try parsing as transaction body
               return Scope.WalletV4.FixedTransaction.new_from_body_bytes(hexToBytes(tx)).to_hex();
             }
           });
-          // Securely inject signatures into raw tx (to preserve cbor set tags compatibility)
-          const signedTxHex = transactionHexAddSignaturesFromWitnessSetHex(fullTxHex, resultWitnessSetHex);
-          if (returnTx) {
-            rpcResponse(request.tabId, request.uid, { ok: signedTxHex });
-          } else {
-            // Extract raw witness set from signed tx carefully (to preserve cbor set tags compatibility)
-            rpcResponse(request.tabId, request.uid, { ok: transactionHexToWitnessSet(signedTxHex) });
+          rpcResponse(request.tabId, request.uid, {
+            ok: transactionHexAddSignaturesFromWitnessSetHex(fullTxHex, witnessSetHex),
+          });
+        } else {
+          rpcResponse(request.tabId, request.uid, { ok: signedTxWitnessResult(tx, (resp.ok: string)) });
+        }
+      }
+        break;
+      case 'txs/cardano':
+      {
+        if (responseData.continuationData.type !== 'cardano-txs') {
+          rpcResponse(request.tabId, request.uid, { err: 'unexpected error' });
+          return;
+        }
+        const { txs } = responseData.request;
+        let witnessSetHexes: ?Array<string> = request.witnessSetHexes;
+        if (request.password) {
+          try {
+            witnessSetHexes = await connectorSignCardanoTxs(wallet, request.password, txs);
+          } catch (error) {
+            rpcResponse(request.tabId, request.uid, {
+              err:
+                error instanceof ConnectorBatchSignError
+                  ? cip103SignError(error.index)
+                  : {
+                      code: TxSignErrorCodes.PROOF_GENERATION,
+                      info: 'Unable to prepare the bulk signing request',
+                    },
+            });
+            witnessSetHexes = null;
           }
+        }
+        if (witnessSetHexes == null) {
+          if (!request.password) {
+            rpcResponse(request.tabId, request.uid, {
+              err: {
+                code: TxSignErrorCodes.PROOF_GENERATION,
+                info: 'Missing witness sets from connector dialog',
+              },
+            });
+          }
+          break;
+        }
+        if (witnessSetHexes.length !== txs.length) {
+          rpcResponse(request.tabId, request.uid, {
+            err: {
+              code: TxSignErrorCodes.PROOF_GENERATION,
+              info: 'Bulk signing returned an unexpected number of witness sets',
+            },
+          });
+          break;
+        }
+        const invalidWitnessIndex = witnessSetHexes.findIndex(witness => typeof witness !== 'string');
+        if (invalidWitnessIndex !== -1) {
+          rpcResponse(request.tabId, request.uid, { err: cip103SignError(invalidWitnessIndex) });
+          break;
+        }
+        const results = [];
+        for (let index = 0; index < txs.length; index++) {
+          try {
+            results.push(signedTxWitnessResult(txs[index].tx, witnessSetHexes[index]));
+          } catch (_error) {
+            rpcResponse(request.tabId, request.uid, { err: cip103SignError(index) });
+            break;
+          }
+        }
+        if (results.length === txs.length) {
+          rpcResponse(request.tabId, request.uid, { ok: results });
         }
       }
         break;
@@ -316,7 +401,7 @@ export const UserSignReject: HandlerType<
         {
           err: {
             code,
-            info: 'User rejected'
+            info: 'User rejected',
           },
         }
       );
@@ -333,6 +418,7 @@ export const SignFail: HandlerType<
   {|
     errorType: string,
     data: string,
+    index?: number,
     uid: RpcUid,
     tabId: number,
   |},
@@ -348,13 +434,16 @@ export const SignFail: HandlerType<
         ? DataSignErrorCodes.DATA_SIGN_PROOF_GENERATION
         : TxSignErrorCodes.PROOF_GENERATION;
 
+      const isBulk = responseData.request?.type === 'txs/cardano';
+      const index = request.index ?? 0;
       rpcResponse(
         request.tabId,
         request.uid,
         {
           err: {
             code,
-            info: `utxo error: ${request.errorType} (${request.data})`
+            ...(isBulk ? { index } : {}),
+            info: `utxo error: ${request.errorType} (${request.data})${isBulk ? ` (transaction index ${index})` : ''}`,
           },
         }
       );

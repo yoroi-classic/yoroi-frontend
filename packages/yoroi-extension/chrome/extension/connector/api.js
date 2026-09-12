@@ -23,7 +23,11 @@ import { getReceiveAddress } from '../../../app/stores/stateless/addressStores';
 import type { PersistedSubmittedTransaction } from '../../../app/api/localStorage';
 import LocalStorageApi, { loadSubmittedTransactions, persistSubmittedTransactions } from '../../../app/api/localStorage';
 
-import { asAddressedUtxo as asAddressedUtxoCardano, multiTokenFromCardanoValue } from '../../../app/api/ada/transactions/utils';
+import {
+  asAddressedUtxo as asAddressedUtxoCardano,
+  multiTokenFromCardanoValue,
+  parseTokenList,
+} from '../../../app/api/ada/transactions/utils';
 import type { AccountStateRequest, AccountStateResponse, RemoteUnspentOutput } from '../../../app/api/ada/lib/state-fetch/types';
 import {
   signTransactionFromWallet as shelleySignTransactionFromWallet,
@@ -55,6 +59,9 @@ import { sendTx } from '../../../app/api/ada/lib/state-fetch/remoteFetcher';
 import type { WalletState } from '../background/types';
 import type { ProtocolParameters } from '@emurgo/yoroi-lib/dist/protocol-parameters/models';
 import { isCertificateKindDrepDelegation } from '../../../app/api/ada/lib/storage/bridge/utils';
+import { signCip103Batch } from './cip103';
+
+export { ConnectorBatchSignError } from './cip103';
 
 function paginateResults<T>(results: T[], paginate: ?Paginate): T[] {
   if (paginate != null) {
@@ -511,7 +518,48 @@ function getCertificatesRequiredSignKeys(txBody: RustModule.WalletV4.Transaction
  * Returns HEX of a serialised witness set
  */
 export async function connectorSignCardanoTx(publicDeriver: PublicDeriver<>, password: string, tx: CardanoTx): Promise<string> {
-  return RustModule.WasmScope(Module => __connectorSignCardanoTx(publicDeriver, password, tx, Module));
+  return RustModule.WasmScope(Module => __connectorSignCardanoTx(publicDeriver, password, tx, [], Module));
+}
+
+export async function connectorSignCardanoTxs(
+  publicDeriver: PublicDeriver<>,
+  password: string,
+  txs: Array<CardanoTx>
+): Promise<Array<string>> {
+  const ownAddresses = await getAllAddressesForDisplay({
+    publicDeriver,
+    type: CoreAddressTypes.CARDANO_BASE,
+    ignoreCutoff: true,
+  });
+  const ownAddressMap = new Map(ownAddresses.map(({ address, addressing }) => [address, addressing]));
+  return signCip103Batch(
+    txs,
+    (tx, chainedUtxos) =>
+      RustModule.WasmScope(Module => __connectorSignCardanoTx(publicDeriver, password, tx, chainedUtxos, Module)),
+    tx =>
+      RustModule.WasmScope(Module => {
+        const { txBody, rawTxBody } = resolveTxOrTxBody(tx, Module);
+        const txHash = Module.WalletV4.FixedTransaction.new_from_body_bytes(rawTxBody).transaction_hash().to_hex();
+        const outputs = [];
+        for (let outputIndex = 0; outputIndex < txBody.outputs().len(); outputIndex++) {
+          const output = txBody.outputs().get(outputIndex);
+          const receiver = output.address().to_hex();
+          const addressing = ownAddressMap.get(receiver);
+          if (addressing != null) {
+            outputs.push({
+              amount: output.amount().coin().to_str(),
+              assets: parseTokenList(output.amount().multiasset()),
+              receiver,
+              tx_hash: txHash,
+              tx_index: outputIndex,
+              utxo_id: txHash + String(outputIndex),
+              addressing,
+            });
+          }
+        }
+        return outputs;
+      })
+  );
 }
 
 export function resolveTxOrTxBody(
@@ -552,6 +600,7 @@ async function __connectorSignCardanoTx(
   publicDeriver: PublicDeriver<>,
   password: string,
   tx: CardanoTx,
+  chainedUtxos: Array<CardanoAddressedUtxo>,
   // eslint-disable-next-line no-shadow
   RustModule: typeof RustModule
 ): Promise<string> {
@@ -663,7 +712,7 @@ async function __connectorSignCardanoTx(
     .map(input => `${input.transaction_id().to_hex()}${String(input.index())}`)
     .toSet();
 
-  const usedUtxos = addressedUtxos.filter(utxo => utxoIdSet.has(utxo.utxo_id));
+  const usedUtxos = [...addressedUtxos, ...chainedUtxos].filter(utxo => utxoIdSet.has(utxo.utxo_id));
 
   const signedTx = await shelleySignTransactionFromWallet(
     usedUtxos,

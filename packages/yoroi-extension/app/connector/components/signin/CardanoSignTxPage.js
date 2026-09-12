@@ -1,5 +1,4 @@
 // @flow
-/* eslint-disable no-nested-ternary */
 import type { Node } from 'react';
 import type { Notification } from '../../../types/notification.types';
 import type { DefaultTokenEntry, TokenLookupKey, TokenEntry } from '../../../api/common/lib/MultiToken';
@@ -50,6 +49,34 @@ const messages = defineMessages({
     id: 'connector.signin.signMessage',
     defaultMessage: '!!!Sign Message',
   },
+  bulkSignTitle: {
+    id: 'connector.signin.bulkSign.title',
+    defaultMessage: '!!!Review {count, plural, one {# transaction} other {# transactions}}',
+  },
+  bulkSignDescription: {
+    id: 'connector.signin.bulkSign.description',
+    defaultMessage: '!!!One approval will sign every transaction in this request, in the order shown.',
+  },
+  bulkSignPosition: {
+    id: 'connector.signin.bulkSign.position',
+    defaultMessage: '!!!Transaction {current} of {total}',
+  },
+  bulkSignConfirm: {
+    id: 'connector.signin.bulkSign.confirm',
+    defaultMessage: '!!!Sign {count, plural, one {# transaction} other {# transactions}}',
+  },
+  bulkSignProgress: {
+    id: 'connector.signin.bulkSign.progress',
+    defaultMessage: '!!!Confirming transaction {current} of {total} on your hardware wallet…',
+  },
+  previousTransaction: {
+    id: 'connector.signin.bulkSign.previous',
+    defaultMessage: '!!!Previous',
+  },
+  nextTransaction: {
+    id: 'connector.signin.bulkSign.next',
+    defaultMessage: '!!!Next',
+  },
 });
 
 export type AssetInfo = {|
@@ -85,6 +112,7 @@ type TokenEntryWithFee = {|
 
 type Props = {|
   +txData: ?CardanoConnectorSignRequest,
+  +txDataBatch?: ?Array<CardanoConnectorSignRequest>,
   +onCopyAddressTooltip: (string, string) => void,
   +onCancel: () => void,
   +onConfirm: string => Promise<void>,
@@ -105,10 +133,13 @@ type Props = {|
   +hwWalletError: ?LocalizableError,
   +isHwWalletErrorRecoverable: ?boolean,
   +tx: ?string,
+  +txs?: ?Array<string>,
+  +bulkSigningProgress?: ?{| current: number, total: number |},
 |};
 
 type State = {|
   isSubmitting: boolean,
+  selectedTransactionIndex: number,
 |};
 
 type DisplayAmount = {|
@@ -123,8 +154,18 @@ type DisplayAmount = {|
 @observer
 class SignTxPage extends Component<Props, State> {
   static contextType: any = IntlContext;
+  static defaultProps: {|
+    bulkSigningProgress: null,
+    txDataBatch: null,
+    txs: null,
+  |} = {
+    bulkSigningProgress: null,
+    txDataBatch: null,
+    txs: null,
+  };
   state: State = {
     isSubmitting: false,
+    selectedTransactionIndex: 0,
   };
 
   form: ReactToolboxMobxForm = new ReactToolboxMobxForm(
@@ -268,9 +309,7 @@ class SignTxPage extends Component<Props, State> {
     return null;
   };
 
-  getSummaryAssetsData: void => SummaryAssetsData = () => {
-    const { txData } = this.props;
-
+  getSummaryAssetsData: (?CardanoConnectorSignRequest) => SummaryAssetsData = txData => {
     const assetsData = {
       total: {},
       isOnlyTxFee: false,
@@ -335,7 +374,15 @@ class SignTxPage extends Component<Props, State> {
     const walletPasswordField = form.$('walletPassword');
 
     const intl = this.context;
-    const { txData, onCancel, connectedWebsite, signData } = this.props;
+    const { onCancel, connectedWebsite, signData } = this.props;
+    const txDataBatch = this.props.txDataBatch ?? [];
+    const isBulk = txDataBatch.length > 0;
+    const selectedTransactionIndex = Math.min(this.state.selectedTransactionIndex, Math.max(txDataBatch.length - 1, 0));
+    const activeTransactionIndex =
+      this.props.bulkSigningProgress == null
+        ? selectedTransactionIndex
+        : Math.min(Math.max(this.props.bulkSigningProgress.current - 1, 0), Math.max(txDataBatch.length - 1, 0));
+    const txData = isBulk ? txDataBatch[activeTransactionIndex] : this.props.txData;
 
     const { isSubmitting } = this.state;
 
@@ -345,10 +392,15 @@ class SignTxPage extends Component<Props, State> {
       return (
         <>
           <ErrorBlock error={hwWalletError} />
-          {Boolean(this.props.tx) && (
+          {Boolean(isBulk ? this.props.txs?.[activeTransactionIndex] : this.props.tx) && (
             <Box>
               <Typography component="div">Transaction:</Typography>
-              <textarea rows="10" style={{ width: '100%' }} disabled value={this.props.tx} />
+              <textarea
+                rows="10"
+                style={{ width: '100%' }}
+                disabled
+                value={isBulk ? this.props.txs?.[activeTransactionIndex] : this.props.tx}
+              />
             </Box>
           )}
         </>
@@ -358,7 +410,7 @@ class SignTxPage extends Component<Props, State> {
     let content;
     let utxosContent;
     if (txData) {
-      const summaryAssetsData = this.getSummaryAssetsData();
+      const summaryAssetsData = this.getSummaryAssetsData(txData);
 
       content = (
         <Box>
@@ -436,6 +488,56 @@ class SignTxPage extends Component<Props, State> {
 
     return (
       <Box height="100%" display="flex" flexDirection="column">
+        {isBulk && (
+          <Box
+            px="32px"
+            py="16px"
+            borderBottom="1px solid"
+            borderColor="ds.gray_200"
+            bgcolor="ds.bg_color_contrast_high"
+            id="cip103BulkSignSummary"
+          >
+            <Typography variant="h6" color="ds.text_gray_medium">
+              {intl.formatMessage(messages.bulkSignTitle, { count: txDataBatch.length })}
+            </Typography>
+            <Typography variant="body2" color="ds.gray_700" mt="4px">
+              {intl.formatMessage(messages.bulkSignDescription)}
+            </Typography>
+            <Box display="flex" alignItems="center" justifyContent="space-between" mt="12px">
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={selectedTransactionIndex === 0 || isSubmitting || this.props.bulkSigningProgress != null}
+                onClick={() => this.setState({ selectedTransactionIndex: selectedTransactionIndex - 1 })}
+                id="previousTransactionButton"
+              >
+                {intl.formatMessage(messages.previousTransaction)}
+              </Button>
+              <Typography variant="body2" fontWeight={500} id="bulkTransactionPosition">
+                {intl.formatMessage(messages.bulkSignPosition, {
+                  current: activeTransactionIndex + 1,
+                  total: txDataBatch.length,
+                })}
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={
+                  selectedTransactionIndex === txDataBatch.length - 1 || isSubmitting || this.props.bulkSigningProgress != null
+                }
+                onClick={() => this.setState({ selectedTransactionIndex: selectedTransactionIndex + 1 })}
+                id="nextTransactionButton"
+              >
+                {intl.formatMessage(messages.nextTransaction)}
+              </Button>
+            </Box>
+            {this.props.bulkSigningProgress != null && (
+              <Typography variant="body2" color="ds.gray_700" mt="12px" id="bulkSigningProgress">
+                {intl.formatMessage(messages.bulkSignProgress, this.props.bulkSigningProgress)}
+              </Typography>
+            )}
+          </Box>
+        )}
         <SignTxTabs
           isDataSignin={!txData && Boolean(signData)}
           detailsContent={<Box overflowWrap="break-word">{content}</Box>}
@@ -472,7 +574,9 @@ class SignTxPage extends Component<Props, State> {
               sx={{ minWidth: 0 }}
               id="confirmButton"
             >
-              {intl.formatMessage(confirmButtonLabel)}
+              {isBulk && walletType === 'mnemonic'
+                ? intl.formatMessage(messages.bulkSignConfirm, { count: txDataBatch.length })
+                : intl.formatMessage(confirmButtonLabel)}
             </Button>
           </Box>
         </Box>
