@@ -490,6 +490,23 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).toHaveBeenCalledTimes(txs.length);
   });
 
+  test('submitTxs normalizes a batch length failure as InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = new Proxy([], {
+      get(target, property, receiver) {
+        if (property === 'length') throw new Error('length getter failed');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    await expect(api.cip103.submitTxs(txs)).rejects.toEqual({
+      code: -1,
+      info: 'length getter failed',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('submitTxs preflights the whole batch as InvalidRequest', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
