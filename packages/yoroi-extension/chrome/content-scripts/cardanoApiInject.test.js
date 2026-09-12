@@ -381,6 +381,42 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  test('signTxs normalizes a batch length failure as InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = new Proxy([], {
+      get(target, property, receiver) {
+        if (property === 'length') throw new Error('length getter failed');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    await expect(api.cip103.signTxs(txs)).rejects.toEqual({
+      code: -1,
+      info: 'length getter failed',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('signTxs normalizes a bare-string batch failure as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = [];
+    Object.defineProperty(txs, 0, {
+      get() {
+        throw 'bare string failure';
+      },
+    });
+    Object.defineProperty(txs, 'length', { value: 1 });
+
+    await expect(api.cip103.signTxs(txs)).rejects.toEqual({
+      code: -1,
+      index: 0,
+      info: 'bare string failure (transaction index 0)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('submitTxs returns transaction hashes in input order when all submissions pass', async () => {
     let activeSubmissions = 0;
     let maxActiveSubmissions = 0;

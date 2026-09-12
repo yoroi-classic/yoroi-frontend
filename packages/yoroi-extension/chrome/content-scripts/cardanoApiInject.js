@@ -83,8 +83,14 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs argument is expected to be an array!');
         }
+        let batchLength;
+        try {
+          batchLength = txs.length;
+        } catch (error) {
+          throw CardanoAPI._asCip103InvalidRequest(error);
+        }
         const requests = [];
-        for (let index = 0; index < txs.length; index++) {
+        for (let index = 0; index < batchLength; index++) {
           try {
             requests.push(CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(txs[index])));
           } catch (error) {
@@ -109,8 +115,14 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs argument is expected to be an array!');
         }
+        let batchLength;
+        try {
+          batchLength = txs.length;
+        } catch (error) {
+          throw CardanoAPI._asCip103InvalidRequest(error);
+        }
         const batch = [];
-        for (let index = 0; index < txs.length; index++) {
+        for (let index = 0; index < batchLength; index++) {
           try {
             const tx = txs[index];
             if (typeof tx !== 'string') {
