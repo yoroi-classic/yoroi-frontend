@@ -2,6 +2,11 @@ import { getConnectedSite, getConnectedWallet, setConnectedSite } from '../conte
 import { sendToInjector } from '../content/utils';
 import { TxSignErrorCodes } from '../../../connector/types';
 import { UserSignConfirm } from './connector';
+import { RustModule } from '../../../../../app/api/ada/lib/cardanoCrypto/rustLoader';
+import {
+  transactionHexAddSignaturesFromWitnessSetHex,
+  transactionHexToWitnessSet,
+} from '../../../../../app/api/ada/lib/cardanoCrypto/utils';
 
 jest.mock('../content/connect', () => ({
   connectContinuation: jest.fn(),
@@ -85,4 +90,54 @@ test('returns a proof-generation error when hardware bulk signing omits witness 
   });
   expect(connection.pendingSigns['7']).toBeUndefined();
   expect(setConnectedSite).toHaveBeenCalledWith(44, connection);
+});
+
+test('aligns hardware witness sets with their transaction indexes', async () => {
+  RustModule.WasmScope = callback =>
+    callback({
+      WalletV4: {
+        FixedTransaction: {
+          from_hex: tx => ({ to_hex: () => `full-${tx}` }),
+        },
+      },
+    });
+  transactionHexAddSignaturesFromWitnessSetHex.mockImplementation(
+    (tx, witnessSet) => `signed-${tx}-${witnessSet}`
+  );
+  transactionHexToWitnessSet.mockImplementation(signedTx => `witness-set-${signedTx}`);
+
+  const connection = {
+    pendingSigns: {
+      '8': {
+        continuationData: { type: 'cardano-txs' },
+        request: {
+          type: 'txs/cardano',
+          txs: [
+            { tx: 'tx-0', partialSign: false, returnTx: false },
+            { tx: 'tx-1', partialSign: false, returnTx: false },
+          ],
+          uid: 8,
+        },
+      },
+    },
+  };
+  getConnectedSite.mockResolvedValue(connection);
+  getConnectedWallet.mockResolvedValue({});
+
+  await UserSignConfirm.handle({
+    password: '',
+    tabId: 44,
+    tx: null,
+    uid: 8,
+    witnessSetHexes: ['witness-0', 'witness-1'],
+  });
+
+  expect(sendToInjector).toHaveBeenCalledWith(44, {
+    type: 'connector_rpc_response',
+    uid: 8,
+    return: {
+      ok: ['witness-set-signed-full-tx-0-witness-0', 'witness-set-signed-full-tx-1-witness-1'],
+    },
+    protocol: 'cardano',
+  });
 });

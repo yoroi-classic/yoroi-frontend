@@ -1,8 +1,14 @@
-import '../../../api/ada/lib/test-config.forTests';
+import '../../api/ada/lib/test-config.forTests';
 
 import BigNumber from 'bignumber.js';
 import ConnectorStore, { addPriorBatchOutput } from './ConnectorStore';
-import { MultiToken } from '../../../api/common/lib/MultiToken';
+import { MultiToken } from '../../api/common/lib/MultiToken';
+
+jest.mock('../../api/thunk', () => ({}));
+jest.mock('../../api/localStorage', () => ({}));
+jest.mock('../../utils/hwConnectHandler', () => ({}));
+jest.mock('../../stores/lib/TrezorWrapper', () => ({}));
+jest.mock('../../../posthog', () => ({}));
 
 const defaults = { defaultIdentifier: '', defaultNetworkId: 0 };
 
@@ -24,16 +30,21 @@ test('counts an owned chained output as an input in the transaction summary', as
   const ownAddresses = new Set(['owned-address']);
   const chainedInput = { address: 'owned-address', value: value(99, 1) };
   const output = { address: 'foreign-address', value: value(98, 0) };
+  const inputs = [];
+  const foreignInputDetails = [];
+
+  addPriorBatchOutput(chainedInput, ownAddresses, inputs, foreignInputDetails);
 
   const { amount, total } = await ConnectorStore.prototype._calculateAmountAndTotal(
     publicDeriver,
-    [chainedInput],
+    inputs,
     [output],
     { tokenId: '', networkId: 0, amount: '1' },
     [],
     ownAddresses
   );
 
+  expect(foreignInputDetails).toHaveLength(0);
   expect(total.get('').toString()).toBe('-99');
   expect(total.get('policy.asset').toString()).toBe('-1');
   expect(amount.get('').toString()).toBe('-98');
@@ -42,12 +53,7 @@ test('counts an owned chained output as an input in the transaction summary', as
 test('labels a chained output to a foreign address as foreign', () => {
   const inputs = [];
   const foreignInputDetails = [];
-  addPriorBatchOutput(
-    { address: 'foreign-address', value: value(1) },
-    new Set(['owned-address']),
-    inputs,
-    foreignInputDetails
-  );
+  addPriorBatchOutput({ address: 'foreign-address', value: value(1) }, new Set(['owned-address']), inputs, foreignInputDetails);
 
   expect(inputs).toHaveLength(0);
   expect(foreignInputDetails).toHaveLength(1);
