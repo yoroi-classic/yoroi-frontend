@@ -1,9 +1,7 @@
-import ws from 'ws';
+import { WebSocket } from 'ws';
 import { fiveSeconds, halfSecond, oneMinute } from './timeConstants.js';
 import { isMacOS, sleep } from '../utils/utils.js';
 import { TrezorModels } from './trezorHelper.js';
-const { WebSocket } = ws;
-
 class TrezorEmulatorControllerError extends Error {}
 
 export class TrezorEmulatorController {
@@ -72,7 +70,13 @@ export class TrezorEmulatorController {
       return;
     }
 
-    if (dataObject.id !== undefined) {
+    // Every request we send is keyed by a number from `this.id++`, so a numeric id is what makes a
+    // frame a response. The emulator's greeting carries the literal string `id: "TODO"` alongside
+    // `type: "client"`, and treating that as a response discarded the one frame `getLastEvent()`
+    // exists to return. Keying on the type rather than on mere presence keeps a genuinely stale
+    // response, one whose request already timed out, reported and dropped rather than queued as an
+    // event it is not.
+    if (typeof dataObject.id === 'number') {
       const pending = this._clearPendingResponse(dataObject.id);
       if (!pending) {
         this.logger.warn(`Ignoring response with unexpected id ${dataObject.id}`);
