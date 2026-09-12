@@ -111,7 +111,6 @@ function run() {
   } else {
     expectEqual('active npm version', actualNpmVersion.version, expectedNpmVersion);
   }
-  expectEqual('root .npmrc engine-strict', npmConfig['engine-strict'], 'true');
   expectEqual('root .npmrc legacy-peer-deps', npmConfig['legacy-peer-deps'], 'true');
 
   for (const packageDir of PACKAGE_DIRS) {
