@@ -19,12 +19,9 @@ jest.mock('../../stores/lib/TrezorWrapper', () => ({}));
 jest.mock('../../api/ada/lib/cardanoCrypto/rustLoader', () => ({ RustModule: {} }));
 jest.mock('../../../posthog', () => ({ captureEvent: jest.fn() }));
 
-const originalRustModule = { ...RustModule };
-
 afterEach(() => {
   jest.resetAllMocks();
   for (const key of Object.keys(RustModule)) delete RustModule[key];
-  Object.assign(RustModule, originalRustModule);
 });
 
 const defaults = { defaultIdentifier: '', defaultNetworkId: 0 };
