@@ -189,8 +189,62 @@ describe('CardanoAPI CIP-0103 extension', () => {
     };
 
     await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, brokenRequest])).rejects.toEqual({
+      code: -1,
       index: 1,
       info: 'getter failed (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('signTxs normalizes a batch element snapshot failure as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = [{ cbor: 'tx-0' }, { cbor: 'tx-1' }];
+    Object.defineProperty(txs, 1, {
+      get() {
+        throw new Error('batch getter failed');
+      },
+    });
+
+    await expect(api.cip103.signTxs(txs)).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: 'batch getter failed (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('signTxs normalizes hostile thrown error accessors as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const hostileError = {};
+    Object.defineProperties(hostileError, {
+      code: {
+        get() {
+          throw new Error('code getter failed');
+        },
+      },
+      info: {
+        get() {
+          throw new Error('info getter failed');
+        },
+      },
+      message: {
+        get() {
+          throw new Error('message getter failed');
+        },
+      },
+    });
+    const brokenRequest = {
+      get cbor() {
+        throw hostileError;
+      },
+    };
+
+    await expect(api.cip103.signTxs([{ cbor: 'tx-0' }, brokenRequest])).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: 'Invalid CIP-0103 transaction request (transaction index 1)',
     });
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -327,6 +381,42 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  test('signTxs normalizes a batch length failure as InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = new Proxy([], {
+      get(target, property, receiver) {
+        if (property === 'length') throw new Error('length getter failed');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    await expect(api.cip103.signTxs(txs)).rejects.toEqual({
+      code: -1,
+      info: 'length getter failed',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('signTxs normalizes a bare-string batch failure as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = [];
+    Object.defineProperty(txs, 0, {
+      get() {
+        throw 'bare string failure';
+      },
+    });
+    Object.defineProperty(txs, 'length', { value: 1 });
+
+    await expect(api.cip103.signTxs(txs)).rejects.toEqual({
+      code: -1,
+      index: 0,
+      info: 'bare string failure (transaction index 0)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('submitTxs returns transaction hashes in input order when all submissions pass', async () => {
     let activeSubmissions = 0;
     let maxActiveSubmissions = 0;
@@ -400,6 +490,23 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).toHaveBeenCalledTimes(txs.length);
   });
 
+  test('submitTxs normalizes a batch length failure as InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = new Proxy([], {
+      get(target, property, receiver) {
+        if (property === 'length') throw new Error('length getter failed');
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    await expect(api.cip103.submitTxs(txs)).rejects.toEqual({
+      code: -1,
+      info: 'length getter failed',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('submitTxs preflights the whole batch as InvalidRequest', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
@@ -412,6 +519,60 @@ describe('CardanoAPI CIP-0103 extension', () => {
     await expect(api.cip103.submitTxs(null)).rejects.toEqual({
       code: -1,
       info: '.cip103.submitTxs argument is expected to be an array!',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('submitTxs normalizes a batch element snapshot failure as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = ['tx-0', 'tx-1'];
+    Object.defineProperty(txs, 1, {
+      get() {
+        throw new Error('batch getter failed');
+      },
+    });
+
+    await expect(api.cip103.submitTxs(txs)).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: 'batch getter failed (transaction index 1)',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test('submitTxs normalizes hostile thrown error accessors as indexed InvalidRequest', async () => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const hostileError = {};
+    Object.defineProperties(hostileError, {
+      code: {
+        get() {
+          throw new Error('code getter failed');
+        },
+      },
+      info: {
+        get() {
+          throw new Error('info getter failed');
+        },
+      },
+      message: {
+        get() {
+          throw new Error('message getter failed');
+        },
+      },
+    });
+    const txs = ['tx-0', 'tx-1'];
+    Object.defineProperty(txs, 1, {
+      get() {
+        throw hostileError;
+      },
+    });
+
+    await expect(api.cip103.submitTxs(txs)).rejects.toEqual({
+      code: -1,
+      index: 1,
+      info: 'Invalid CIP-0103 transaction request (transaction index 1)',
     });
     expect(rpc).not.toHaveBeenCalled();
   });
