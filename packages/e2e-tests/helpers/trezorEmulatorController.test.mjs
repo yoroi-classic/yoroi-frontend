@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TrezorEmulatorController } from './trezorEmulatorController.js';
 
+const warnings = [];
 const logger = Object.freeze({
   info() {},
-  warn() {},
+  warn(message) {
+    warnings.push(message);
+  },
   error() {},
 });
 
@@ -59,6 +62,7 @@ const connect = async (controller, firstMessage) => {
 
 test.beforeEach(() => {
   FakeWebSocket.instances = [];
+  warnings.length = 0;
 });
 
 test('queues the initial event and correlates a successful response by id', async () => {
@@ -109,6 +113,7 @@ test('a response arriving after its request timed out is dropped, not queued as 
   // correlation bug would surface as a nonsense event rather than as the warning it is.
   socket.message({ id: 0, success: true });
   await assert.rejects(controller.getLastEvent(), /getLastEvent: no event after 10ms/);
+  assert.deepEqual(warnings, ['Ignoring response with unexpected id 0']);
 
   controller.closeWsConnection();
 });

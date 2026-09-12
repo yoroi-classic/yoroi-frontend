@@ -1,9 +1,7 @@
-import ws from 'ws';
+import { WebSocket } from 'ws';
 import { fiveSeconds, halfSecond, oneMinute } from './timeConstants.js';
 import { isMacOS, sleep } from '../utils/utils.js';
 import { TrezorModels } from './trezorHelper.js';
-const { WebSocket } = ws;
-
 class TrezorEmulatorControllerError extends Error {}
 
 export class TrezorEmulatorController {
