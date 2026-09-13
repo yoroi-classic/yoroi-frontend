@@ -83,13 +83,18 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs argument is expected to be an array!');
         }
-        const batch = txs.slice();
+        let batchLength;
+        try {
+          batchLength = txs.length;
+        } catch (error) {
+          throw CardanoAPI._asCip103InvalidRequest(error);
+        }
         const requests = [];
-        for (let index = 0; index < batch.length; index++) {
+        for (let index = 0; index < batchLength; index++) {
           try {
-            requests.push(CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(batch[index])));
+            requests.push(CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(txs[index])));
           } catch (error) {
-            throw CardanoAPI._withCip103FailureIndex(error, index);
+            throw CardanoAPI._withCip103FailureIndex(CardanoAPI._asCip103InvalidRequest(error), index);
           }
         }
 
@@ -110,13 +115,22 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs argument is expected to be an array!');
         }
-        const batch = txs.slice();
-        for (let index = 0; index < batch.length; index++) {
-          if (typeof batch[index] !== 'string') {
-            throw CardanoAPI._withCip103FailureIndex(
-              CardanoAPI._cip103InvalidRequest('.cip103.submitTxs transaction must be a cbor string!'),
-              index
-            );
+        let batchLength;
+        try {
+          batchLength = txs.length;
+        } catch (error) {
+          throw CardanoAPI._asCip103InvalidRequest(error);
+        }
+        const batch = [];
+        for (let index = 0; index < batchLength; index++) {
+          try {
+            const tx = txs[index];
+            if (typeof tx !== 'string') {
+              throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs transaction must be a cbor string!');
+            }
+            batch.push(tx);
+          } catch (error) {
+            throw CardanoAPI._withCip103FailureIndex(CardanoAPI._asCip103InvalidRequest(error), index);
           }
         }
 
@@ -232,6 +246,31 @@
 
     static _cip103InvalidRequest(info) {
       return { code: API_INVALID_REQUEST, info };
+    }
+
+    static _asCip103InvalidRequest(error) {
+      if (error != null && typeof error === 'object') {
+        try {
+          const info = error.info;
+          if (typeof info === 'string') {
+            return CardanoAPI._cip103InvalidRequest(info);
+          }
+        } catch (_error) {
+          // A thrown object can expose hostile accessors. Fall through to other safe metadata.
+        }
+        try {
+          const message = error.message;
+          if (typeof message === 'string') {
+            return CardanoAPI._cip103InvalidRequest(message);
+          }
+        } catch (_error) {
+          // Use the generic request error below when no metadata can be read safely.
+        }
+      }
+      if (typeof error === 'string') {
+        return CardanoAPI._cip103InvalidRequest(error);
+      }
+      return CardanoAPI._cip103InvalidRequest('Invalid CIP-0103 transaction request');
     }
 
     getExtensions() {
