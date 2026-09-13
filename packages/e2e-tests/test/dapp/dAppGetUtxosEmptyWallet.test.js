@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { WindowManager, mockDAppName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { getTestWalletName } from '../../helpers/constants.js';
@@ -15,7 +15,7 @@ import { WebDriver } from 'selenium-webdriver';
 import WalletCommonBase from '../../pages/walletCommonBase.page.js';
 
 describe('dApp, getUtxos, empty wallet', function () {
-  beforeQuarantinedDApp('empty wallet creation waits indefinitely in CI; see yoroi-frontend#55');
+  beforeQuarantinedDApp('empty wallet creation still times out after 60 seconds in gated CI; see yoroi-frontend#55');
 
   const testWalletName = getTestWalletName();
   let newTestWallet = {
@@ -81,7 +81,7 @@ describe('dApp, getUtxos, empty wallet', function () {
       await walletCommonPage.closeBrowser();
     }
     if (mockServer) {
-      mockServer.close();
+      await closeMockServer(mockServer);
     }
   });
 });

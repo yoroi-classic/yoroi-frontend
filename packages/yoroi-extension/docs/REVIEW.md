@@ -4,7 +4,8 @@ Hello, and thank you for reviewing Yoroi for your platform!
 
 ### Finding version commit you're testing
 
-You should be able to find the exact release you're reviewing in the [RELEASE](https://github.com/Emurgo/yoroi-frontend/releases) tab.
+You should be able to find the exact release you're reviewing in the
+[yoroi-classic release list](https://github.com/yoroi-classic/yoroi-frontend/releases).
 
 If you want to know the exact version & commit used for the build you've received, you can find it inside the settings page.
 
@@ -37,48 +38,32 @@ However, overall the build should match exactly.
 
 If you want to build the code on your machine, you should be able to follow the regular project setup and build steps outlined in the repository's main readme.
 
-#### Building with docker
+#### Reproducing the CI build locally
 
-Docker is a tool that allows you to setup a virtual environment inside your computer. You can use this tool to setup an environment that replicate the environment we use for our automated CI builds.
+The repository currently supports Node.js 22.22.2 and npm 10.9.7. After
+checking out the exact release commit, use the checked-in toolchain and clean
+install path rather than an unpinned global environment:
 
-You can find download instructions for Docker [here](https://docs.docker.com/get-docker/)
-
-```
-# go to exact commit that was released to Firefox & Chrome
+```bash
+# Go to the exact commit released to the browser stores.
 git checkout insert-commit-or-version-number-here
 
-# Setup CI environment that will be used to build
+# From the repository root, activate and verify the supported toolchain.
 nvm use
-npm run localci:setup
-npm run localci:newbuild
+corepack enable npm
+corepack prepare npm@10.9.7 --activate
+npm run check:toolchain
 
-# Enter CI environment docker image
-docker exec -it yoroi_ci /bin/bash
-cd yoroi/
+# Reproduce CI's clean dependency installation.
+./ci-install-all.sh
 
-# generate mock keys (from SETUP.md)
-npm run keygen
-mv key.pem production-key.pem
-npm run keygen
-mv key.pem shelley-production.pem
-
-# Install correct nodejs version inside docker image
-
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-nvm install
-npm install
-
-# build
-
-npm run prod:stable
+# Reproduce CI's test extension build without a production signing key.
+cd packages/yoroi-extension
+npm run prod:build -- --env test --isE2E
 ```
 
-If you need to access the build from your host machine, you can use the following command to copy the build folder out of the docker container and into your host machine. (**note**: you must run this command from the host machine and not from inside the docker image)
-```
-docker cp yoroi_ci:/yoroi/build ./build
-```
+See [SETUP.md](./SETUP.md), [BUILD.md](./BUILD.md), and [TEST.md](./TEST.md)
+for the maintained setup, build, and verification commands.
 
 ### Other FAQ
 

@@ -1,0 +1,20 @@
+{
+  "@typescript-eslint/ban-ts-comment": 96,
+  "@typescript-eslint/no-explicit-any": 429,
+  "@typescript-eslint/no-floating-promises": 49,
+  "@typescript-eslint/no-misused-promises": 31,
+  "@typescript-eslint/no-redundant-type-constituents": 18,
+  "@typescript-eslint/no-unnecessary-type-assertion": 9,
+  "@typescript-eslint/no-unsafe-argument": 263,
+  "@typescript-eslint/no-unsafe-assignment": 1656,
+  "@typescript-eslint/no-unsafe-call": 662,
+  "@typescript-eslint/no-unsafe-enum-comparison": 4,
+  "@typescript-eslint/no-unsafe-member-access": 1987,
+  "@typescript-eslint/no-unsafe-return": 155,
+  "@typescript-eslint/no-unused-expressions": 6,
+  "@typescript-eslint/only-throw-error": 1,
+  "@typescript-eslint/prefer-promise-reject-errors": 2,
+  "@typescript-eslint/require-await": 10,
+  "@typescript-eslint/restrict-template-expressions": 4,
+  "@typescript-eslint/unbound-method": 3
+}

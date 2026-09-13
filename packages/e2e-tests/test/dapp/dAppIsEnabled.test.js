@@ -4,7 +4,7 @@ import { expect } from 'chai';
 import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { WindowManager, mockDAppName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import driversPoolsManager from '../../utils/driversPool.js';
@@ -72,6 +72,6 @@ describe('dApp, isEnabled', function () {
 
   after(async function () {
     await walletCommonPage.closeBrowser();
-    mockServer.close();
+    await closeMockServer(mockServer);
   });
 });

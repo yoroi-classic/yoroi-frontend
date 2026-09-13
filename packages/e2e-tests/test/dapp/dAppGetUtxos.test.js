@@ -4,7 +4,7 @@ import { expect } from 'chai';
 import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { WindowManager, mockDAppName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { adaInLovelaces } from '../../helpers/constants.js';
@@ -93,9 +93,10 @@ describe('dApp, getUtxos, nested tests', function () {
       const getUtxosResponse = await mockedDApp.getUTXOs();
       expect(getUtxosResponse.success, 'The request getUtxos failed').to.be.true;
       expect(getUtxosResponse.retValue).to.be.an('array').that.is.not.empty;
-      const sumUtxosAmount = getUtxosResponse.retValue.reduce((accumulator, utxo) => accumulator + parseFloat(utxo.amount), 0);
-      const sumInAda = sumUtxosAmount / adaInLovelaces;
-      expect(sumInAda).to.equal(testWallet1.balance);
+      const balanceResponse = await mockedDApp.getBalance();
+      expect(balanceResponse.success, 'The request getBalance failed').to.be.true;
+      const sumUtxosAmount = getUtxosResponse.retValue.reduce((accumulator, utxo) => accumulator + BigInt(utxo.amount), 0n);
+      expect(sumUtxosAmount.toString()).to.equal(balanceResponse.retValue);
     });
   });
 
@@ -105,6 +106,6 @@ describe('dApp, getUtxos, nested tests', function () {
 
   after(async function () {
     await walletCommonPage.closeBrowser();
-    mockServer.close();
+    await closeMockServer(mockServer);
   });
 });

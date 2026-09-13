@@ -1,7 +1,7 @@
 import { customAfterEach } from '../../utils/customHooks.js';
 import { expect } from 'chai';
 import { getTestLogger } from '../../utils/utils.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { WindowManager, mockDAppName } from '../../helpers/windowManager.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { yoroiObject } from '../../helpers/constants.js';
@@ -64,6 +64,6 @@ describe('dApp, Yoroi object in Cardano', function () {
 
   after(async function () {
     await walletCommonPage.closeBrowser();
-    mockServer.close();
+    await closeMockServer(mockServer);
   });
 });

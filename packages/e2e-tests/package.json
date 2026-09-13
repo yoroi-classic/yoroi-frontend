@@ -57,6 +57,8 @@
     "test:ext:smoke:dry-run": "npm run test:hooks && mocha --dry-run --require $npm_package_config_hooks $npm_package_config_extAll -g \"_smoke_\" --reporter dot",
     "test:dapp": "env ISDAPP=true npm run test:dapp:base:sequintel",
     "test:dapp:one": "npm run test:dapp:base:one",
+    "test:dapp-server-lifecycle": "node --test helpers/mock-dApp-webpage/mockServer.lifecycle.test.mjs",
+    "test:dapp-server": "node --test helpers/mock-dApp-webpage/mockServer.test.mjs",
     "test:ledger": "npm run test:ledger:base:sequintel",
     "test:ledger:one": "npm run test:ledger:base:one",
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
@@ -79,7 +81,7 @@
     "simple-node-logger": "^21.8.12"
   },
   "dependencies": {
-    "axios": "^1.6.8",
+    "axios": "^1.18.0",
     "balanced-match": "^1.0.2",
     "brace-expansion": "^1.1.11",
     "concat-map": "^0.0.1",
@@ -102,10 +104,10 @@
     "safe-buffer": "^5.1.2",
     "setimmediate": "^1.0.5",
     "string_decoder": "^1.1.1",
-    "tmp": "^0.2.1",
+    "tmp": "^0.2.7",
     "util-deprecate": "^1.0.2",
     "wrappy": "^1.0.2",
-    "ws": "^8.14.2"
+    "ws": "^8.21.1"
   },
   "keywords": [],
   "engines": {

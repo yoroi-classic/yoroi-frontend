@@ -45,6 +45,19 @@ function parseNpmVersionFromUserAgent(userAgent) {
   return match ? match[1] : null;
 }
 
+function parseNpmConfig(contents) {
+  return Object.fromEntries(
+    contents
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line !== '' && !line.startsWith('#') && !line.startsWith(';'))
+      .map(line => {
+        const separator = line.indexOf('=');
+        return separator === -1 ? [line, ''] : [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+      })
+  );
+}
+
 function detectNpmVersion(options = {}) {
   const runCommand = typeof options === 'function' ? options : options.runCommand || execFileSync;
   const env = typeof options === 'function' ? process.env : options.env || process.env;
@@ -90,6 +103,7 @@ function run() {
   const expectedNpmVersion = rootPackage.engines && rootPackage.engines.npm;
   const expectedPackageManager = `npm@${expectedNpmVersion}`;
   const actualNpmVersion = detectNpmVersion();
+  const npmConfig = parseNpmConfig(readText('.npmrc'));
 
   expectEqual('active Node version', process.versions.node, expectedNodeVersion);
   if (actualNpmVersion.error) {
@@ -97,6 +111,8 @@ function run() {
   } else {
     expectEqual('active npm version', actualNpmVersion.version, expectedNpmVersion);
   }
+  expectEqual('root .npmrc engine-strict', npmConfig['engine-strict'], 'true');
+  expectEqual('root .npmrc legacy-peer-deps', npmConfig['legacy-peer-deps'], 'true');
 
   for (const packageDir of PACKAGE_DIRS) {
     const packageLabel = labelForPackage(packageDir);
@@ -145,5 +161,6 @@ if (require.main === module) {
 module.exports = {
   detectNpmVersion,
   formatCommandFailure,
+  parseNpmConfig,
   parseNpmVersionFromUserAgent,
 };

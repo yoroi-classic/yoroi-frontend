@@ -6,6 +6,7 @@ import { TOKEN_CHART_INTERVAL } from '../../../common/helpers/constants';
 import useChart from '../../../common/hooks/useChart';
 import { useGetPortfolioTokenChart } from '../../../common/hooks/usePortfolioTokenChart';
 import { TokenMarketPriceOverview } from './MarketPriceOverview';
+import type { TokenInfoType } from '../../../../../types/tokenInfo';
 
 const getHoverBgColor = (variant: string, disabled: boolean, theme: any) => {
   if (variant === 'contained') {

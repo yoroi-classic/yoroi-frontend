@@ -97,6 +97,19 @@ async function sendMsgSigningTx(): Promise<?SigningMessage> {
 type GetWhitelistFunc = void => Promise<?Array<WhitelistEntry>>;
 type SetWhitelistFunc = ({| whitelist: Array<WhitelistEntry> | void |}) => Promise<void>;
 
+export function addPriorBatchOutput(
+  priorOutput: TxDataInput,
+  ownAddresses: Set<string>,
+  inputs: Array<TxDataInput>,
+  foreignInputDetails: Array<TxDataInput>
+): void {
+  if (ownAddresses.has(priorOutput.address)) {
+    inputs.push(priorOutput);
+  } else {
+    foreignInputDetails.push(priorOutput);
+  }
+}
+
 export default class ConnectorStore extends Store<StoresMap> {
   @observable unrecoverableError: string | null = null;
   @observable connectingMessage: ?ConnectingMessage = null;
@@ -676,6 +689,19 @@ export default class ConnectorStore extends Store<StoresMap> {
       amount: txBody.fee().to_str(),
     };
 
+    const foreignInputDetails = [];
+    const unresolvedForeignInputs = [];
+    for (const foreignInput of foreignInputs) {
+      const priorOutput = batchOutputs?.get(`${foreignInput.txHash}${foreignInput.txIndex}`);
+      if (priorOutput != null) {
+        // Outputs from an earlier transaction in this batch are not in the
+        // wallet UTxO set yet, so classify them explicitly.
+        addPriorBatchOutput(priorOutput, ownAddresses, inputs, foreignInputDetails);
+      } else {
+        unresolvedForeignInputs.push(foreignInput);
+      }
+    }
+
     const { amount, total } = await this._calculateAmountAndTotal(
       connectedWallet,
       inputs,
@@ -684,17 +710,6 @@ export default class ConnectorStore extends Store<StoresMap> {
       connectedWallet.utxos,
       ownAddresses
     );
-
-    const foreignInputDetails = [];
-    const unresolvedForeignInputs = [];
-    for (const foreignInput of foreignInputs) {
-      const priorOutput = batchOutputs?.get(`${foreignInput.txHash}${foreignInput.txIndex}`);
-      if (priorOutput != null) {
-        foreignInputDetails.push(priorOutput);
-      } else {
-        unresolvedForeignInputs.push(foreignInput);
-      }
-    }
     if (unresolvedForeignInputs.length) {
       const foreignUtxos = await this.stores.substores.ada.stateFetchStore.fetcher.getUtxoData({
         network,

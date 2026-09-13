@@ -4,7 +4,7 @@ import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { collectInfo, preloadDBAndStorage, waitTxPage } from '../../helpers/restoreWalletHelper.js';
 import { WindowManager, mockDAppName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { adaInLovelaces } from '../../helpers/constants.js';
@@ -13,6 +13,17 @@ import { WebDriver } from 'selenium-webdriver';
 import { Logger } from 'simple-node-logger';
 import { testWallet1 } from '../../utils/testWallets.js';
 import WalletCommonBase from '../../pages/walletCommonBase.page.js';
+
+const maxCollateralInputs = 3;
+const lovelacesPerAda = BigInt(adaInLovelaces);
+
+const expectCollateralCovers = (collateralResponse, requestedAmount) => {
+  expect(collateralResponse.success, 'The request getCollateral failed').to.be.true;
+  expect(collateralResponse.retValue).to.be.an('array').that.is.not.empty;
+  expect(collateralResponse.retValue.length, 'There are more collateral inputs than allowed').to.be.at.most(maxCollateralInputs);
+  const receivedAmount = collateralResponse.retValue.reduce((accumulator, utxo) => accumulator + BigInt(utxo.amount), 0n);
+  expect(receivedAmount >= requestedAmount, 'The returned collateral does not cover the requested amount').to.be.true;
+};
 
 describe('dApp, getCollateral, no popup, positive', function () {
   this.timeout(2 * oneMinute);
@@ -61,12 +72,9 @@ describe('dApp, getCollateral, no popup, positive', function () {
     });
 
     it('Getting collateral for 1 ADA', async function () {
-      const collateralResponse = await mockedDApp.getCollateral(String(1 * adaInLovelaces));
-      expect(collateralResponse.success, 'The request getCollateral failed').to.be.true;
-      expect(collateralResponse.retValue).to.be.an('array').that.is.not.empty;
-      expect(collateralResponse.retValue.length).to.be.equal(1);
-      const receivedAmount = parseFloat(collateralResponse.retValue[0].amount) / adaInLovelaces;
-      expect(receivedAmount, 'returned amount is less than 1 ADA').to.be.at.least(1);
+      const requestedAmount = lovelacesPerAda;
+      const collateralResponse = await mockedDApp.getCollateral(requestedAmount.toString());
+      expectCollateralCovers(collateralResponse, requestedAmount);
     });
   });
 
@@ -76,15 +84,9 @@ describe('dApp, getCollateral, no popup, positive', function () {
     });
 
     it('Getting collateral for 3 ADA', async function () {
-      const collateralResponse = await mockedDApp.getCollateral(String(3 * adaInLovelaces));
-      expect(collateralResponse.success, 'The request getCollateral failed').to.be.true;
-      expect(collateralResponse.retValue).to.be.an('array').that.is.not.empty;
-      expect(collateralResponse.retValue.length).to.be.equal(3);
-      const sumUtxosAmount = collateralResponse.retValue.reduce(
-        (accumulator, utxo) => accumulator + parseFloat(utxo.amount) / adaInLovelaces,
-        0
-      );
-      expect(sumUtxosAmount, 'returned amount is less than 3 ADA').to.be.at.least(3);
+      const requestedAmount = 3n * lovelacesPerAda;
+      const collateralResponse = await mockedDApp.getCollateral(requestedAmount.toString());
+      expectCollateralCovers(collateralResponse, requestedAmount);
     });
   });
 
@@ -94,15 +96,9 @@ describe('dApp, getCollateral, no popup, positive', function () {
     });
 
     it('Getting collateral for 5 ADA', async function () {
-      const collateralResponse = await mockedDApp.getCollateral(String(5 * adaInLovelaces));
-      expect(collateralResponse.success, 'The request getCollateral failed').to.be.true;
-      expect(collateralResponse.retValue).to.be.an('array').that.is.not.empty;
-      expect(collateralResponse.retValue.length, 'There are more UTxOs then expected').to.be.at.most(3);
-      const sumUtxosAmount = collateralResponse.retValue.reduce(
-        (accumulator, utxo) => accumulator + parseFloat(utxo.amount) / adaInLovelaces,
-        0
-      );
-      expect(sumUtxosAmount, 'returned amount is less than 5 ADA').to.be.at.least(5);
+      const requestedAmount = 5n * lovelacesPerAda;
+      const collateralResponse = await mockedDApp.getCollateral(requestedAmount.toString());
+      expectCollateralCovers(collateralResponse, requestedAmount);
     });
   });
 
@@ -112,15 +108,9 @@ describe('dApp, getCollateral, no popup, positive', function () {
     });
 
     it('Getting collateral for undefined amount', async function () {
+      const defaultRequestedAmount = 5n * lovelacesPerAda;
       const collateralResponse = await mockedDApp.getCollateral();
-      expect(collateralResponse.success, 'The request getCollateral failed').to.be.true;
-      expect(collateralResponse.retValue).to.be.an('array').that.is.not.empty;
-      expect(collateralResponse.retValue.length, 'There are more UTxOs then expected').to.be.at.most(3);
-      const sumUtxosAmount = collateralResponse.retValue.reduce(
-        (accumulator, utxo) => accumulator + parseFloat(utxo.amount) / adaInLovelaces,
-        0
-      );
-      expect(sumUtxosAmount, 'returned amount is less than 5 ADA').to.be.at.least(5);
+      expectCollateralCovers(collateralResponse, defaultRequestedAmount);
     });
   });
 
@@ -130,6 +120,6 @@ describe('dApp, getCollateral, no popup, positive', function () {
 
   after(async function () {
     await walletCommonPage.closeBrowser();
-    mockServer.close();
+    await closeMockServer(mockServer);
   });
 });

@@ -79,18 +79,18 @@ const defaultCatalystRegistrationValues = {
   votingMinAmount: new BigNumber(0),
   votingRegTx: {},
   // @ts-ignore
-  dispatch: (action: StepAction) => {},
+  dispatch: (_action: StepAction) => {},
 };
 
 const defaultCatalystRegistrationActions = {
   generatePin: async () => {},
   resetRegistration: () => {},
   // @ts-ignore
-  createTransaction: async (password: string | null) => {},
+  createTransaction: async (_password: string | null) => {},
   // @ts-ignore
-  signTransaction: async (password: string | null) => {},
+  signTransaction: async (_password: string | null) => {},
   // @ts-ignore
-  setError: (error: string | null) => {},
+  setError: (_error: string | null) => {},
 };
 
 const defaultCatalystRegistrationState = {

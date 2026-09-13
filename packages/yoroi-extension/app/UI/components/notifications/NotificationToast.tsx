@@ -18,7 +18,7 @@ type IconProps = {
   type: NotificationTypes;
 };
 
-export const NotificationCloseButton = ({ closeToast, ...props }) => {
+export const NotificationCloseButton = ({ closeToast: _closeToast, ...props }) => {
   const handleClose = e => {
     e.stopPropagation();
     const { onClose } = props.data;

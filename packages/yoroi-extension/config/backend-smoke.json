@@ -1,0 +1,58 @@
+{
+  "network": {
+    "name": "test",
+    "priceBackendUrl": "http://wallet-backend:3010"
+  },
+  "poolExplorer": {
+    "simpleTemplate": ""
+  },
+  "app": {
+    "walletRefreshInterval": 2000,
+    "serverStatusRefreshInterval": 2000,
+    "logsBufferSize": 500,
+    "logsFileSuffix": "-yoroi.log",
+    "addressRequestSize": 50,
+    "txsBodiesRequestSize": 150,
+    "coinPriceRefreshInterval": 60000,
+    "coinPriceFreshnessThreshold": 900000,
+    "pubKeyData": "0e011fe7149bff8e3802168261aec6da54febee37da6a41d6179fa545868421e",
+    "pubKeyMaster": "ab9e4f1c4d996a0e9cdda8546bf5ee1dd8397fd7ab287c331ff171c7e4e0e9e2"
+  },
+  "bring": {
+    "baseUrl": "https://api.bringweb3.io/v1/extension/",
+    "identifier": "G1TjqDrfxS8jhRYz15Sg2fMGsvZpdFF8IWgKe0g8",
+    "apiEndpoint": "sandbox"
+  },
+  "bringSandbox": {
+    "baseUrl": "https://sandbox-api.bringweb3.io/v1/extension/",
+    "identifier": "G1TjqDrfxS8jhRYz15Sg2fMGsvZpdFF8IWgKe0g8",
+    "apiEndpoint": "sandbox"
+  },
+  "fcm": {
+    "apiKey": "AIzaSyCzwU3ybOxkhW2sWTiryF4CYxwh2lxvZSM",
+    "authDomain": "yoroi-extension-14826.firebaseapp.com",
+    "projectId": "yoroi-extension-14826",
+    "storageBucket": "yoroi-extension-14826.firebasestorage.app",
+    "messagingSenderId": "290850618958",
+    "appId": "1:290850618958:web:8bd5fa25dc80522b9acd1f"
+  },
+  "notifications": {
+    "defaultDuration": 4,
+    "vapidPublicKey": "BKj3BumTPTjepBiiXXYVZu-W8WbofAon4GG2YMhK-QKeVtd5UQ-zB8HMckW0nw4P2PfEIcPQ-ktxefSvTyzpE9M"
+  },
+  "yoroiBackend": {
+    "mainnet": "https://yoroi-api.blinklabs.cloud",
+    "preprod": "http://wallet-backend:3010",
+    "zeroMainnet": "https://yoroi-zero.blinklabs.cloud",
+    "zeroPreprod": "http://wallet-backend:3010"
+  },
+  "cardanoWalletBackend": {
+    "enabled": true,
+    "mainnet": "http://wallet-backend:3010",
+    "preprod": "http://wallet-backend:3010"
+  },
+  "tokenMetadata": {
+    "mainnet": "https://tokens.cardano.org",
+    "preprod": "https://preprod.tokens.cardano.org"
+  }
+}

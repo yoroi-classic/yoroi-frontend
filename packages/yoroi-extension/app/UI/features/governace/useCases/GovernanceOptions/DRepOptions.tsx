@@ -10,7 +10,7 @@ import { useGovernanceDelegationStatus } from '../../common/hooks/useGovernanceD
 import { GOVERNANCE_STATUS } from '../../common/constants';
 import { OptionsSkeletonScreen } from '../../common/SkeletonCardLoaders';
 
-interface DRepOptionsScreenProps {}
+type DRepOptionsScreenProps = Record<string, never>;
 
 export const DRepOptions: React.FC<DRepOptionsScreenProps> = () => {
   const strings = useStrings();

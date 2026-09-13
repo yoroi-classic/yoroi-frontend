@@ -13,6 +13,7 @@ import { useGetPortfolioTokenChart } from '../../common/hooks/usePortfolioTokenC
 import { usePortfolio } from '../../module/PortfolioContextProvider';
 import { useMemo } from 'react';
 import { getTotalAmount } from '../../../../utils/createCurrentWalletInfo';
+import type { TokenInfoType } from '../../../../types/tokenInfo';
 
 export const TokenDisplay = ({ token, pathId }: { token: TokenInfoType; pathId: string }) => {
   const theme = useTheme();

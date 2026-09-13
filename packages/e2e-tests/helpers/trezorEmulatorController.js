@@ -1,5 +1,5 @@
 import ws from 'ws';
-import { fiveSeconds, halfSecond } from './timeConstants.js';
+import { fiveSeconds, halfSecond, oneMinute } from './timeConstants.js';
 import { isMacOS, sleep } from '../utils/utils.js';
 import { TrezorModels } from './trezorHelper.js';
 const { WebSocket } = ws;
@@ -10,11 +10,18 @@ export class TrezorEmulatorController {
   websocketUrl = 'ws://localhost:9001/';
   id = 0;
 
-  constructor(logger) {
+  constructor(logger, { WebSocketImpl = WebSocket, responseTimeout = oneMinute / 2 } = {}) {
     this.logger = logger;
+    this.WebSocketImpl = WebSocketImpl;
+    this.responseTimeout = responseTimeout;
     this.ws = null;
     this.model = null;
     this.label = null;
+    this.pendingResponses = new Map();
+    this.pendingEvents = [];
+    this.queuedEvents = [];
+    this.connectionGeneration = 0;
+    this.connectionAttempt = null;
   }
 
   isModelT = () => this.model === TrezorModels.ModelT;
@@ -23,38 +30,184 @@ export class TrezorEmulatorController {
 
   _getAddition = () => (isMacOS() ? '-arm' : '');
 
+  _isSocketOpen() {
+    return this.ws?.readyState === this.WebSocketImpl.OPEN;
+  }
+
+  _socketError(message) {
+    return new TrezorEmulatorControllerError(message);
+  }
+
+  _clearPendingResponse(id) {
+    const pending = this.pendingResponses.get(id);
+    if (pending) {
+      clearTimeout(pending.timer);
+      this.pendingResponses.delete(id);
+    }
+    return pending;
+  }
+
+  _rejectPending(error) {
+    for (const [id, pending] of this.pendingResponses) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+      this.pendingResponses.delete(id);
+    }
+    for (const pending of this.pendingEvents.splice(0)) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+  }
+
+  _handleIncomingMessage(event) {
+    let dataObject;
+    try {
+      dataObject = this.handleMessage(event);
+    } catch (error) {
+      this._rejectPending(error);
+      return;
+    }
+
+    if (dataObject.background_check) {
+      return;
+    }
+
+    if (dataObject.id !== undefined) {
+      const pending = this._clearPendingResponse(dataObject.id);
+      if (!pending) {
+        this.logger.warn(`Ignoring response with unexpected id ${dataObject.id}`);
+        return;
+      }
+      pending.resolve(dataObject);
+      return;
+    }
+
+    const pendingEvent = this.pendingEvents.shift();
+    if (pendingEvent) {
+      clearTimeout(pendingEvent.timer);
+      pendingEvent.resolve(dataObject);
+    } else {
+      this.queuedEvents.push(dataObject);
+    }
+  }
+
+  _handleSocketFailure(error) {
+    const reason = error instanceof Error ? error : this._socketError(`Trezor WebSocket failed: ${String(error)}`);
+    this._rejectPending(reason);
+  }
+
+  _cancelConnectionAttempt(error) {
+    const attempt = this.connectionAttempt;
+    if (!attempt) return;
+
+    this.connectionAttempt = null;
+    clearTimeout(attempt.timer);
+    attempt.reject(error);
+    if (attempt.server.readyState === this.WebSocketImpl.CONNECTING || attempt.server.readyState === this.WebSocketImpl.OPEN) {
+      attempt.server.close();
+    }
+  }
+
   _customPromise(json, functionName) {
+    if (!this._isSocketOpen()) {
+      return Promise.reject(this._socketError(`${functionName}: Trezor WebSocket is not open`));
+    }
+
     return new Promise((resolve, reject) => {
-      this._send(json, functionName);
-      this.ws.onmessage = event => {
-        const dataObject = this.handleMessage(event);
-        this.logger.info(`${functionName}: The response is received: ${JSON.stringify(dataObject)}`);
-        resolve(dataObject);
-      };
-      this.ws.onerror = err => {
-        this.logger.error(`${functionName}: The error is received: ${err}`);
-        reject(this.ws);
-      };
+      const requestId = this.id++;
+      const timer = setTimeout(() => {
+        this.pendingResponses.delete(requestId);
+        reject(this._socketError(`${functionName}: no response after ${this.responseTimeout}ms`));
+      }, this.responseTimeout);
+      this.pendingResponses.set(requestId, { resolve, reject, timer });
+
+      try {
+        this._send(json, functionName, requestId);
+      } catch (error) {
+        this._clearPendingResponse(requestId);
+        reject(error);
+      }
     });
   }
 
-  _innerConnect(websocketUrl, logger) {
+  _innerConnect(websocketUrl, logger, generation) {
     return new Promise((resolve, reject) => {
-      const server = new WebSocket(websocketUrl);
-      server.onopen = function () {
+      const server = new this.WebSocketImpl(websocketUrl);
+      let connected = false;
+      const isCurrentConnection = () => generation === this.connectionGeneration;
+      const connectTimer = setTimeout(() => {
+        if (connected) return;
+        const error = isCurrentConnection()
+          ? this._socketError(`connect: no connection after ${this.responseTimeout}ms`)
+          : this._socketError('connect: superseded by a newer connection');
+        if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
+        reject(error);
+        if (server.readyState === this.WebSocketImpl.CONNECTING || server.readyState === this.WebSocketImpl.OPEN) {
+          server.close();
+        }
+      }, this.responseTimeout);
+      this.connectionAttempt = { server, timer: connectTimer, reject };
+      server.onmessage = event => {
+        if (isCurrentConnection()) this._handleIncomingMessage(event);
+      };
+      server.onopen = () => {
+        if (!isCurrentConnection()) {
+          clearTimeout(connectTimer);
+          server.close();
+          reject(this._socketError('connect: superseded by a newer connection'));
+          return;
+        }
+        connected = true;
+        clearTimeout(connectTimer);
+        if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
         logger.info(`_innerConnect: Connection is open`);
         resolve(server);
       };
-      server.onerror = function (err) {
+      server.onerror = err => {
+        if (!isCurrentConnection()) return;
         logger.error(`_innerConnect: Connection is rejected. Reason: ${JSON.stringify(err)}`);
-        reject(err);
+        if (!connected) {
+          clearTimeout(connectTimer);
+          if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
+          this.connectionGeneration += 1;
+          this.queuedEvents = [];
+          reject(err);
+          if (server.readyState === this.WebSocketImpl.CONNECTING || server.readyState === this.WebSocketImpl.OPEN) {
+            server.close();
+          }
+          return;
+        }
+        this._handleSocketFailure(err);
+      };
+      server.onclose = () => {
+        if (!isCurrentConnection()) return;
+        clearTimeout(connectTimer);
+        if (this.connectionAttempt?.server === server) this.connectionAttempt = null;
+        if (this.ws === server) {
+          this.ws = null;
+          this.queuedEvents = [];
+        }
+        this.connectionGeneration += 1;
+        const error = this._socketError('Trezor WebSocket closed');
+        if (!connected) reject(error);
+        this._handleSocketFailure(error);
       };
     });
   }
 
   async connect() {
     this.logger.info(`connect: Connecting to websocket ${this.websocketUrl}`);
-    this.ws = await this._innerConnect(this.websocketUrl, this.logger);
+    if (this.ws) this.closeWsConnection();
+
+    const generation = ++this.connectionGeneration;
+    this._cancelConnectionAttempt(this._socketError('connect: superseded by a newer connection'));
+    this.queuedEvents = [];
+    const server = await this._innerConnect(this.websocketUrl, this.logger, generation);
+    if (generation !== this.connectionGeneration) {
+      server.close();
+      throw this._socketError('connect: superseded by a newer connection');
+    }
+    this.ws = server;
 
     return this;
   }
@@ -83,25 +236,37 @@ export class TrezorEmulatorController {
     return dataObject;
   }
 
-  _send(json, functionName) {
-    const tempId = this.id;
+  _send(json, functionName, requestId = this.id++) {
+    if (!this._isSocketOpen()) {
+      throw this._socketError(`${functionName}: Trezor WebSocket is not open`);
+    }
     const requestToSend = JSON.stringify(
       Object.assign(json, {
-        id: tempId,
+        id: requestId,
       })
     );
     this.ws.send(requestToSend);
-    this.id++;
     this.logger.info(`${functionName}._send: Request sent: ${requestToSend}`);
   }
 
   _sendOnBackground(json) {
+    if (!this._isSocketOpen()) {
+      throw this._socketError('background request: Trezor WebSocket is not open');
+    }
     this.ws.send(JSON.stringify(json));
   }
 
   closeWsConnection() {
     this.logger.info(`closeWsConnection: Closing the connection`);
-    this.ws.close();
+    const server = this.ws;
+    this.connectionGeneration += 1;
+    this._cancelConnectionAttempt(this._socketError('Trezor WebSocket closed'));
+    this.ws = null;
+    this.queuedEvents = [];
+    this._rejectPending(this._socketError('Trezor WebSocket closed'));
+    if (server && (server.readyState === this.WebSocketImpl.CONNECTING || server.readyState === this.WebSocketImpl.OPEN)) {
+      server.close();
+    }
     this.logger.info(`closeWsConnection: The connection is closed`);
   }
 
@@ -222,20 +387,47 @@ export class TrezorEmulatorController {
   }
 
   exit() {
+    if (!this._isSocketOpen()) {
+      return Promise.reject(this._socketError('exit: Trezor WebSocket is not open'));
+    }
+
     return new Promise((resolve, reject) => {
-      this._send(
-        {
-          type: 'exit',
-        },
-        'exit'
-      );
-      this.ws.onclose = () => {
-        resolve(this.ws);
+      const server = this.ws;
+      const previousOnClose = server.onclose;
+      const previousOnError = server.onerror;
+      let settled = false;
+      const cleanup = () => {
+        clearTimeout(timer);
+        if (server.onclose === onClose) server.onclose = previousOnClose;
+        if (server.onerror === onError) server.onerror = previousOnError;
       };
-      this.ws.onerror = err => {
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        callback(value);
+      };
+      const onClose = event => {
+        previousOnClose?.(event);
+        finish(resolve, server);
+      };
+      const onError = err => {
+        previousOnError?.(err);
         this.logger.error(`exit: The error is received:${err}`);
-        reject(this.ws);
+        finish(reject, this._socketError('exit: Trezor WebSocket failed'));
       };
+      const timer = setTimeout(
+        () => finish(reject, this._socketError(`exit: socket did not close after ${this.responseTimeout}ms`)),
+        this.responseTimeout
+      );
+      server.onclose = onClose;
+      server.onerror = onError;
+
+      try {
+        this._send({ type: 'exit' }, 'exit');
+      } catch (error) {
+        finish(reject, error);
+      }
     });
   }
 
@@ -248,15 +440,20 @@ export class TrezorEmulatorController {
   }
 
   getLastEvent() {
+    if (!this._isSocketOpen()) {
+      return Promise.reject(this._socketError('getLastEvent: Trezor WebSocket is not open'));
+    }
+    const queued = this.queuedEvents.shift();
+    if (queued) return Promise.resolve(queued);
+
     return new Promise((resolve, reject) => {
-      this.ws.onmessage = event => {
-        const dataObject = this.handleMessage(event);
-        resolve(dataObject);
-      };
-      this.ws.onerror = err => {
-        this.logger.error(`getLastEvent: The error is received:${err}`);
-        reject(this.ws);
-      };
+      const pending = { resolve, reject };
+      pending.timer = setTimeout(() => {
+        const index = this.pendingEvents.indexOf(pending);
+        if (index >= 0) this.pendingEvents.splice(index, 1);
+        reject(this._socketError(`getLastEvent: no event after ${this.responseTimeout}ms`));
+      }, this.responseTimeout);
+      this.pendingEvents.push(pending);
     });
   }
 

@@ -13,7 +13,7 @@ type AssetInfo = {
   numberOfDecimals: number;
 };
 
-type TokenInfoType = {
+export type TokenInfoType = {
   assetName: string;
   amountForSorting: string;
   formatedAmount: string;

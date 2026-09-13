@@ -5,7 +5,7 @@ import { getTestLogger } from '../../utils/utils.js';
 import { oneMinute } from '../../helpers/timeConstants.js';
 import { collectInfo, restoreWallet } from '../../helpers/restoreWalletHelper.js';
 import { WindowManager, mockDAppName, popupConnectorName } from '../../helpers/windowManager.js';
-import { getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
+import { closeMockServer, getMockServer, mockDAppUrl } from '../../helpers/mock-dApp-webpage/mockServer.js';
 import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { adaInLovelaces, getPassword } from '../../helpers/constants.js';
@@ -233,7 +233,7 @@ describe('dApp, signTx, intrawallet Tx', function () {
       await dappSingTxPage.closeBrowser();
     }
     if (mockServer) {
-      mockServer.close();
+      await closeMockServer(mockServer);
     }
   });
 });
