@@ -154,12 +154,22 @@ export default class SignTxContainer extends Component<ConnectorStoresProps> {
         break;
       }
       case 'data':
+      case 'txs/cardano':
       case 'tx/cardano': {
-        const txData = this.props.stores.connector.adaTransaction;
+        const isBulk = signingMessage.sign.type === 'txs/cardano';
+        const txDataBatch = isBulk ? this.props.stores.connector.adaTransactions : null;
+        const txData = isBulk ? txDataBatch?.[0] : this.props.stores.connector.adaTransaction;
         if (txData == null && signData == null) return this.renderLoading();
+        if (signingMessage.sign.type === 'txs/cardano' && txDataBatch?.length !== signingMessage.sign.txs.length) {
+          return this.renderLoading();
+        }
         let tx;
+        let txs = null;
         if (signingMessage.sign.type === 'tx/cardano') {
           tx = signingMessage.sign.tx.tx;
+        } else if (signingMessage.sign.type === 'txs/cardano') {
+          tx = '';
+          txs = signingMessage.sign.txs.map(({ tx: txHex }) => txHex);
         } else {
           tx = '';
         }
@@ -171,6 +181,7 @@ export default class SignTxContainer extends Component<ConnectorStoresProps> {
             onCopyAddressTooltip={handleCopyAddressTooltip}
             notification={notification}
             txData={txData}
+            txDataBatch={txDataBatch}
             getTokenInfo={genLookupOrNull(this.props.stores.tokenInfoStore.tokenInfo)}
             defaultToken={{
               defaultNetworkId: selectedWallet.networkId,
@@ -189,6 +200,8 @@ export default class SignTxContainer extends Component<ConnectorStoresProps> {
             hwWalletError={this.props.stores.connector.hwWalletError}
             isHwWalletErrorRecoverable={this.props.stores.connector.isHwWalletErrorRecoverable}
             tx={tx}
+            txs={txs}
+            bulkSigningProgress={this.props.stores.connector.bulkSigningProgress}
           />
         );
         break;
