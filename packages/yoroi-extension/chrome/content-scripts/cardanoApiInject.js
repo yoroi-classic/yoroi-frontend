@@ -83,12 +83,7 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs argument is expected to be an array!');
         }
-        let batchLength;
-        try {
-          batchLength = txs.length;
-        } catch (error) {
-          throw CardanoAPI._asCip103InvalidRequest(error);
-        }
+        const batchLength = CardanoAPI._cip103BatchLength(txs);
         const requests = [];
         for (let index = 0; index < batchLength; index++) {
           try {
@@ -115,12 +110,7 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs argument is expected to be an array!');
         }
-        let batchLength;
-        try {
-          batchLength = txs.length;
-        } catch (error) {
-          throw CardanoAPI._asCip103InvalidRequest(error);
-        }
+        const batchLength = CardanoAPI._cip103BatchLength(txs);
         const batch = [];
         for (let index = 0; index < batchLength; index++) {
           try {
@@ -246,6 +236,18 @@
 
     static _cip103InvalidRequest(info) {
       return { code: API_INVALID_REQUEST, info };
+    }
+
+    static _cip103BatchLength(txs) {
+      try {
+        const batchLength = Number(txs.length);
+        if (!Number.isSafeInteger(batchLength) || batchLength < 0) {
+          throw CardanoAPI._cip103InvalidRequest('.cip103 transaction batch length must be a non-negative integer!');
+        }
+        return batchLength;
+      } catch (error) {
+        throw CardanoAPI._asCip103InvalidRequest(error);
+      }
     }
 
     static _asCip103InvalidRequest(error) {
