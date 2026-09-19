@@ -52,7 +52,7 @@
       CardanoAPI._cardano_rpc_cbor_call = cborRpcWrapper;
       CardanoAPI._disconnection = [false];
       CardanoAPI._returnType = ['cbor'];
-      window.addEventListener('yoroi_wallet_disconnected', function () {
+      window.addEventListener('yoroi_wallet_disconnected', () => {
         if (!CardanoAPI._disconnection[0]) {
           CardanoAPI._disconnection[0] = true;
           CardanoAPI._disconnection.slice(1).forEach(f => f());
@@ -83,13 +83,13 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.signTxs argument is expected to be an array!');
         }
-        const batch = txs.slice();
+        const batchLength = CardanoAPI._cip103BatchLength(txs);
         const requests = [];
-        for (let index = 0; index < batch.length; index++) {
+        for (let index = 0; index < batchLength; index++) {
           try {
-            requests.push(CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(batch[index])));
+            requests.push(CardanoAPI._normalizeCip103SignRequest(CardanoAPI._snapshotCip103SignRequest(txs[index])));
           } catch (error) {
-            throw CardanoAPI._withCip103FailureIndex(error, index);
+            throw CardanoAPI._withCip103FailureIndex(CardanoAPI._asCip103InvalidRequest(error), index);
           }
         }
 
@@ -110,13 +110,17 @@
         if (!Array.isArray(txs)) {
           throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs argument is expected to be an array!');
         }
-        const batch = txs.slice();
-        for (let index = 0; index < batch.length; index++) {
-          if (typeof batch[index] !== 'string') {
-            throw CardanoAPI._withCip103FailureIndex(
-              CardanoAPI._cip103InvalidRequest('.cip103.submitTxs transaction must be a cbor string!'),
-              index
-            );
+        const batchLength = CardanoAPI._cip103BatchLength(txs);
+        const batch = [];
+        for (let index = 0; index < batchLength; index++) {
+          try {
+            const tx = txs[index];
+            if (typeof tx !== 'string') {
+              throw CardanoAPI._cip103InvalidRequest('.cip103.submitTxs transaction must be a cbor string!');
+            }
+            batch.push(tx);
+          } catch (error) {
+            throw CardanoAPI._withCip103FailureIndex(CardanoAPI._asCip103InvalidRequest(error), index);
           }
         }
 
@@ -232,6 +236,44 @@
 
     static _cip103InvalidRequest(info) {
       return { code: API_INVALID_REQUEST, info };
+    }
+
+    static _cip103BatchLength(txs) {
+      try {
+        const rawLength = txs.length;
+        const batchLength = Number(rawLength);
+        if (typeof rawLength !== 'number' || !Number.isSafeInteger(batchLength) || batchLength < 0) {
+          throw CardanoAPI._cip103InvalidRequest('.cip103 transaction batch length must be a non-negative integer!');
+        }
+        return batchLength;
+      } catch (error) {
+        throw CardanoAPI._asCip103InvalidRequest(error);
+      }
+    }
+
+    static _asCip103InvalidRequest(error) {
+      if (error != null && typeof error === 'object') {
+        try {
+          const info = error.info;
+          if (typeof info === 'string') {
+            return CardanoAPI._cip103InvalidRequest(info);
+          }
+        } catch (_error) {
+          // A thrown object can expose hostile accessors. Fall through to other safe metadata.
+        }
+        try {
+          const message = error.message;
+          if (typeof message === 'string') {
+            return CardanoAPI._cip103InvalidRequest(message);
+          }
+        } catch (_error) {
+          // Use the generic request error below when no metadata can be read safely.
+        }
+      }
+      if (typeof error === 'string') {
+        return CardanoAPI._cip103InvalidRequest(error);
+      }
+      return CardanoAPI._cip103InvalidRequest('Invalid CIP-0103 transaction request');
     }
 
     getExtensions() {
