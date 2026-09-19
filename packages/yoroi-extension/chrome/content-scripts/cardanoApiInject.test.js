@@ -431,6 +431,23 @@ describe('CardanoAPI CIP-0103 extension', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  test.each([null, false, ''])('signTxs rejects a non-numeric batch length: %p', async length => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = new Proxy([], {
+      get(target, property, receiver) {
+        if (property === 'length') return length;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    await expect(api.cip103.signTxs(txs)).rejects.toEqual({
+      code: -1,
+      info: '.cip103 transaction batch length must be a non-negative integer!',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   test('signTxs normalizes a bare-string batch failure as indexed InvalidRequest', async () => {
     const rpc = jest.fn();
     const api = loadApi(rpc);
@@ -572,6 +589,23 @@ describe('CardanoAPI CIP-0103 extension', () => {
     await expect(api.cip103.submitTxs(txs)).rejects.toEqual({
       code: -1,
       info: 'length coercion failed',
+    });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  test.each([null, false, ''])('submitTxs rejects a non-numeric batch length: %p', async length => {
+    const rpc = jest.fn();
+    const api = loadApi(rpc);
+    const txs = new Proxy([], {
+      get(target, property, receiver) {
+        if (property === 'length') return length;
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    await expect(api.cip103.submitTxs(txs)).rejects.toEqual({
+      code: -1,
+      info: '.cip103 transaction batch length must be a non-negative integer!',
     });
     expect(rpc).not.toHaveBeenCalled();
   });

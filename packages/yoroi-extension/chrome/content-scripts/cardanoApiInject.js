@@ -240,8 +240,9 @@
 
     static _cip103BatchLength(txs) {
       try {
-        const batchLength = Number(txs.length);
-        if (!Number.isSafeInteger(batchLength) || batchLength < 0) {
+        const rawLength = txs.length;
+        const batchLength = Number(rawLength);
+        if (typeof rawLength !== 'number' || !Number.isSafeInteger(batchLength) || batchLength < 0) {
           throw CardanoAPI._cip103InvalidRequest('.cip103 transaction batch length must be a non-negative integer!');
         }
         return batchLength;
