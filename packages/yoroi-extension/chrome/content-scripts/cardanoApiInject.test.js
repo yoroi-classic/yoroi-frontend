@@ -288,7 +288,6 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const rejection = { code: 2, info: 'User rejected' };
     const rpc = jest.fn(() => {
       // Connector RPC errors are API error records rather than JavaScript Error instances.
-      // eslint-disable-next-line prefer-promise-reject-errors
       return Promise.reject(rejection);
     });
     const api = loadApi(rpc);
@@ -404,6 +403,8 @@ describe('CardanoAPI CIP-0103 extension', () => {
     const txs = [];
     Object.defineProperty(txs, 0, {
       get() {
+        // This deliberately exercises normalization of a legacy bare-string throw.
+        // eslint-disable-next-line no-throw-literal
         throw 'bare string failure';
       },
     });
