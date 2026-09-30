@@ -260,7 +260,7 @@ export class MockDAppWebpage {
     this.logger.info(`MockDApp::getBalance The response is ${JSON.stringify(balanceResponse, null, 2)}`);
     if (balanceResponse.success) {
       const value = getCmlValue(balanceResponse.retValue);
-      const valueStr = value.coin().to_str();
+      const valueStr = value.coin().toString();
       this.logger.info(`MockDApp::getBalance The balance is ${valueStr}`);
       balanceResponse.retValue = valueStr;
     }

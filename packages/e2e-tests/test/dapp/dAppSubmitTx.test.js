@@ -103,6 +103,8 @@ describe('dApp, submitTx', function () {
   //   });
 
   //   it('Submit Tx and check response', async function () {
+  //     const { signTxWithCML } = await import('../../helpers/mock-dApp-webpage/dAppTxHelper.js');
+  //     const signedTxHex = signTxWithCML(uTxHex, witnessSet);
   //     const submitResponse = await mockedDApp.submitTx(signedTxHex);
   //     expect(submitResponse.success, 'Submit Tx request failed').to.be.true;
   //     expect(submitResponse.retValue).to.be.an('string').that.is.not.empty;

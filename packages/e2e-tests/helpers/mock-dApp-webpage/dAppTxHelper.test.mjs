@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import * as CML from '@dcspark/cardano-multiplatform-lib-nodejs';
 
+import { MockDAppWebpage } from './mockedDApp.js';
 import {
   addressToCbor,
   addressesFromCborIfNeeded,
@@ -38,6 +39,25 @@ test('CML helpers preserve integer quantities above JavaScript safe integer rang
   const amount = '9007199254740993';
   assert.equal(getCmlValue(getAmountInHex(amount)).coin().toString(), amount);
   assert.equal(toInt(amount).to_str(), amount);
+  assert.equal(toInt('-17').to_str(), '-17');
+  assert.throws(() => toInt('1.5'), /integer/);
+  assert.throws(() => toInt(Number.MAX_SAFE_INTEGER + 1), /safe integer/);
+});
+
+test('mocked dApp returns CML coin balances as decimal strings', async () => {
+  const driver = {
+    executeAsyncScript: async () => ({
+      success: true,
+      retValue: CML.Value.from_coin(9007199254740993n).to_cbor_hex(),
+    }),
+  };
+  const logger = { info: () => {} };
+  const mockedDApp = new MockDAppWebpage(driver, logger);
+
+  assert.deepEqual(await mockedDApp.getBalance(), {
+    success: true,
+    retValue: '9007199254740993',
+  });
 });
 
 test('CML UTxO mapping preserves output references and exact ADA amounts', () => {

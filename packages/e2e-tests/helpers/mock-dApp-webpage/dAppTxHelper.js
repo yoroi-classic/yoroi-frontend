@@ -22,7 +22,20 @@ const asBigInt = (value, field) => {
   return BigInt(encoded);
 };
 
-export const toInt = value => CML.Int.new(asBigInt(value, 'integer'));
+const asSignedBigInt = (value, field) => {
+  if (typeof value === 'number' && !Number.isSafeInteger(value)) {
+    throw new Error(`${field} must be a safe integer`);
+  }
+
+  const encoded = String(value);
+  if (!/^-?(0|[1-9][0-9]*)$/.test(encoded)) {
+    throw new Error(`${field} must be an integer`);
+  }
+
+  return BigInt(encoded);
+};
+
+export const toInt = value => CML.Int.new(asSignedBigInt(value, 'integer'));
 
 export const getTxBuilder = () => {
   const coinsPerUtxoWord = asBigInt(protocolParams.coinsPerUtxoWord, 'coinsPerUtxoWord');
