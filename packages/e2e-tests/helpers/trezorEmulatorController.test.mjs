@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { TrezorEmulatorController } from './trezorEmulatorController.js';
 
+const warnings = [];
 const logger = Object.freeze({
   info() {},
-  warn() {},
+  warn(message) {
+    warnings.push(message);
+  },
   error() {},
 });
 
@@ -59,14 +62,19 @@ const connect = async (controller, firstMessage) => {
 
 test.beforeEach(() => {
   FakeWebSocket.instances = [];
+  warnings.length = 0;
 });
 
 test('queues the initial event and correlates a successful response by id', async () => {
   const controller = makeController();
-  const socket = await connect(controller, { type: 'client' });
+  // The real trezor-user-env greeting carries a literal `id: "TODO"` alongside `type: "client"`.
+  // Omitting it here made this fixture disagree with the emulator, and the suite stayed green while
+  // every hardware-wallet run timed out waiting for an event that had been discarded as a response.
+  const greeting = { type: 'client', id: 'TODO' };
+  const socket = await connect(controller, greeting);
 
   await assert.doesNotReject(async () => {
-    assert.deepEqual(await controller.getLastEvent(), { type: 'client' });
+    assert.deepEqual(await controller.getLastEvent(), greeting);
   });
 
   const response = controller.ping();
@@ -92,6 +100,21 @@ test('ignores background and wrong-id messages until the matching response arriv
 
   socket.message({ id: 0, success: true });
   await response;
+  controller.closeWsConnection();
+});
+
+test('a response arriving after its request timed out is dropped, not queued as an event', async () => {
+  const controller = makeController(10);
+  const socket = await connect(controller);
+
+  await assert.rejects(controller.ping(), /ping: no response after 10ms/);
+
+  // The late response is still a response. It must not become the next getLastEvent() result, or a
+  // correlation bug would surface as a nonsense event rather than as the warning it is.
+  socket.message({ id: 0, success: true });
+  await assert.rejects(controller.getLastEvent(), /getLastEvent: no event after 10ms/);
+  assert.deepEqual(warnings, ['Ignoring response with unexpected id 0']);
+
   controller.closeWsConnection();
 });
 
