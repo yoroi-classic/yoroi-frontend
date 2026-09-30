@@ -10,7 +10,6 @@ import { MockDAppWebpage } from '../../helpers/mock-dApp-webpage/mockedDApp.js';
 import { connectNonAuth } from '../../helpers/mock-dApp-webpage/dAppHelper.js';
 import { adaInLovelaces, getPassword } from '../../helpers/constants.js';
 import DAppSignTx from '../../pages/dapp/dAppSignTx.page.js';
-import { signTxWithCSL } from '../../helpers/mock-dApp-webpage/dAppTxHelper.js';
 import { ApiErrorCode, TxSendErrorCode } from '../../helpers/mock-dApp-webpage/cip30Errors.js';
 import driversPoolsManager from '../../utils/driversPool.js';
 import { beforeQuarantinedDApp } from '../../utils/quarantine.js';
@@ -104,7 +103,8 @@ describe('dApp, submitTx', function () {
   //   });
 
   //   it('Submit Tx and check response', async function () {
-  //     const signedTxHex = signTxWithCSL(uTxHex, witnessSet);
+  //     const { signTxWithCML } = await import('../../helpers/mock-dApp-webpage/dAppTxHelper.js');
+  //     const signedTxHex = signTxWithCML(uTxHex, witnessSet);
   //     const submitResponse = await mockedDApp.submitTx(signedTxHex);
   //     expect(submitResponse.success, 'Submit Tx request failed').to.be.true;
   //     expect(submitResponse.retValue).to.be.an('string').that.is.not.empty;

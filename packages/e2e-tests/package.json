@@ -59,6 +59,7 @@
     "test:dapp:one": "npm run test:dapp:base:one",
     "test:dapp-server-lifecycle": "node --test helpers/mock-dApp-webpage/mockServer.lifecycle.test.mjs",
     "test:dapp-server": "node --test helpers/mock-dApp-webpage/mockServer.test.mjs",
+    "test:cardano-cml": "node --test helpers/mock-dApp-webpage/dAppTxHelper.test.mjs",
     "test:ledger": "npm run test:ledger:base:sequintel",
     "test:ledger:one": "npm run test:ledger:base:one",
     "test:trezor": "env IS_TREZOR=true npm run test:trezor:base:sequintel",
@@ -69,7 +70,7 @@
   "author": "Yoroi Classic Contributors",
   "license": "ISC",
   "devDependencies": {
-    "@emurgo/cardano-serialization-lib-nodejs": "13.2.1",
+    "@dcspark/cardano-multiplatform-lib-nodejs": "6.2.0",
     "bignumber.js": "^9.1.2",
     "chai": "^4.3.10",
     "cross-env": "^7.0.3",

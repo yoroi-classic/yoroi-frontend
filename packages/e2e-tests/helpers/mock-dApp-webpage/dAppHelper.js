@@ -8,8 +8,9 @@ import {
   getLargestFirstMultiAsset,
   getTransactionOutput,
   getTxBuilder,
-  getCslUtxos,
+  getCmlUtxos,
 } from './dAppTxHelper.js';
+import * as CML from '@dcspark/cardano-multiplatform-lib-nodejs';
 
 /**
  * The function to request non-authorised connection the a wallet.
@@ -57,19 +58,22 @@ export const connectNonAuth = async (webdriver, logger, windowManager, mockedDAp
 export const buildSimpleTx = (receiverAddrBech32, amount, changeAddressHex, utxosHex) => {
   const buildTransactionInput = { amount, address: receiverAddrBech32 };
   const txBuilder = getTxBuilder();
-  const cslChangeAddress = getAddressFromBytes(changeAddressHex);
-  const cslOutputAddress = getAddressFromBech32(receiverAddrBech32);
-  const cslOutput = getTransactionOutput(cslOutputAddress, buildTransactionInput);
-  txBuilder.add_output(cslOutput);
-  const cslUtxos = getCslUtxos(utxosHex);
-  txBuilder.add_inputs_from(cslUtxos, getLargestFirstMultiAsset());
-  txBuilder.add_change_if_needed(cslChangeAddress);
-  const cslUnsignedTransaction = txBuilder.build_tx();
-  const txFee = cslUnsignedTransaction.body().fee().to_str();
-  const cslUnsignedTxHex = bytesToHex(cslUnsignedTransaction.to_bytes());
+  const cmlChangeAddress = getAddressFromBytes(changeAddressHex);
+  const cmlOutputAddress = getAddressFromBech32(receiverAddrBech32);
+  const cmlOutput = getTransactionOutput(cmlOutputAddress, buildTransactionInput);
+  txBuilder.add_output(cmlOutput);
+  const cmlUtxos = getCmlUtxos(utxosHex);
+  for (const utxo of cmlUtxos) {
+    txBuilder.add_utxo(CML.SingleInputBuilder.from_transaction_unspent_output(utxo).payment_key());
+  }
+  txBuilder.select_utxos(getLargestFirstMultiAsset());
+  const signedBuilder = txBuilder.build(CML.ChangeSelectionAlgo.Default, cmlChangeAddress);
+  const unsignedTransaction = signedBuilder.build_unchecked();
+  const txFee = unsignedTransaction.body().fee().toString();
+  const unsignedTxHex = bytesToHex(unsignedTransaction.to_cbor_bytes());
 
   return {
-    uTxHex: cslUnsignedTxHex,
+    uTxHex: unsignedTxHex,
     txFee,
   };
 };

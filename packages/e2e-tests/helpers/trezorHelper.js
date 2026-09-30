@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { TrezorEmulatorController } from './trezorEmulatorController.js';
-import * as CSL from '@emurgo/cardano-serialization-lib-nodejs';
+import * as CML from '@dcspark/cardano-multiplatform-lib-nodejs';
 
 export const TrezorModels = Object.freeze({
   ModelT: 'T2T1',
@@ -51,4 +51,4 @@ export const convertExportResponse = trezorScreensContent => {
   };
 };
 
-export const getStakeBeck32KeyFromKeyHash = stakeKeyHash => CSL.Ed25519KeyHash.from_hex(stakeKeyHash).to_bech32('stake_vkh');
+export const getStakeBeck32KeyFromKeyHash = stakeKeyHash => CML.Ed25519KeyHash.from_hex(stakeKeyHash).to_bech32('stake_vkh');
