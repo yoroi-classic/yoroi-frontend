@@ -5,7 +5,7 @@ import ReceiveSubTab from '../../../pages/wallet/walletTab/receiveSubTab.page.js
 import { customAfterEach } from '../../../utils/customHooks.js';
 import { getTestLogger } from '../../../utils/utils.js';
 import { oneMinute } from '../../../helpers/timeConstants.js';
-import { getRewarKeyHashFromBech32 } from '../../../helpers/mock-dApp-webpage/dAppTxHelper.js';
+import { getRewardKeyHashFromBech32 } from '../../../helpers/mock-dApp-webpage/dAppTxHelper.js';
 import { prepareWallet } from '../../../helpers/restoreWalletHelper.js';
 import { WebDriver } from 'selenium-webdriver';
 import { Logger } from 'simple-node-logger';
@@ -42,7 +42,7 @@ describe('Verify addresses', function () {
     expect(bech32StakeAddress)
       .to.be.a('string')
       .and.satisfy(msg => msg.startsWith('stake_test1'));
-    stakingKeyHexExp = getRewarKeyHashFromBech32(bech32StakeAddress);
+    stakingKeyHexExp = getRewardKeyHashFromBech32(bech32StakeAddress);
   });
 
   it('Check base external addresses', async function () {
