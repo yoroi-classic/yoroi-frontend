@@ -1,7 +1,14 @@
 // @flow
 import '../test-config.forTests';
 import { RustModule } from './rustLoader';
-import { addressBech32ToHex, addressHexToBech32, baseAddressesFromKeyHashes, deriveRewardAddressFromAddress } from './cmlAddress';
+import {
+  addressBech32ToHex,
+  addressHexToBech32,
+  baseAddressesFromKeyHashes,
+  deriveRewardAddressFromAddress,
+  enterpriseAndBaseAddressHexFromKeyHashes,
+  rewardAddressFromKeyHash,
+} from './cmlAddress';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -47,4 +54,31 @@ test('reconstructs base addresses from payment and stake key hashes', () => {
   );
 
   expect(baseAddressesFromKeyHashes(1, keyHashes)).toEqual(expectedAddresses);
+});
+
+test('constructs enterprise, base, and reward addresses with CML', () => {
+  const payment = '01'.repeat(28);
+  const stake = '02'.repeat(28);
+  const expected = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const paymentCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex(payment));
+    const stakeCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex(stake));
+    return {
+      enterpriseAddressHex: CSL.EnterpriseAddress.new(1, paymentCredential)
+        .to_address()
+        .to_hex(),
+      baseAddressHex: CSL.BaseAddress.new(1, paymentCredential, stakeCredential)
+        .to_address()
+        .to_hex(),
+      rewardAddressHex: CSL.RewardAddress.new(1, stakeCredential)
+        .to_address()
+        .to_hex(),
+    };
+  });
+
+  expect(enterpriseAndBaseAddressHexFromKeyHashes(1, payment, stake)).toEqual({
+    enterpriseAddressHex: expected.enterpriseAddressHex,
+    baseAddressHex: expected.baseAddressHex,
+  });
+  expect(rewardAddressFromKeyHash(1, stake)).toEqual(expected.rewardAddressHex);
 });

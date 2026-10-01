@@ -21,6 +21,31 @@ export const baseAddressesFromKeyHashes = (
     })
   );
 
+export const rewardAddressFromKeyHash = (networkId: number, stakeKeyHash: string): string =>
+  RustModule.WasmScope(Module => {
+    const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash));
+    return Module.CML.RewardAddress.new(networkId, stakeCredential)
+      .to_address()
+      .to_hex();
+  });
+
+export const enterpriseAndBaseAddressHexFromKeyHashes = (
+  networkId: number,
+  paymentKeyHash: string,
+  stakeKeyHash: string
+): {| enterpriseAddressHex: string, baseAddressHex: string |} =>
+  RustModule.WasmScope(Module => {
+    const paymentCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(paymentKeyHash));
+    const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash));
+    const enterpriseAddressHex = Module.CML.EnterpriseAddress.new(networkId, paymentCredential)
+      .to_address()
+      .to_hex();
+    const baseAddressHex = Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential)
+      .to_address()
+      .to_hex();
+    return { enterpriseAddressHex, baseAddressHex };
+  });
+
 export const deriveRewardAddressFromAddress = (address: string, networkId: number): string =>
   RustModule.WasmScope(Module => {
     const baseAddress = Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(address));

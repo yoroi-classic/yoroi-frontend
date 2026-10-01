@@ -9,6 +9,7 @@ import type { ConfigType } from '../../../../../config/config-types';
 import { ChainDerivations, BIP44_SCAN_SIZE } from '../../../../config/numbersConfig';
 
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
+import { enterpriseAndBaseAddressHexFromKeyHashes, rewardAddressFromKeyHash } from '../../lib/cardanoCrypto/cmlAddress';
 
 import type { TreeInsert, InsertRequest } from '../../lib/storage/database/walletTypes/common/utils.types';
 import type { AddByHashFunc } from '../../../common/lib/storage/bridge/hashMapper';
@@ -40,15 +41,12 @@ export async function addShelleyChimericAccountAddress(
 ): Promise<{|
   KeyDerivationId: number,
 |}> {
-  const accountAddr = RustModule.WalletV4.RewardAddress.new(
-    chainNetworkId,
-    RustModule.WalletV4.Credential.from_keyhash(stakingKey.hash())
-  );
+  const accountAddressHex = rewardAddressFromKeyHash(chainNetworkId, stakingKey.hash().to_hex());
   await addByHash({
     ...insertRequest,
     address: {
       type: CoreAddressTypes.CARDANO_REWARD,
-      data: accountAddr.to_address().to_hex(),
+      data: accountAddressHex,
     },
   });
 
@@ -66,30 +64,23 @@ export async function addShelleyUtxoAddress(
 ): Promise<{|
   KeyDerivationId: number,
 |}> {
-  const wasmEnterpriseAddr = RustModule.WalletV4.EnterpriseAddress.new(
+  const { enterpriseAddressHex, baseAddressHex } = enterpriseAndBaseAddressHexFromKeyHashes(
     networkId,
-    RustModule.WalletV4.Credential.from_keyhash(keyHash)
-  );
-  if (wasmEnterpriseAddr == null) {
-    throw new Error(`${nameof(addShelleyUtxoAddress)} address is not an enterprise address`);
-  }
-  const baseAddr = RustModule.WalletV4.BaseAddress.new(
-    networkId,
-    wasmEnterpriseAddr.payment_cred(),
-    RustModule.WalletV4.Credential.from_keyhash(stakingKey.hash())
+    keyHash.to_hex(),
+    stakingKey.hash().to_hex()
   );
   await addByHash({
     ...insertRequest,
     address: {
       type: CoreAddressTypes.CARDANO_ENTERPRISE,
-      data: wasmEnterpriseAddr.to_address().to_hex(),
+      data: enterpriseAddressHex,
     },
   });
   await addByHash({
     ...insertRequest,
     address: {
       type: CoreAddressTypes.CARDANO_BASE,
-      data: baseAddr.to_address().to_hex(),
+      data: baseAddressHex,
     },
   });
   return {
