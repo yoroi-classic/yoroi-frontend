@@ -3,6 +3,7 @@
 import type { CoreAddressT } from '../database/primitives/enums';
 import { CoreAddressTypes } from '../database/primitives/enums';
 import { RustModule } from '../../cardanoCrypto/rustLoader';
+import { stakingCredentialCborHexFromRewardAddress } from '../../cardanoCrypto/cmlAddress';
 import type { NetworkRow } from '../database/primitives/tables';
 import { isCardanoHaskell } from '../database/prepackaged/networks';
 import type { $npm$ReactIntl$MessageDescriptor } from 'react-intl';
@@ -284,7 +285,9 @@ export function isCardanoHaskellAddress(kind: CoreAddressT): boolean {
   return false;
 }
 
-export function getCardanoSpendingKeyHash(addr: RustModule.WalletV4.Address): // null -> legacy address (no key hash)
+export function getCardanoSpendingKeyHash(
+  addr: RustModule.WalletV4.Address
+): // null -> legacy address (no key hash)
 // undefined -> script hash instead of key hash
 RustModule.WalletV4.Ed25519KeyHash | null | void {
   {
@@ -355,11 +358,12 @@ export function getAddressPayload(address: string, network: $ReadOnly<NetworkRow
   }
 }
 
-export function unwrapStakingKey(stakingAddress: string): RustModule.WalletV4.Credential {
-  return (
-    RustModule.WalletV4.RewardAddress.from_address(RustModule.WalletV4.Address.from_hex(stakingAddress))?.payment_cred() ??
-    fail(`${nameof(unwrapStakingKey)} staking key invalid`)
-  );
+export function unwrapStakingKey(stakingAddress: string): string {
+  try {
+    return stakingCredentialCborHexFromRewardAddress(stakingAddress);
+  } catch (_error) {
+    return fail(`${nameof(unwrapStakingKey)} staking key invalid`);
+  }
 }
 
 export function isCertificateKindDrepDelegation(kind: $Values<CertificateKind>): boolean {

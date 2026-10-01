@@ -1,11 +1,56 @@
 // @flow
 import { RustModule } from './rustLoader';
 
+const parseAddress = (Module: any, address: string): any => {
+  try {
+    return Module.CML.Address.from_hex(address);
+  } catch (_hexError) {
+    try {
+      return Module.CML.Address.from_bech32(address);
+    } catch (_bech32Error) {
+      try {
+        return Module.CML.ByronAddress.from_base58(address).to_address();
+      } catch (_base58Error) {
+        return Module.CML.ByronAddress.from_cbor_hex(address).to_address();
+      }
+    }
+  }
+};
+
 export const addressHexToBech32 = (addressHex: string): string =>
   RustModule.WasmScope(Module => Module.CML.Address.from_hex(addressHex).to_bech32());
 
 export const addressBech32ToHex = (addressBech32: string): string =>
   RustModule.WasmScope(Module => Module.CML.Address.from_bech32(addressBech32).to_hex());
+
+export const credentialCborHexFromKeyHash = (keyHash: string): string =>
+  RustModule.WasmScope(Module => Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(keyHash)).to_cbor_hex());
+
+export const stakingCredentialCborHexFromRewardAddress = (stakingAddressHex: string): string =>
+  RustModule.WasmScope(Module => {
+    const rewardAddress = Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(stakingAddressHex));
+    if (rewardAddress == null) throw new Error('Staking address is not a reward address');
+    return rewardAddress.payment().to_cbor_hex();
+  });
+
+export const stakingKeyHashFromRewardAddress = (stakingAddressHex: string): string | null =>
+  RustModule.WasmScope(Module => {
+    const rewardAddress = Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(stakingAddressHex));
+    if (rewardAddress == null) throw new Error('Staking address is not a reward address');
+    return (
+      rewardAddress
+        .payment()
+        .as_pub_key()
+        ?.to_hex() ?? null
+    );
+  });
+
+export const addressHasStakeCredential = (address: string, credentialCborHex: string): boolean =>
+  RustModule.WasmScope(Module => {
+    const cmlAddress = parseAddress(Module, address);
+    const baseAddress = Module.CML.BaseAddress.from_address(cmlAddress);
+    return baseAddress != null && baseAddress.stake().to_cbor_hex() === credentialCborHex;
+  });
 
 export const baseAddressesFromKeyHashes = (
   networkId: number,

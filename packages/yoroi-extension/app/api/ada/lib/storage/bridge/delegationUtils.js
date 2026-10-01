@@ -2,7 +2,8 @@
 
 import BigNumber from 'bignumber.js';
 import { RustModule } from '../../cardanoCrypto/rustLoader';
-import { normalizeToAddress, unwrapStakingKey } from './utils';
+import { unwrapStakingKey } from './utils';
+import { addressHasStakeCredential } from '../../cardanoCrypto/cmlAddress';
 import type { IGetAllUtxosResponse } from '../models/PublicDeriver/interfaces';
 import { MultiToken } from '../../../../common/lib/MultiToken';
 import type { WalletState } from '../../../../../../chrome/extension/background/types';
@@ -29,8 +30,8 @@ export type RewardHistoryResponse = Array<
   [
     number, // epoch
     MultiToken, // amount
-    string, // poolHash
-  ],
+    string // poolHash
+  ]
 >;
 export type RewardHistoryFunc = (request: RewardHistoryRequest) => Promise<RewardHistoryResponse>;
 
@@ -46,39 +47,16 @@ export async function getDelegatedBalance(request: GetDelegatedBalanceRequest): 
   };
 }
 
-export function addrContainsAccountKey(
-  address: string,
-  targetAccountKey: RustModule.WalletV4.Credential | string,
-  acceptTypeMismatch: boolean
-): boolean {
-  const wasmAddr = normalizeToAddress(address);
-  if (wasmAddr == null) throw new Error(`${nameof(addrContainsAccountKey)} invalid address ${address}`);
-
-  const accountKeyString = typeof targetAccountKey === 'string' ? targetAccountKey : targetAccountKey.to_hex();
-
-  const asBase = RustModule.WalletV4.BaseAddress.from_address(wasmAddr);
-
-  if (asBase != null) {
-    const isAccountKey = asBase.stake_cred().to_hex() === accountKeyString;
-    // clean: de-allocate the pointer
-    asBase.free();
-    if (isAccountKey) return true;
+export function addrContainsAccountKey(address: string, targetAccountKey: string, acceptTypeMismatch: boolean): boolean {
+  try {
+    return addressHasStakeCredential(address, targetAccountKey) || acceptTypeMismatch;
+  } catch (_error) {
+    throw new Error(`${nameof(addrContainsAccountKey)} invalid address ${address}`);
   }
-
-  const asPointer = RustModule.WalletV4.PointerAddress.from_address(wasmAddr);
-  if (asPointer != null) {
-    // clean: de-allocate the pointer
-    asPointer.free();
-  }
-
-  // clean: de-allocate the pointer
-  wasmAddr.free();
-
-  return acceptTypeMismatch;
 }
 
 export function filterAddressesByStakingKey<T: { +address: string, ... }>(
-  stakingKey: RustModule.WalletV4.Credential,
+  stakingKey: string,
   utxos: $ReadOnlyArray<$ReadOnly<T>>,
   acceptTypeMismatch: boolean
 ): $ReadOnlyArray<$ReadOnly<T>> {

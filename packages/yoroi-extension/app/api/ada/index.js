@@ -127,7 +127,7 @@ import {
 import type { TransactionExportRow } from '../export';
 
 import { RustModule } from './lib/cardanoCrypto/rustLoader';
-import { baseAddressHexFromKeyHashes } from './lib/cardanoCrypto/cmlAddress';
+import { baseAddressHexFromKeyHashes, credentialCborHexFromKeyHash } from './lib/cardanoCrypto/cmlAddress';
 import type {
   CreateWalletRequest,
   CreateWalletResponse,
@@ -2290,7 +2290,7 @@ function getDifferenceAfterTx(
   stakingKey: RustModule.WalletV4.PublicKey,
   defaultToken: DefaultTokenEntry
 ): MultiToken {
-  const accountKeyString = RustModule.WasmScope(Scope => Scope.WalletV4.Credential.from_keyhash(stakingKey.hash()).to_hex());
+  const accountKeyString = credentialCborHexFromKeyHash(stakingKey.hash().to_hex());
 
   const sumInForKey = new MultiToken([], defaultToken);
   {

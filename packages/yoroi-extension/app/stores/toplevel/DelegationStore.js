@@ -15,7 +15,7 @@ import type { RemotePoolDisplayInfo } from '../../api/ada/lib/state-fetch/types'
 import { PoolInfoApi } from '@emurgo/yoroi-lib';
 import { MultiToken } from '../../api/common/lib/MultiToken';
 import { forceNonNull, maybe } from '../../coreUtils';
-import { unwrapStakingKey } from '../../api/ada/lib/storage/bridge/utils';
+import { stakingKeyHashFromRewardAddress } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
 
 import type {
   GetDelegatedBalanceFunc,
@@ -317,7 +317,7 @@ export default class DelegationStore extends Store<StoresMap> {
 
   checkGovernanceStatus: ({ stakingAddress: string, networkId: number, ... }) => Promise<void> = async publicDeriver => {
     try {
-      const skey = unwrapStakingKey(publicDeriver.stakingAddress).to_keyhash()?.to_hex();
+      const skey = stakingKeyHashFromRewardAddress(publicDeriver.stakingAddress);
       if (skey == null) {
         throw new Error('Cannot get staking key from the wallet!');
       }

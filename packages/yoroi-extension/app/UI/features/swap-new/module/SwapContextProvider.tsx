@@ -10,7 +10,7 @@ import {
   Dispatch,
   useCallback,
 } from 'react';
-import { unwrapStakingKey } from '../../../../api/ada/lib/storage/bridge/utils';
+import { stakingKeyHashFromRewardAddress } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { swapManagerMaker, swapStorageMaker } from '@yoroi/swap';
 import { isPrimaryToken, primaryTokenId } from '@yoroi/portfolio';
 import { useSwapConfig } from '../common/hooks/useSwapConfig';
@@ -57,9 +57,7 @@ export const SwapContextProvider = ({ children, currentWallet, stores }: any) =>
   useEffect(() => {
     if (!selectedWallet) return;
     const stakignAddr = selectedWallet.stakingAddress;
-    const skey = unwrapStakingKey(stakignAddr)
-      .to_keyhash()
-      ?.to_hex();
+    const skey = stakingKeyHashFromRewardAddress(stakignAddr);
     if (skey == null) {
       throw new Error('Cannot get staking key from the wallet!');
     }

@@ -2,7 +2,7 @@ import { GovernanceApi } from '@emurgo/yoroi-lib/dist/governance/emurgo-api';
 import * as React from 'react';
 import { RustModule } from '../../../../api/ada/lib/cardanoCrypto/rustLoader';
 import { dRepNormalize } from '../../../../api/ada/lib/cardanoCrypto/utils';
-import { unwrapStakingKey } from '../../../../api/ada/lib/storage/bridge/utils';
+import { stakingKeyHashFromRewardAddress } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { getPrivateStakingKey } from '../../../../api/thunk';
 import { DREP_ALWAYS_ABSTAIN, DREP_ALWAYS_NO_CONFIDENCE } from '../common/constants';
 import { useGovernanceManagerMaker } from '../common/hooks/useGovernanceManagerMaker';
@@ -88,7 +88,7 @@ export const GovernanceContextProvider = ({
   };
 
   React.useEffect(() => {
-    const skey = unwrapStakingKey(stakingAddress).to_keyhash()?.to_hex();
+    const skey = stakingKeyHashFromRewardAddress(stakingAddress);
     if (skey == null) {
       throw new Error(`missing staking key functionality`);
     }

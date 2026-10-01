@@ -3,12 +3,16 @@ import '../test-config.forTests';
 import { RustModule } from './rustLoader';
 import {
   addressBech32ToHex,
+  addressHasStakeCredential,
   addressHexToBech32,
   baseAddressHexFromKeyHashes,
   baseAddressesFromKeyHashes,
+  credentialCborHexFromKeyHash,
   deriveRewardAddressFromAddress,
   enterpriseAndBaseAddressHexFromKeyHashes,
   rewardAddressFromKeyHash,
+  stakingCredentialCborHexFromRewardAddress,
+  stakingKeyHashFromRewardAddress,
 } from './cmlAddress';
 
 beforeAll(async () => {
@@ -83,4 +87,41 @@ test('constructs enterprise, base, and reward addresses with CML', () => {
   });
   expect(rewardAddressFromKeyHash(1, stake)).toEqual(expected.rewardAddressHex);
   expect(baseAddressHexFromKeyHashes(1, payment, stake)).toEqual(expected.baseAddressHex);
+});
+
+test('extracts staking credential and key hashes from reward addresses with CML', () => {
+  const rewardAddressHex = 'e89ec1b053b44c4ec71efbd200e80eb2ef4cef788f984ee5846f6f11bf';
+  const expected = RustModule.WasmScope(Module => {
+    const rewardAddress = Module.WalletV4.RewardAddress.from_address(Module.WalletV4.Address.from_hex(rewardAddressHex));
+    const credential = rewardAddress?.payment_cred();
+    return {
+      credentialCborHex: credential?.to_hex(),
+      keyHashHex: credential?.to_keyhash()?.to_hex(),
+    };
+  });
+
+  expect(stakingCredentialCborHexFromRewardAddress(rewardAddressHex)).toEqual(expected.credentialCborHex);
+  expect(stakingKeyHashFromRewardAddress(rewardAddressHex)).toEqual(expected.keyHashHex);
+  expect(credentialCborHexFromKeyHash(expected.keyHashHex)).toEqual(expected.credentialCborHex);
+});
+
+test('matches base-address stake credentials for hex, bech32, and non-base address forms', () => {
+  const baseAddress = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
+  const stakeCredential = RustModule.WasmScope(Module =>
+    Module.WalletV4.BaseAddress.from_address(Module.WalletV4.Address.from_bech32(baseAddress))
+      ?.stake_cred()
+      .to_hex()
+  );
+  const baseAddressHex = RustModule.WasmScope(Module => Module.WalletV4.Address.from_bech32(baseAddress).to_hex());
+
+  expect(addressHasStakeCredential(baseAddress, stakeCredential)).toBe(true);
+  expect(addressHasStakeCredential(baseAddressHex, stakeCredential)).toBe(true);
+  expect(addressHasStakeCredential('addr1vahzs6qr0cmmrh64p7jd2qtq2wlgggl5e0enr2my20f44ssv2wfee', stakeCredential)).toBe(false);
+  expect(addressHasStakeCredential('Ae2tdPwUPEZ6ipzynAWN6atmb9LNqEogput2NrMD3Z8UL7phtQLDhrKt1bf', stakeCredential)).toBe(false);
+  expect(
+    addressHasStakeCredential(
+      '82d818582183581c99394e1ca570f79e250651062545898c022145444079d9019b612a51a0001a2ebac743',
+      stakeCredential
+    )
+  ).toBe(false);
 });
