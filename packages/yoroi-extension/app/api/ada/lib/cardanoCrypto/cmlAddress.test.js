@@ -1,7 +1,7 @@
 // @flow
 import '../test-config.forTests';
 import { RustModule } from './rustLoader';
-import { addressBech32ToHex, addressHexToBech32, deriveRewardAddressFromAddress } from './cmlAddress';
+import { addressBech32ToHex, addressHexToBech32, baseAddressesFromKeyHashes, deriveRewardAddressFromAddress } from './cmlAddress';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -32,4 +32,19 @@ test('derives a reward address from a base address stake credential', () => {
 
   expect(result.networkId).toEqual(networkId);
   expect(result.stakeCredential).toEqual(result.expectedStakeCredential);
+});
+
+test('reconstructs base addresses from payment and stake key hashes', () => {
+  const keyHashes = [{ payment: '01'.repeat(28), stake: '02'.repeat(28) }];
+  const expectedAddresses = RustModule.WasmScope(Module =>
+    keyHashes.map(({ payment, stake }) => {
+      const paymentCredential = Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(payment));
+      const stakeCredential = Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(stake));
+      return Module.WalletV4.BaseAddress.new(1, paymentCredential, stakeCredential)
+        .to_address()
+        .to_bech32();
+    })
+  );
+
+  expect(baseAddressesFromKeyHashes(1, keyHashes)).toEqual(expectedAddresses);
 });

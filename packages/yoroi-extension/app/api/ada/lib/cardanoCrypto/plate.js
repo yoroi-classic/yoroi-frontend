@@ -1,6 +1,7 @@
 // @flow
 
 import { RustModule } from './rustLoader';
+import { baseAddressesFromKeyHashes } from './cmlAddress';
 import type { GenerateAddressFunc } from '../../../common/lib/restoration/bip44AddressScan';
 import {
   ChainDerivations,
@@ -31,7 +32,10 @@ export const generateShelleyPlate = (
   const accountPublic = accountKey.to_public();
   const chainKey = accountPublic.derive(ChainDerivations.EXTERNAL);
 
-  const stakingKey = accountPublic.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(STAKING_KEY_INDEX).to_raw_key();
+  const stakingKey = accountPublic
+    .derive(ChainDerivations.CHIMERIC_ACCOUNT)
+    .derive(STAKING_KEY_INDEX)
+    .to_raw_key();
 
   const plate = walletChecksum(bytesToHex(accountPublic.as_bytes()));
   const generateAddressFunc = genBaseAddressBatchFunc(chainKey, stakingKey, chainNetworkId);
@@ -45,12 +49,11 @@ export function genBaseAddressBatchFunc(
   chainNetworkId: number
 ): GenerateAddressFunc {
   return (indices: Array<number>) => {
-    const stakeKey = RustModule.WalletV4.Credential.from_keyhash(stakingKey.hash());
-    return indices.map(i => {
+    const stake = stakingKey.hash().to_hex();
+    const keyHashes = indices.map(i => {
       const addressKey = addressChain.derive(i).to_raw_key();
-      const paymentKey = RustModule.WalletV4.Credential.from_keyhash(addressKey.hash());
-      const address = RustModule.WalletV4.BaseAddress.new(chainNetworkId, paymentKey, stakeKey);
-      return address.to_address().to_bech32();
+      return { payment: addressKey.hash().to_hex(), stake };
     });
+    return baseAddressesFromKeyHashes(chainNetworkId, keyHashes);
   };
 }
