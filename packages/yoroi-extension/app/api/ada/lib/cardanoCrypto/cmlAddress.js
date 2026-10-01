@@ -29,6 +29,15 @@ export const rewardAddressFromKeyHash = (networkId: number, stakeKeyHash: string
       .to_hex();
   });
 
+export const baseAddressHexFromKeyHashes = (networkId: number, paymentKeyHash: string, stakeKeyHash: string): string =>
+  RustModule.WasmScope(Module => {
+    const paymentCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(paymentKeyHash));
+    const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash));
+    return Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential)
+      .to_address()
+      .to_hex();
+  });
+
 export const enterpriseAndBaseAddressHexFromKeyHashes = (
   networkId: number,
   paymentKeyHash: string,

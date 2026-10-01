@@ -4,6 +4,7 @@ import { RustModule } from './rustLoader';
 import {
   addressBech32ToHex,
   addressHexToBech32,
+  baseAddressHexFromKeyHashes,
   baseAddressesFromKeyHashes,
   deriveRewardAddressFromAddress,
   enterpriseAndBaseAddressHexFromKeyHashes,
@@ -81,4 +82,5 @@ test('constructs enterprise, base, and reward addresses with CML', () => {
     baseAddressHex: expected.baseAddressHex,
   });
   expect(rewardAddressFromKeyHash(1, stake)).toEqual(expected.rewardAddressHex);
+  expect(baseAddressHexFromKeyHashes(1, payment, stake)).toEqual(expected.baseAddressHex);
 });
