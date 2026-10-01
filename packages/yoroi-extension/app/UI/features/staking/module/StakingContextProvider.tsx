@@ -8,7 +8,7 @@ import { GraphData } from '../common/types';
 import { networkConfigs } from '../../../utils/network-config';
 import { MultiToken } from '../../../../api/common/lib/MultiToken';
 import { getDefaultAssetByWallet } from '../../../../api/ada/lib/storage/database/prepackaged/networks';
-import { RustModule } from '../../../../api/ada/lib/cardanoCrypto/rustLoader';
+import { poolKeyHashHexToBech32 } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { BigNumber } from 'bignumber.js';
 
 const initialStakingProvider = {
@@ -18,8 +18,8 @@ const initialStakingProvider = {
 const StakingContext = React.createContext(initialStakingProvider);
 
 type StakingProviderProps = {
-  children: React.ReactNode;
-  stores: StoresMap;
+  children: React.ReactNode,
+  stores: StoresMap,
 };
 
 export const StakingContextProvider = observer(({ children, stores }: StakingProviderProps) => {
@@ -206,5 +206,5 @@ export function roundOneDecimal(num: number): string {
 }
 
 export function poolIdHexToBech32(hex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Ed25519KeyHash.from_hex(hex).to_bech32('pool'));
+  return poolKeyHashHexToBech32(hex);
 }

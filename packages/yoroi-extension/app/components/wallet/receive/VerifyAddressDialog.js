@@ -14,6 +14,7 @@ import { SelectedExplorer } from '../../../domain/SelectedExplorer';
 import { truncateAddress } from '../../../utils/formatters';
 import { CoreAddressTypes } from '../../../api/ada/lib/storage/database/primitives/enums';
 import { RustModule } from '../../../api/ada/lib/cardanoCrypto/rustLoader';
+import { stakeCredentialHashFromAddress } from '../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import {
   isCardanoHaskellAddress,
   getCardanoSpendingKeyHash,
@@ -156,16 +157,7 @@ export default class VerifyAddressDialog extends Component<Props> {
     const intl = this.context;
     const { type: addrType, address } = this.props.addressInfo;
 
-    const getStakingKey = (WasmScope: typeof RustModule) => {
-      if (addrType === CoreAddressTypes.CARDANO_BASE) {
-        const wasmAddr = WasmScope.WalletV4.BaseAddress.from_address(
-          WasmScope.WalletV4.Address.from_bech32(address)
-        )?.stake_cred();
-        return (wasmAddr?.to_keyhash() ?? wasmAddr?.to_scripthash())?.to_hex();
-      }
-    };
-
-    const stakingKey = RustModule.WasmScope(getStakingKey);
+    const stakingKey = addrType === CoreAddressTypes.CARDANO_BASE ? stakeCredentialHashFromAddress(address) : null;
     if (stakingKey == null) return null;
     return (
       <>

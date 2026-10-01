@@ -52,6 +52,17 @@ export const addressHasStakeCredential = (address: string, credentialCborHex: st
     return baseAddress != null && baseAddress.stake().to_cbor_hex() === credentialCborHex;
   });
 
+export const stakeCredentialHashFromAddress = (address: string): string | null =>
+  RustModule.WasmScope(Module => {
+    const baseAddress = Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(address));
+    const stakeCredential = baseAddress?.stake();
+    if (stakeCredential == null) return null;
+    return stakeCredential.as_pub_key()?.to_hex() ?? stakeCredential.as_script()?.to_hex() ?? null;
+  });
+
+export const poolKeyHashHexToBech32 = (poolKeyHashHex: string): string =>
+  RustModule.WasmScope(Module => Module.CML.Ed25519KeyHash.from_hex(poolKeyHashHex).to_bech32('pool'));
+
 export const baseAddressesFromKeyHashes = (
   networkId: number,
   keyHashes: Array<{ payment: string, stake: string }>

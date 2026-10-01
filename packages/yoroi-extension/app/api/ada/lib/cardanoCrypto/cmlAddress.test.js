@@ -10,7 +10,9 @@ import {
   credentialCborHexFromKeyHash,
   deriveRewardAddressFromAddress,
   enterpriseAndBaseAddressHexFromKeyHashes,
+  poolKeyHashHexToBech32,
   rewardAddressFromKeyHash,
+  stakeCredentialHashFromAddress,
   stakingCredentialCborHexFromRewardAddress,
   stakingKeyHashFromRewardAddress,
 } from './cmlAddress';
@@ -124,4 +126,38 @@ test('matches base-address stake credentials for hex, bech32, and non-base addre
       stakeCredential
     )
   ).toBe(false);
+});
+
+test('extracts the stake credential hash and encodes pool IDs with CML', () => {
+  const baseAddress = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
+  const poolKeyHash = 'ab'.repeat(28);
+  const expected = RustModule.WasmScope(Module => ({
+    stakeHash: Module.WalletV4.BaseAddress.from_address(Module.WalletV4.Address.from_bech32(baseAddress))
+      ?.stake_cred()
+      .to_keyhash()
+      ?.to_hex(),
+    poolId: Module.WalletV4.Ed25519KeyHash.from_hex(poolKeyHash).to_bech32('pool'),
+  }));
+
+  expect(stakeCredentialHashFromAddress(baseAddress)).toEqual(expected.stakeHash);
+  expect(stakeCredentialHashFromAddress('addr1vahzs6qr0cmmrh64p7jd2qtq2wlgggl5e0enr2my20f44ssv2wfee')).toBeNull();
+  expect(poolKeyHashHexToBech32(poolKeyHash)).toEqual(expected.poolId);
+});
+
+test('extracts script stake credential hashes from base addresses', () => {
+  const scriptHash = 'cd'.repeat(28);
+  const scriptAddress = RustModule.WasmScope(Module => {
+    const credential = Module.CML.Credential.new_script(Module.CML.ScriptHash.from_hex(scriptHash));
+    return Module.CML.BaseAddress.new(1, credential, credential)
+      .to_address()
+      .to_bech32();
+  });
+  const expectedScriptHash = RustModule.WasmScope(Module =>
+    Module.WalletV4.BaseAddress.from_address(Module.WalletV4.Address.from_bech32(scriptAddress))
+      ?.stake_cred()
+      .to_scripthash()
+      ?.to_hex()
+  );
+
+  expect(stakeCredentialHashFromAddress(scriptAddress)).toEqual(expectedScriptHash);
 });

@@ -1,6 +1,7 @@
 // @flow
 
 import { RustModule } from './rustLoader';
+import { poolKeyHashHexToBech32 } from './cmlAddress';
 import { bytesToHex, fail, forceNonNull, hexToBytes, iterateLenGet, maybe } from '../../../../coreUtils';
 import { base32ToHex, hexToBase32 } from '../storage/bridge/utils';
 
@@ -9,7 +10,7 @@ export function v4PublicToV2(v4Key: RustModule.WalletV4.Bip32PublicKey): RustMod
 }
 
 export function poolIdHexToBech32(hex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Ed25519KeyHash.from_hex(hex).to_bech32('pool'));
+  return poolKeyHashHexToBech32(hex);
 }
 
 export function addressHexToBech32(hex: string): string {
@@ -39,7 +40,11 @@ export function transactionHexToBodyHex(txHex: string): string {
 }
 
 export function transactionHexToHash(txHex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.FixedTransaction.from_hex(txHex).transaction_hash().to_hex());
+  return RustModule.WasmScope(Module =>
+    Module.WalletV4.FixedTransaction.from_hex(txHex)
+      .transaction_hash()
+      .to_hex()
+  );
 }
 
 export function transactionHexReplaceWitnessSet(txHex: string, witnessSetHex: string): string {
@@ -226,7 +231,13 @@ function getWithdrawalKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.T
   const withdrawals = txBody.withdrawals?.();
   if (withdrawals != null) {
     for (const rewardAddress of iterateLenGet(withdrawals.keys())) {
-      maybe(rewardAddress.payment_cred().to_keyhash()?.to_hex(), x => result.add(x));
+      maybe(
+        rewardAddress
+          .payment_cred()
+          .to_keyhash()
+          ?.to_hex(),
+        x => result.add(x)
+      );
     }
   }
   return result;
