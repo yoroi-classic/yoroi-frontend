@@ -13,13 +13,20 @@ import type { BigNum, LinearFee, TransactionBuilder } from '@emurgo/cardano-seri
 import * as WasmV4 from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
 import * as CrossCslBrowser from '@emurgo/cross-csl-browser';
+// $FlowFixMe[untyped-import]
+import * as CMLBrowser from '@dcspark/cardano-multiplatform-lib-browser';
 
 // TODO: unmagic the constants
 const MAX_VALUE_BYTES = 5000;
 const MAX_TX_BYTES = 16384;
 
 function isWasmPointer(o: ?any): boolean {
-  return o != null && typeof o.ptr === 'number' && typeof o.free === 'function';
+  return o != null && (typeof o.ptr === 'number' || typeof o.__wbg_ptr === 'number') && typeof o.free === 'function';
+}
+
+function wasmPointerIsFree(o: any): boolean {
+  const pointer = typeof o.__wbg_ptr === 'number' ? o.__wbg_ptr : o.ptr;
+  return pointer === 0;
 }
 
 /*
@@ -134,13 +141,13 @@ function createWasmScope(): {|
     free: () => {
       scope.forEach(x => {
         // Checking just to avoid a null-pointer crash
-        if (x.ptr !== 0) {
+        if (!wasmPointerIsFree(x)) {
           x.free();
         }
       });
     },
     size: () => scope.length,
-    isFree: () => scope.every(x => x.ptr === 0),
+    isFree: () => scope.every(wasmPointerIsFree),
   };
 }
 
@@ -224,6 +231,10 @@ class Module {
 
   get CrossCsl(): typeof CrossCslBrowser {
     return CrossCslBrowser;
+  }
+
+  get CML(): any {
+    return CMLBrowser;
   }
 
   WalletV4TxBuilderFromConfig(config: {

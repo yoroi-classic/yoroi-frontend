@@ -1,6 +1,6 @@
 import BigNumber from 'bignumber.js';
 import moment from 'moment';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
+import { addressHexToBech32 } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import { maybe } from '../../coreUtils';
 import { genLookupOrFail, getTokenIdentifierIfExists, getTokenStrictName } from '../../stores/stateless/tokenHelpers';
@@ -16,8 +16,8 @@ export const mapStakingKeyStateToGovernanceAction = (state: any) => {
   return vote.action === 'abstain'
     ? { kind: 'abstain' }
     : vote.action === 'no-confidence'
-      ? { kind: 'no-confidence' }
-      : { kind: 'delegate', drepID: vote.drepID };
+    ? { kind: 'no-confidence' }
+    : { kind: 'delegate', drepID: vote.drepID };
 };
 
 const getStakePoolMeta = (stores: any) => {
@@ -52,7 +52,7 @@ export const getTotalAmount = (walletAmount, rewards) => {
 };
 
 const combinedMultiToken = (walletAmount /*: MultiToken */, rewards /*: MultiToken */) /*: MultiToken */ => {
-  return walletAmount && rewards ? walletAmount.joinAddCopy(rewards) : (walletAmount ?? rewards);
+  return walletAmount && rewards ? walletAmount.joinAddCopy(rewards) : walletAmount ?? rewards;
 };
 
 const getWalletTotalAdaBalance = (stores, selectedWallet /*: WalletState */) /*: MultiToken */ => {
@@ -177,7 +177,7 @@ export const createCurrrentWalletInfo = (stores: any): CurrentWalletType | undef
 
     const allWalletAddresses = selectedWallet?.allAddresses?.utxoAddresses?.map(a => {
       if (a.address?.Hash) {
-        return RustModule.WalletV4.Address.from_hex(a.address?.Hash).to_bech32();
+        return addressHexToBech32(a.address?.Hash);
       }
     });
 

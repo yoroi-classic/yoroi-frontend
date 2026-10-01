@@ -31,9 +31,47 @@ export const useTxBody = ({
 
 export const getCborTxBody = async (cbor: string) => {
   try {
-    const txBody = RustModule.WalletV4.FixedTransaction.from_hex(cbor).body().to_json();
+    return RustModule.WasmScope(Module => {
+      const body = Module.CML.Transaction.from_cbor_hex(cbor).body();
+      const txBody = JSON.parse(body.to_json());
 
-    return JSON.parse(txBody);
+      // CML's JSON serializer emits coin quantities as JSON numbers. Convert them
+      // from the integer accessors instead so JSON.parse cannot round Lovelace or
+      // token quantities above Number.MAX_SAFE_INTEGER.
+      txBody.fee = body.fee().toString();
+      const outputs = body.outputs();
+      txBody.outputs = Array.from({ length: outputs.len() }, (_, index) => {
+        const output = outputs.get(index);
+        const amount = output.amount();
+        const multiAsset = amount.multi_asset();
+        const policyIds = multiAsset.keys();
+        const formattedAssets = {};
+
+        for (let policyIndex = 0; policyIndex < policyIds.len(); policyIndex++) {
+          const policyId = policyIds.get(policyIndex);
+          const assets = multiAsset.get_assets(policyId);
+          const assetNames = assets.keys();
+          const formattedPolicyAssets = {};
+
+          for (let assetIndex = 0; assetIndex < assetNames.len(); assetIndex++) {
+            const assetName = assetNames.get(assetIndex);
+            formattedPolicyAssets[assetName.to_hex()] = assets.get(assetName).toString();
+          }
+
+          formattedAssets[policyId.to_hex()] = formattedPolicyAssets;
+        }
+
+        return {
+          address: output.address().to_bech32(),
+          amount: {
+            coin: amount.coin().toString(),
+            multiasset: Object.keys(formattedAssets).length === 0 ? null : formattedAssets,
+          },
+        };
+      });
+
+      return txBody;
+    });
   } catch (e) {
     console.warn('getCborTxBody failed:', e);
     throw e;

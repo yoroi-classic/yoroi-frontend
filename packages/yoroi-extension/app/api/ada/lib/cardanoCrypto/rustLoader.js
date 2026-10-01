@@ -141,13 +141,23 @@ class Module {
   _wasmv4: WasmV4;
   _messageSigning: WasmMessageSigning;
   _crossCsl: CrossCsl;
+  _cml: any;
 
   async load(): Promise<void> {
-    if (this._wasmv2 != null || this._wasmv4 != null || this._messageSigning != null || this._crossCsl != null) return;
+    if (
+      this._wasmv2 != null &&
+      this._wasmv4 != null &&
+      this._messageSigning != null &&
+      this._crossCsl != null &&
+      this._cml != null
+    )
+      return;
     this._wasmv2 = await import('cardano-wallet-browser');
     this._wasmv4 = await import('@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib');
     this._messageSigning = await import('@emurgo/cardano-message-signing-browser/cardano_message_signing');
     this._crossCsl = await import('@emurgo/cross-csl-browser');
+    // $FlowFixMe[untyped-import]
+    this._cml = await import('@dcspark/cardano-multiplatform-lib-browser');
   }
 
   __WasmScopeInternal<T>(callback: Module => T): {|
@@ -238,6 +248,9 @@ class Module {
   }
   get CrossCsl(): CrossCsl {
     return this._crossCsl;
+  }
+  get CML(): any {
+    return this._cml;
   }
   WalletV4TxBuilderFromConfig(config: {
     +LinearFee: {|

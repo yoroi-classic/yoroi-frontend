@@ -23,8 +23,18 @@ type FormattedMetadata = { hash: string | null; metadata: unknown | null };
 export const formatCborMetadata = (cbor: string, txBody: TransactionBody): FormattedMetadata => {
   const hash = txBody?.auxiliary_data_hash ?? null;
   try {
-    const tx = RustModule.WalletV4.Transaction.from_hex(cbor);
-    const aux = tx?.auxiliary_data()?.to_json();
+    const aux = RustModule.WasmScope(Module => {
+      const auxiliaryData = Module.CML.Transaction.from_cbor_hex(cbor).auxiliary_data();
+      const metadata = auxiliaryData?.metadata();
+      if (metadata == null) return undefined;
+
+      const labels = metadata.labels();
+      for (let index = 0; index < labels.len(); index++) {
+        const label = labels.get(index);
+        if (Number(label) === 674) return metadata.get(label)?.to_json();
+      }
+      return undefined;
+    });
     return { hash, metadata: format674(aux) };
   } catch (e) {
     console.error('Error parsing metadata', e);
@@ -130,6 +140,7 @@ const format674 = (raw: any) => {
   const label =
     data?.metadata?.['674'] ??
     data?.['674'] ?? // sometimes it’s already at root
+    (Array.isArray(data?.map) ? data : null) ??
     null;
 
   if (!label || typeof label !== 'object' || !Array.isArray(label.map)) return null;

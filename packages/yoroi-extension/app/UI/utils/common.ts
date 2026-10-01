@@ -1,4 +1,7 @@
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
+import {
+  addressHexToBech32 as addressHexToBech32WithCml,
+  deriveRewardAddressFromAddress as deriveRewardAddressWithCml,
+} from '../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { getNetworkById, getCardanoHaskellBaseConfigCombined } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import { truncateAddressShort, truncateAddress } from '../../utils/formatters';
 
@@ -7,12 +10,7 @@ export const deriveRewardAddressFromAddress = (address: string, networkId: numbe
     const network = getNetworkById(networkId);
     const networkConfig = getCardanoHaskellBaseConfigCombined(network);
 
-    const from_bech32 = RustModule.WalletV4.Address.from_bech32(address);
-    const baseAddress = RustModule.WalletV4.BaseAddress.from_address(from_bech32);
-    const stakeCred = baseAddress?.stake_cred();
-    const stakeCredential = RustModule.WalletV4.RewardAddress.new(networkConfig.ChainNetworkId, stakeCred);
-    const rewardAddress = stakeCredential.to_address();
-    const rewardAddrAsAddress = rewardAddress.to_bech32();
+    const rewardAddrAsAddress = deriveRewardAddressWithCml(address, networkConfig.ChainNetworkId);
 
     if (typeof rewardAddrAsAddress !== 'string') throw new Error('Its not possible to derive reward address');
     return rewardAddrAsAddress;
@@ -23,7 +21,7 @@ export const deriveRewardAddressFromAddress = (address: string, networkId: numbe
 };
 
 export function addressHexToBech32(hex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Address.from_hex(hex).to_bech32());
+  return addressHexToBech32WithCml(hex);
 }
 
 type Truncate = 'short' | 'long' | 'none';

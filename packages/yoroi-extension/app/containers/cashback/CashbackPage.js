@@ -16,7 +16,7 @@ import { walletSignData, encodeHardwareWalletSignResult } from '../../api/ada';
 import { getPublicDeriverById } from '../../../chrome/extension/background/handlers/yoroi/utils';
 import Dialog from '../../components/widgets/Dialog';
 import DialogCloseButton from '../../components/widgets/DialogCloseButton';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
+import { addressHexToBech32 } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { useTheme, Box, TextField, Typography, DialogContentText, IconButton, styled } from '@mui/material';
 import { LedgerConnect } from '../../utils/hwConnectHandler';
 import { MessageAddressFieldType, AddressType } from '@cardano-foundation/ledgerjs-hw-app-cardano';
@@ -249,9 +249,7 @@ const CashbackPageContainer = observer((props: AllProps) => {
     try {
       const publicDeriver = stores.wallets.selected;
       if (!publicDeriver) throw Error('no publicDeriver');
-      const walletAddress = RustModule.WalletV4.Address.from_hex(
-        publicDeriver.externalAddressesByType[CoreAddressTypes.CARDANO_BASE][0].address
-      ).to_bech32();
+      const walletAddress = addressHexToBech32(publicDeriver.externalAddressesByType[CoreAddressTypes.CARDANO_BASE][0].address);
 
       const response = await fetch(`${bringConfig.baseUrl}check/portal`, {
         method: 'POST',
@@ -276,7 +274,12 @@ const CashbackPageContainer = observer((props: AllProps) => {
 
   function stringToHex(str) {
     return Array.from(str)
-      .map(char => char.charCodeAt(0).toString(16).padStart(2, '0'))
+      .map(char =>
+        char
+          .charCodeAt(0)
+          .toString(16)
+          .padStart(2, '0')
+      )
       .join('');
   }
 

@@ -1,15 +1,22 @@
-import {
-  CertificateJSON,
-  TransactionBodyJSON,
-  TransactionInputsJSON,
-  TransactionOutputsJSON,
-} from '@emurgo/cardano-serialization-lib-nodejs';
-import { CredKind } from '@emurgo/cross-csl-core';
 import { Balance, Portfolio } from '@yoroi/types';
 
-export type TransactionBody = TransactionBodyJSON;
-export type TransactionInputs = TransactionInputsJSON;
-export type TransactionOutputs = TransactionOutputsJSON;
+export type CardanoCredentialKind = 0 | 1;
+
+export type TransactionInput = { index: number; transaction_id: string };
+export type TransactionInputs = TransactionInput[];
+export type TransactionOutput = {
+  address: string;
+  amount: { coin: string; multiasset?: Record<string, Record<string, string>> | null };
+};
+export type TransactionOutputs = TransactionOutput[];
+export type TransactionBody = {
+  auxiliary_data_hash?: string | null;
+  certs?: Array<Record<string, unknown>> | null;
+  fee: string;
+  inputs: TransactionInputs;
+  outputs: TransactionOutputs;
+  reference_inputs?: TransactionInputs | null;
+};
 
 export type FormattedInput = {
   assets: Array<{
@@ -20,7 +27,7 @@ export type FormattedInput = {
     isPrimary: boolean;
   }>;
   address: string | undefined;
-  addressKind: CredKind | null;
+  addressKind: CardanoCredentialKind | null;
   rewardAddress: string | null;
   ownAddress: boolean | null;
   txIndex: number;
@@ -38,7 +45,7 @@ export type FormattedOutput = {
     isPrimary: boolean;
   }>;
   address: string;
-  addressKind: CredKind | null;
+  addressKind: CardanoCredentialKind | null;
   rewardAddress: string | null;
   ownAddress: boolean;
 };
@@ -67,19 +74,7 @@ export type FormattedMetadata = {
   metadata: { msg: Array<string> } | null;
 };
 
-type AssertEqual<T, Expected> = T extends Expected
-  ? Expected extends T
-    ? true
-    : ['Type', Expected, 'is not equal to', T]
-  : ['Type', T, 'is not equal to', Expected];
-
-type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
-
-type Transformed<T> = {
-  [K in keyof UnionToIntersection<T>]: { type: K; value: UnionToIntersection<T>[K] };
-}[keyof UnionToIntersection<T>];
-
-export type FormattedCertificate = Transformed<CertificateJSON>;
+export type FormattedCertificate = { type: CertificateType; value: unknown };
 
 export const CertificateType = {
   StakeRegistration: 'StakeRegistration', //
@@ -101,10 +96,7 @@ export const CertificateType = {
   VoteRegistrationAndDelegation: 'VoteRegistrationAndDelegation', // NO
 } as const;
 
-export type CertificateType = (typeof CertificateType)[keyof typeof CertificateType];
-
-// Makes sure CertificateType lists all the certificates in CertificateJSON
-export type AssertAllImplementedCertTypes = AssertEqual<CertificateType, keyof UnionToIntersection<CertificateJSON>>;
+export type CertificateType = typeof CertificateType[keyof typeof CertificateType];
 
 export const TransactionResult = {
   SUCCESS: 'success', //
@@ -113,4 +105,4 @@ export const TransactionResult = {
   NO_CARDANO_RUNNING: 'noCardanoRunning', //
 } as const;
 
-export type TransactionResultType = (typeof TransactionResult)[keyof typeof TransactionResult];
+export type TransactionResultType = typeof TransactionResult[keyof typeof TransactionResult];

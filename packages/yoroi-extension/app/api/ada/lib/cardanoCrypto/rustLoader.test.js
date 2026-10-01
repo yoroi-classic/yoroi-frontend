@@ -27,3 +27,20 @@ test('Wasm Scope Monad Simple Address Convert', async () => {
     .unwrap(bytes => bytesToHex(bytes));
   expect(addressFixedInScope).toEqual(addressFixedDirectly);
 });
+
+test('CML objects created in a wasm scope are freed', async () => {
+  const addr = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
+  const scopeResult = RustModule.__WasmScopeInternal(Module => Module.CML.Address.from_bech32(addr).to_bech32());
+
+  expect(scopeResult.result).toEqual(addr);
+  expect(scopeResult.scopeSize).toEqual(1);
+  expect(scopeResult.scopeIsFree).toEqual(true);
+});
+
+test('reloads CML when another wasm module loaded before it', async () => {
+  RustModule._cml = null;
+
+  await RustModule.load();
+
+  expect(typeof RustModule.CML.Address.from_bech32).toEqual('function');
+});
