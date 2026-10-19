@@ -224,15 +224,15 @@ export const makeCip8Key: Uint8Array => RustModule.MessageSigning.COSEKey = publ
   return key;
 };
 
-function getWithdrawalKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.TransactionBody): Set<string> {
+function getWithdrawalKeyHashesFromTransactionBody(txBody: any): Set<string> {
   const result = new Set<string>();
   const withdrawals = txBody.withdrawals?.();
   if (withdrawals != null) {
     for (const rewardAddress of iterateLenGet(withdrawals.keys())) {
       maybe(
         rewardAddress
-          .payment_cred()
-          .to_keyhash()
+          .payment()
+          .as_pub_key()
           ?.to_hex(),
         x => result.add(x)
       );
@@ -241,47 +241,51 @@ function getWithdrawalKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.T
   return result;
 }
 
-function resolveCredential(cred: RustModule.WalletV4.Credential): {| keyHash: ?string, scriptHash: ?string |} {
-  return {
-    keyHash: cred.to_keyhash()?.to_hex(),
-    scriptHash: cred.to_scripthash()?.to_hex(),
-  };
+function getCertificateKeyHash(credential: any): string | null {
+  return credential.as_pub_key()?.to_hex() ?? null;
 }
 
-function getCertificateStakeCredential(cert: RustModule.WalletV4.Certificate): ?{| keyHash: ?string, scriptHash: ?string |} {
-  switch (cert.kind()) {
-    case RustModule.WalletV4.CertificateKind.StakeRegistration: {
-      const stakeRegCert = forceNonNull(cert.as_stake_registration());
-      if (!stakeRegCert.coin()) {
-        return null;
-      }
-      return resolveCredential(stakeRegCert.stake_credential());
-    }
-    case RustModule.WalletV4.CertificateKind.StakeDeregistration:
-      return resolveCredential(forceNonNull(cert.as_stake_deregistration()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeAndVoteDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_and_vote_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeRegistrationAndDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_registration_and_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeVoteRegistrationAndDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_vote_registration_and_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.VoteDelegation:
-      return resolveCredential(forceNonNull(cert.as_vote_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.VoteRegistrationAndDelegation:
-      return resolveCredential(forceNonNull(cert.as_vote_registration_and_delegation()).stake_credential());
-    default:
-      return null;
-  }
-}
-
-function getCertificateKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.TransactionBody): Set<string> {
+function getCertificateKeyHashesFromTransactionBody(txBody: any): Set<string> {
   const result = new Set<string>();
   const certificates = txBody.certs?.();
   if (certificates != null) {
-    for (const cert of iterateLenGet(certificates)) {
-      maybe(getCertificateStakeCredential(cert)?.keyHash, x => result.add(x));
+    for (const certificate of iterateLenGet(certificates)) {
+      const kind = certificate.kind();
+      let credential;
+      switch (kind) {
+        case RustModule.CML.CertificateKind.StakeDeregistration:
+          credential = certificate.as_stake_deregistration()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeDelegation:
+          credential = certificate.as_stake_delegation()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.RegCert:
+          credential = certificate.as_reg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.UnregCert:
+          credential = certificate.as_unreg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.VoteDelegCert:
+          credential = certificate.as_vote_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeVoteDelegCert:
+          credential = certificate.as_stake_vote_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeRegDelegCert:
+          credential = certificate.as_stake_reg_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.VoteRegDelegCert:
+          credential = certificate.as_vote_reg_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeVoteRegDelegCert:
+          credential = certificate.as_stake_vote_reg_deleg_cert()?.stake_credential();
+          break;
+        // The legacy registration variant has no explicit deposit and was
+        // deliberately excluded by the previous CSL parser.
+        default:
+          break;
+      }
+      maybe(credential == null ? null : getCertificateKeyHash(credential), x => result.add(x));
     }
   }
   return result;
@@ -289,7 +293,7 @@ function getCertificateKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.
 
 export function getStakingKeyHashesInTransactionBody(txBodyHex: string): Set<string> {
   return RustModule.WasmScope(Module => {
-    const txBody = Module.WalletV4.TransactionBody.from_hex(txBodyHex);
+    const txBody = Module.CML.TransactionBody.from_cbor_hex(txBodyHex);
     const withdrawalKeys = getWithdrawalKeyHashesFromTransactionBody(txBody);
     const certificateKeys = getCertificateKeyHashesFromTransactionBody(txBody);
     return new Set([...withdrawalKeys, ...certificateKeys]);

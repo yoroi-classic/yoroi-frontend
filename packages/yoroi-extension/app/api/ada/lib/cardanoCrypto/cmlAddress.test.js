@@ -22,6 +22,7 @@ import {
   dRepNormalize,
   dRepToMaybeCredentialHex,
   dRepToPreCip129,
+  getStakingKeyHashesInTransactionBody,
   pubKeyHashToRewardAddress,
 } from './utils';
 import { hexToBase32 } from '../storage/bridge/utils';
@@ -213,4 +214,29 @@ test('normalizes legacy and CIP-129 DRep IDs with CML credential parsing', () =>
   expect(dRepToPreCip129(cip129KeyDrep)).toEqual(legacyKeyDrep);
   expect(dRepToPreCip129(cip129ScriptDrep)).toEqual(scriptHashDrep);
   expect(dRepToMaybeCredentialHex('drep1invalid')).toBeNull();
+});
+
+test('extracts key-controlled staking credentials from CML transaction certificates and withdrawals', () => {
+  const expectedKeyHashes = ['78'.repeat(28), '9a'.repeat(28), 'bc'.repeat(28)];
+  const transactionBodyHex = RustModule.WasmScope(Module => {
+    const CML = Module.CML;
+    const certificates = CML.CertificateList.new();
+    const registrationKey = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(expectedKeyHashes[0]));
+    const delegationKey = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(expectedKeyHashes[1]));
+    const scriptCredential = CML.Credential.new_script(CML.ScriptHash.from_hex('de'.repeat(28)));
+    const withdrawalKey = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(expectedKeyHashes[2]));
+    certificates.add(CML.Certificate.new_reg_cert(registrationKey, 2_000_000n));
+    certificates.add(CML.Certificate.new_stake_delegation(delegationKey, CML.Ed25519KeyHash.from_hex('ef'.repeat(28))));
+    certificates.add(CML.Certificate.new_stake_registration(scriptCredential));
+
+    const withdrawals = CML.MapRewardAccountToCoin.new();
+    withdrawals.insert(CML.RewardAddress.new(1, withdrawalKey), 5n);
+
+    const transactionBody = CML.TransactionBody.new(CML.TransactionInputList.new(), CML.TransactionOutputList.new(), 1n);
+    transactionBody.set_certs(certificates);
+    transactionBody.set_withdrawals(withdrawals);
+    return transactionBody.to_cbor_hex();
+  });
+
+  expect(getStakingKeyHashesInTransactionBody(transactionBodyHex)).toEqual(new Set(expectedKeyHashes));
 });
