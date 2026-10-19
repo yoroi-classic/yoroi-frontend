@@ -1,7 +1,12 @@
 // @flow
 
 import { RustModule } from './rustLoader';
-import { poolKeyHashHexToBech32 } from './cmlAddress';
+import {
+  addressBech32ToHex as cmlAddressBech32ToHex,
+  addressHexToBech32 as cmlAddressHexToBech32,
+  poolKeyHashHexToBech32,
+  rewardAddressFromKeyHash,
+} from './cmlAddress';
 import { bytesToHex, fail, forceNonNull, hexToBytes, iterateLenGet, maybe } from '../../../../coreUtils';
 import { base32ToHex, hexToBase32 } from '../storage/bridge/utils';
 
@@ -14,11 +19,11 @@ export function poolIdHexToBech32(hex: string): string {
 }
 
 export function addressHexToBech32(hex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Address.from_hex(hex).to_bech32());
+  return cmlAddressHexToBech32(hex);
 }
 
 export function addressBech32ToHex(bech32: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Address.from_bech32(bech32).to_hex());
+  return cmlAddressBech32ToHex(bech32);
 }
 
 export function transactionHexToWitnessSet(txHex: string): string {
@@ -79,19 +84,19 @@ export function dRepToMaybeCredentialHex(s: string): ?string {
           return maybe(base32ToHex(s), dRepToMaybeCredentialHex);
         }
         // Pre CIP129 drep1 encoding means same as drep_vkh1 now
-        return Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_bech32(s)).to_hex();
+        return Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_bech32(s)).to_cbor_hex();
       }
       if (s.startsWith('drep_vkh1')) {
-        return Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_bech32(s)).to_hex();
+        return Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_bech32(s)).to_cbor_hex();
       }
       if (s.startsWith('drep_script1')) {
-        return Module.WalletV4.Credential.from_scripthash(Module.WalletV4.ScriptHash.from_bech32(s)).to_hex();
+        return Module.CML.Credential.new_script(Module.CML.ScriptHash.from_bech32(s)).to_cbor_hex();
       }
       if (isPotentiallyValidHex && s.startsWith('22')) {
-        return Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(s.substr(2))).to_hex();
+        return Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(s.substr(2))).to_cbor_hex();
       }
       if (isPotentiallyValidHex && s.startsWith('23')) {
-        return Module.WalletV4.Credential.from_scripthash(Module.WalletV4.ScriptHash.from_hex(s.substr(2))).to_hex();
+        return Module.CML.Credential.new_script(Module.CML.ScriptHash.from_hex(s.substr(2))).to_cbor_hex();
       }
     } catch {} // eslint-disable-line no-empty
     return null;
@@ -104,9 +109,9 @@ function parseDrep(drep: string): ?{| hash: string, isScript: boolean |} {
     return null;
   }
   return RustModule.WasmScope(Module => {
-    const cred = Module.WalletV4.Credential.from_hex(credentialHex);
-    const isScript = cred.kind() === Module.WalletV4.CredKind.Script;
-    const hash = isScript ? forceNonNull(cred.to_scripthash()).to_hex() : forceNonNull(cred.to_keyhash()).to_hex();
+    const cred = Module.CML.Credential.from_cbor_hex(credentialHex);
+    const isScript = cred.as_script() != null;
+    const hash = isScript ? forceNonNull(cred.as_script()).to_hex() : forceNonNull(cred.as_pub_key()).to_hex();
     return { hash, isScript };
   });
 }
@@ -143,14 +148,7 @@ export function dRepToPreCip129(drep: string): string {
 }
 
 export function pubKeyHashToRewardAddress(hex: string, network: number): string {
-  return RustModule.WasmScope(Module =>
-    Module.WalletV4.RewardAddress.new(
-      network,
-      Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(hex))
-    )
-      .to_address()
-      .to_hex()
-  );
+  return rewardAddressFromKeyHash(network, hex);
 }
 
 export const cip8Sign = async (

@@ -16,6 +16,15 @@ import {
   stakingCredentialCborHexFromRewardAddress,
   stakingKeyHashFromRewardAddress,
 } from './cmlAddress';
+import {
+  addressBech32ToHex as legacyAddressBech32ToHex,
+  addressHexToBech32 as legacyAddressHexToBech32,
+  dRepNormalize,
+  dRepToMaybeCredentialHex,
+  dRepToPreCip129,
+  pubKeyHashToRewardAddress,
+} from './utils';
+import { hexToBase32 } from '../storage/bridge/utils';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -160,4 +169,48 @@ test('extracts script stake credential hashes from base addresses', () => {
   );
 
   expect(stakeCredentialHashFromAddress(scriptAddress)).toEqual(expectedScriptHash);
+});
+
+test('keeps shared address and reward-address utility output compatible with CSL', () => {
+  const address = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
+  const addressHex = RustModule.WasmScope(Module => Module.WalletV4.Address.from_bech32(address).to_hex());
+  const stakeKeyHash = '12'.repeat(28);
+  const rewardAddressHex = RustModule.WasmScope(Module =>
+    Module.WalletV4.RewardAddress.new(
+      1,
+      Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(stakeKeyHash))
+    )
+      .to_address()
+      .to_hex()
+  );
+
+  expect(legacyAddressBech32ToHex(address)).toEqual(addressHex);
+  expect(legacyAddressHexToBech32(addressHex)).toEqual(address);
+  expect(pubKeyHashToRewardAddress(stakeKeyHash, 1)).toEqual(rewardAddressHex);
+});
+
+test('normalizes legacy and CIP-129 DRep IDs with CML credential parsing', () => {
+  const keyHash = '34'.repeat(28);
+  const scriptHash = '56'.repeat(28);
+  const legacyKeyDrep = hexToBase32(keyHash, 'drep');
+  const keyHashDrep = hexToBase32(keyHash, 'drep_vkh');
+  const scriptHashDrep = hexToBase32(scriptHash, 'drep_script');
+  const cip129KeyDrep = hexToBase32(`22${keyHash}`, 'drep');
+  const cip129ScriptDrep = hexToBase32(`23${scriptHash}`, 'drep');
+  const expected = RustModule.WasmScope(Module => ({
+    keyCredential: Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(keyHash)).to_hex(),
+    scriptCredential: Module.WalletV4.Credential.from_scripthash(Module.WalletV4.ScriptHash.from_hex(scriptHash)).to_hex(),
+  }));
+
+  expect(dRepToMaybeCredentialHex(legacyKeyDrep)).toEqual(expected.keyCredential);
+  expect(dRepToMaybeCredentialHex(keyHashDrep)).toEqual(expected.keyCredential);
+  expect(dRepToMaybeCredentialHex(scriptHashDrep)).toEqual(expected.scriptCredential);
+  expect(dRepToMaybeCredentialHex(cip129KeyDrep)).toEqual(expected.keyCredential);
+  expect(dRepToMaybeCredentialHex(cip129ScriptDrep)).toEqual(expected.scriptCredential);
+  expect(dRepNormalize(legacyKeyDrep)).toEqual(cip129KeyDrep);
+  expect(dRepNormalize(scriptHashDrep)).toEqual(cip129ScriptDrep);
+  expect(dRepNormalize(cip129KeyDrep)).toEqual(cip129KeyDrep);
+  expect(dRepToPreCip129(cip129KeyDrep)).toEqual(legacyKeyDrep);
+  expect(dRepToPreCip129(cip129ScriptDrep)).toEqual(scriptHashDrep);
+  expect(dRepToMaybeCredentialHex('drep1invalid')).toBeNull();
 });
