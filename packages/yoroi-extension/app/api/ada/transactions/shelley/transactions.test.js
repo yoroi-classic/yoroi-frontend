@@ -1233,6 +1233,8 @@ describe('Create sendAll unsigned TX from UTXO', () => {
         KeyDeposit: new BigNumber('500'),
       },
     });
+    expect(Array.from(signRequest.self())).toEqual(Array.from(response.txBuilder));
+    expect(signRequest.isEqual(response.txBuilder)).toBe(true);
     const serializedSignRequestHex = signRequest.serializedUnsignedTxHex();
     const signRequestSummary = RustModule.WasmScope(Module => {
       const serializedSignRequest = Module.CML.Transaction.from_cbor_hex(serializedSignRequestHex);

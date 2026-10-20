@@ -8,7 +8,7 @@ import { ISignRequest } from '../../../common/lib/transactions/ISignRequest';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
-import { multiTokenFromCardanoValue, multiTokenFromRemote } from '../utils';
+import { multiTokenFromRemote } from '../utils';
 import { bytesToHex } from '../../../../coreUtils';
 
 function multiTokenFromCmlValue(cml: any, value: any, networkId: number): MultiToken {
@@ -69,10 +69,10 @@ export type LedgerNanoCatalystRegistrationTxSignData = {|
 
 export type TrezorTCatalystRegistrationTxSignData = LedgerNanoCatalystRegistrationTxSignData;
 
-type UnsignedTx = RustModule.WalletV4.TransactionBuilder | Uint8Array;
-type TxMetadata = RustModule.WalletV4.AuxiliaryData | Uint8Array;
+type UnsignedTx = Uint8Array;
+type TxMetadata = Uint8Array;
 
-function metadataBytes(metadata: TxMetadata): Uint8Array {
+function metadataBytes(metadata: RustModule.WalletV4.AuxiliaryData | Uint8Array): Uint8Array {
   return metadata instanceof Uint8Array ? metadata : metadata.to_bytes();
 }
 
@@ -94,7 +94,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     implicitInputValue?: void | Uint8Array,
     depositAmount?: void | string,
     changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
-    metadata: void | TxMetadata,
+    metadata: void | (RustModule.WalletV4.AuxiliaryData | TxMetadata),
     networkSettingSnapshot: NetworkSettingSnapshot,
     trezorTCatalystRegistrationTxSignData?: void | TrezorTCatalystRegistrationTxSignData,
     ledgerNanoCatalystRegistrationTxSignData?: void | LedgerNanoCatalystRegistrationTxSignData,
@@ -105,7 +105,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     this.implicitInputValue = data.implicitInputValue;
     this.depositAmount = data.depositAmount;
     this.changeAddr = data.changeAddr;
-    this.metadata = data.metadata;
+    this.metadata = data.metadata == null ? undefined : metadataBytes(data.metadata);
     this.networkSettingSnapshot = data.networkSettingSnapshot;
     this.trezorTCatalystRegistrationTxSignData = data.trezorTCatalystRegistrationTxSignData;
     this.ledgerNanoCatalystRegistrationTxSignData = data.ledgerNanoCatalystRegistrationTxSignData;
@@ -113,16 +113,12 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   }
 
   txId(): string {
-    if (this.unsignedTx instanceof RustModule.WalletV4.TransactionBuilder) {
-      return RustModule.WalletV4.FixedTransaction.from_hex(this.unsignedTx.build_tx().to_hex()).transaction_hash().to_hex();
-    }
     return RustModule.WasmScope(Module =>
       Module.CML.hash_transaction(Module.CML.TransactionBody.from_cbor_bytes(this.unsignedTx)).to_hex()
     );
   }
 
   serializedUnsignedTxHex(): string {
-    if (this.unsignedTx instanceof RustModule.WalletV4.TransactionBuilder) return this.unsignedTx.build_tx().to_hex();
     return RustModule.WasmScope(Module => {
       const cml = Module.CML;
       const body = cml.TransactionBody.from_cbor_bytes(this.unsignedTx);
@@ -133,7 +129,6 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   }
 
   bodyBytes(): Uint8Array {
-    if (this.unsignedTx instanceof RustModule.WalletV4.TransactionBuilder) return this.unsignedTx.build().to_bytes();
     return this.unsignedTx;
   }
 
@@ -169,22 +164,14 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   }
 
   totalInput(): MultiToken {
-    const values = this.unsignedTx instanceof RustModule.WalletV4.TransactionBuilder
-      ? multiTokenFromCardanoValue(
-          this.unsignedTx.get_implicit_input().checked_add(this.unsignedTx.get_explicit_input()),
-          {
-            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-          }
-        )
-      : this.senderUtxos.reduce(
-          (total, utxo) => total.joinAddMutable(multiTokenFromRemote(utxo, this.networkSettingSnapshot.NetworkId)),
-          new MultiToken([], {
-            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-          })
-        );
-    if (!(this.unsignedTx instanceof RustModule.WalletV4.TransactionBuilder) && this.implicitInputValue != null) {
+    const values = this.senderUtxos.reduce(
+      (total, utxo) => total.joinAddMutable(multiTokenFromRemote(utxo, this.networkSettingSnapshot.NetworkId)),
+      new MultiToken([], {
+        defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+        defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+      })
+    );
+    if (this.implicitInputValue != null) {
       values.joinAddMutable(
         RustModule.WasmScope(Module =>
           multiTokenFromCmlValue(
@@ -215,12 +202,6 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   }
 
   totalOutput(): MultiToken {
-    if (this.unsignedTx instanceof RustModule.WalletV4.TransactionBuilder) {
-      return multiTokenFromCardanoValue(this.unsignedTx.get_explicit_output(), {
-        defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-        defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-      });
-    }
     return this.outputs().reduce((total, output) => total.joinAddMutable(output.value), new MultiToken([], {
       defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
       defaultNetworkId: this.networkSettingSnapshot.NetworkId,
@@ -234,13 +215,11 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     });
     values.add({
       identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-      amount: this.unsignedTx instanceof RustModule.WalletV4.TransactionBuilder
-        ? new BigNumber(this.unsignedTx.get_fee_if_set()?.to_str() || '0').plus(this.unsignedTx.get_deposit().to_str())
-        : new BigNumber(
-            RustModule.WasmScope(Module =>
-              Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).fee().toString()
-            )
-          ).plus(this.depositAmount ?? '0'),
+      amount: new BigNumber(
+        RustModule.WasmScope(Module =>
+          Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).fee().toString()
+        )
+      ).plus(this.depositAmount ?? '0'),
       networkId: this.networkSettingSnapshot.NetworkId,
     });
 
@@ -350,22 +329,16 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     return Array.from(new Set(this.senderUtxos.map(utxo => utxo.receiver)));
   }
 
-  isEqual(tx: ?(mixed | RustModule.WalletV4.TransactionBuilder)): boolean {
+  isEqual(tx: ?mixed): boolean {
     if (tx == null) return false;
-    if (!(tx instanceof RustModule.WalletV4.TransactionBuilder)) {
-      return false;
-    }
-    return shelleyTxEqual(this.unsignedTx, tx);
+    return tx instanceof Uint8Array && bytesToHex(this.unsignedTx) === bytesToHex(tx);
   }
 
-  self(): RustModule.WalletV4.TransactionBuilder {
+  self(): Uint8Array {
     return this.unsignedTx;
   }
-}
 
-export function shelleyTxEqual(
-  req1: RustModule.WalletV4.TransactionBuilder,
-  req2: RustModule.WalletV4.TransactionBuilder
-): boolean {
-  return req1.build().to_hex() === req2.build().to_hex();
+  setMetadata(metadata: RustModule.WalletV4.AuxiliaryData | Uint8Array): void {
+    this.metadata = metadataBytes(metadata);
+  }
 }

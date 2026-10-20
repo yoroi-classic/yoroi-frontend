@@ -209,14 +209,14 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       );
 
       const { signedTxHex, txId, metadata } = await this.trezorSignRawTx({
-        rawTxHex: request.signRequest.self().build_tx().to_hex(),
+        rawTxHex: request.signRequest.serializedUnsignedTxHex(),
         wallet: request.wallet,
         catalystData: request.signRequest.trezorTCatalystRegistrationTxSignData,
         changeAddrs: request.signRequest.changeAddr,
       });
 
       if (metadata) {
-        request.signRequest.self().set_auxiliary_data(metadata);
+        request.signRequest.setMetadata(metadata);
       }
 
       await broadcastTransaction({
@@ -349,7 +349,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       const mainnetNetworkIdForByronTransfer = request.signRequest.networkSettingSnapshot.NetworkId;
 
       const { signedTxHex, txId, metadata } = await this.ledgerWalletSignRawTx({
-        rawTxHex: request.signRequest.self().build_tx().to_hex(),
+        rawTxHex: request.signRequest.serializedUnsignedTxHex(),
         wallet: {
           ...request.wallet,
           networkId: mainnetNetworkIdForByronTransfer,
@@ -360,7 +360,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       });
 
       if (metadata) {
-        request.signRequest.self().set_auxiliary_data(metadata);
+        request.signRequest.setMetadata(metadata);
       }
 
       await broadcastTransaction({
