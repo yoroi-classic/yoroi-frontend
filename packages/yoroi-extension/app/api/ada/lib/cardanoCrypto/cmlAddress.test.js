@@ -9,6 +9,7 @@ import {
   baseAddressesFromKeyHashes,
   credentialCborHexFromKeyHash,
   deriveRewardAddressFromAddress,
+  enterpriseAddressHexFromBaseOrPointerAddress,
   enterpriseAndBaseAddressHexFromKeyHashes,
   poolKeyHashHexToBech32,
   rewardAddressFromKeyHash,
@@ -36,6 +37,40 @@ test('converts Shelley addresses between bech32 and hex with CML', () => {
   const addressHex = addressBech32ToHex(address);
 
   expect(addressHexToBech32(addressHex)).toEqual(address);
+});
+
+test('derives canonical enterprise addresses from base and pointer addresses with CML', () => {
+  const cases = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const addressCases = [];
+    for (const networkId of [0, 1]) {
+      for (const credentialKind of ['key', 'script']) {
+        const paymentCredential =
+          credentialKind === 'key'
+            ? CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)))
+            : CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
+        const stakeCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('33'.repeat(28)));
+        const expectedEnterpriseHex = CSL.EnterpriseAddress.new(networkId, paymentCredential)
+          .to_address()
+          .to_hex();
+        const baseAddressHex = CSL.BaseAddress.new(networkId, paymentCredential, stakeCredential)
+          .to_address()
+          .to_hex();
+        const pointer = CSL.Pointer.new(CSL.BigNum.from_str('1'), CSL.BigNum.from_str('2'), CSL.BigNum.from_str('3'));
+        const pointerAddressHex = CSL.PointerAddress.new(networkId, paymentCredential, pointer)
+          .to_address()
+          .to_hex();
+
+        addressCases.push({ addressHex: baseAddressHex, expectedEnterpriseHex });
+        addressCases.push({ addressHex: pointerAddressHex, expectedEnterpriseHex });
+      }
+    }
+    return addressCases;
+  });
+
+  for (const testCase of cases) {
+    expect(enterpriseAddressHexFromBaseOrPointerAddress(testCase.addressHex)).toEqual(testCase.expectedEnterpriseHex);
+  }
 });
 
 test('derives a reward address from a base address stake credential', () => {

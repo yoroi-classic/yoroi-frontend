@@ -5,7 +5,7 @@ import { ModifyAddress } from '../../../../ada/lib/storage/database/primitives/a
 import { GetAddress } from '../../../../ada/lib/storage/database/primitives/api/read';
 import type { AddressRow, NetworkRow } from '../../../../ada/lib/storage/database/primitives/tables';
 import type { CoreAddressT } from '../../../../ada/lib/storage/database/primitives/enums';
-import { RustModule } from '../../../../ada/lib/cardanoCrypto/rustLoader';
+import { enterpriseAddressHexFromBaseOrPointerAddress } from '../../../../ada/lib/cardanoCrypto/cmlAddress';
 import { CoreAddressTypes } from '../../../../ada/lib/storage/database/primitives/enums';
 import { addressToKind } from '../../../../ada/lib/storage/bridge/utils';
 import { getAllTables } from '../../../../ada/lib/storage/database/utils';
@@ -150,13 +150,9 @@ export type HashToIdsFunc = HashToIdsRequest => Promise<Map<string, number>>;
  */
 
 export const rawGenHashToIdsFunc = (ownAddressIds: Set<number>, network: $ReadOnly<NetworkRow>): HashToIdsFunc =>
-  RustModule.WasmScope(Scope => _rawGenHashToIdsFunc(Scope, ownAddressIds, network));
+  _rawGenHashToIdsFunc(ownAddressIds, network);
 
-function _rawGenHashToIdsFunc(
-  Scope: typeof RustModule,
-  ownAddressIds: Set<number>,
-  network: $ReadOnly<NetworkRow>
-): HashToIdsFunc {
+function _rawGenHashToIdsFunc(ownAddressIds: Set<number>, network: $ReadOnly<NetworkRow>): HashToIdsFunc {
   return async (request: HashToIdsRequest): Promise<Map<string, number>> => {
     const deps = Object.freeze({
       GetAddress,
@@ -208,11 +204,7 @@ function _rawGenHashToIdsFunc(
       if (address.type === CoreAddressTypes.CARDANO_BASE) {
         // for group addresses we have to look at the payment key
         // to see if there exists a canonical address
-        const wasmAddress = Scope.WalletV4.Address.from_hex(address.data);
-        const baseAddress = Scope.WalletV4.BaseAddress.from_address(wasmAddress);
-        if (baseAddress == null) throw new Error(`${nameof(rawGenHashToIdsFunc)} not base address Should never happen`);
-        const canonical = Scope.WalletV4.EnterpriseAddress.new(wasmAddress.network_id(), baseAddress.payment_cred());
-        const hash = canonical.to_address().to_hex();
+        const hash = enterpriseAddressHexFromBaseOrPointerAddress(address.data);
         await addFromCanonical(
           request.db,
           request.tx,
@@ -226,11 +218,7 @@ function _rawGenHashToIdsFunc(
       } else if (address.type === CoreAddressTypes.CARDANO_PTR) {
         // for group addresses we have to look at the payment key
         // to see if there exists a canonical address
-        const wasmAddress = Scope.WalletV4.Address.from_hex(address.data);
-        const ptrAddress = Scope.WalletV4.PointerAddress.from_address(wasmAddress);
-        if (ptrAddress == null) throw new Error(`${nameof(rawGenHashToIdsFunc)} not ptr address Should never happen`);
-        const canonical = Scope.WalletV4.EnterpriseAddress.new(wasmAddress.network_id(), ptrAddress.payment_cred());
-        const hash = canonical.to_address().to_hex();
+        const hash = enterpriseAddressHexFromBaseOrPointerAddress(address.data);
         await addFromCanonical(
           request.db,
           request.tx,

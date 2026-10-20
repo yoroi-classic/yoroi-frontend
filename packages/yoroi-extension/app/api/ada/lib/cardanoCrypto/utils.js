@@ -7,7 +7,7 @@ import {
   poolKeyHashHexToBech32,
   rewardAddressFromKeyHash,
 } from './cmlAddress';
-import { bytesToHex, fail, forceNonNull, hexToBytes, iterateLenGet, maybe } from '../../../../coreUtils';
+import { bytesToHex, fail, forceNonNull, iterateLenGet, maybe } from '../../../../coreUtils';
 import { base32ToHex, hexToBase32 } from '../storage/bridge/utils';
 
 export function v4PublicToV2(v4Key: RustModule.WalletV4.Bip32PublicKey): RustModule.WalletV2.PublicKey {
@@ -27,50 +27,65 @@ export function addressBech32ToHex(bech32: string): string {
 }
 
 export function transactionHexToWitnessSet(txHex: string): string {
-  return RustModule.WasmScope(Module => bytesToHex(Module.WalletV4.FixedTransaction.from_hex(txHex).raw_witness_set()));
+  return RustModule.WasmScope(Module =>
+    Module.CML.Transaction.from_cbor_hex(txHex)
+      .witness_set()
+      .to_cbor_hex()
+  );
 }
 
 export function transactionBodyHexToTransaction(txBodyHex: string): string {
-  return RustModule.WasmScope(Module =>
-    Module.WalletV4.FixedTransaction.new(
-      hexToBytes(txBodyHex),
-      Module.WalletV4.TransactionWitnessSet.new().to_bytes(),
-      true
-    ).to_hex()
-  );
+  return RustModule.WasmScope(Module => {
+    const body = Module.CML.TransactionBody.from_cbor_hex(txBodyHex);
+    const witnessSet = Module.CML.TransactionWitnessSet.new();
+    return Module.CML.Transaction.new(body, witnessSet, true).to_cbor_hex();
+  });
 }
 
 export function transactionHexToBodyHex(txHex: string): string {
-  return RustModule.WasmScope(Module => bytesToHex(Module.WalletV4.FixedTransaction.from_hex(txHex).raw_body()));
+  return RustModule.WasmScope(Module =>
+    Module.CML.Transaction.from_cbor_hex(txHex)
+      .body()
+      .to_cbor_hex()
+  );
 }
 
 export function transactionHexToHash(txHex: string): string {
-  return RustModule.WasmScope(Module =>
-    Module.WalletV4.FixedTransaction.from_hex(txHex)
-      .transaction_hash()
-      .to_hex()
-  );
+  return RustModule.WasmScope(Module => Module.CML.hash_transaction(Module.CML.Transaction.from_cbor_hex(txHex).body()).to_hex());
 }
 
 export function transactionHexReplaceWitnessSet(txHex: string, witnessSetHex: string): string {
   return RustModule.WasmScope(Module => {
-    const fixedTransaction = Module.WalletV4.FixedTransaction.from_hex(txHex);
-    fixedTransaction.set_witness_set(hexToBytes(witnessSetHex));
-    return fixedTransaction.to_hex();
+    const tx = Module.CML.Transaction.from_cbor_hex(txHex);
+    const witnessSet = Module.CML.TransactionWitnessSet.from_cbor_hex(witnessSetHex);
+    const auxiliaryData = tx.auxiliary_data();
+    return Module.CML.Transaction.new(tx.body(), witnessSet, tx.is_valid(), auxiliaryData).to_cbor_hex();
   });
 }
 
 export function transactionHexAddSignaturesFromWitnessSetHex(txHex: string, witnessSetHex: string): string {
   return RustModule.WasmScope(Module => {
-    const fixedTransaction = Module.WalletV4.FixedTransaction.from_hex(txHex);
-    const witnessSet = Module.WalletV4.TransactionWitnessSet.from_hex(witnessSetHex);
-    for (const vkeyWitness of iterateLenGet(witnessSet.vkeys())) {
-      fixedTransaction.add_vkey_witness(vkeyWitness);
+    const tx = Module.CML.Transaction.from_cbor_hex(txHex);
+    const witnessSet = tx.witness_set();
+    const incomingWitnessSet = Module.CML.TransactionWitnessSet.from_cbor_hex(witnessSetHex);
+
+    const vkeyWitnesses = witnessSet.vkeywitnesses() ?? Module.CML.VkeywitnessList.new();
+    for (const vkeyWitness of iterateLenGet(incomingWitnessSet.vkeywitnesses())) {
+      vkeyWitnesses.add(vkeyWitness);
     }
-    for (const bootstrapWitness of iterateLenGet(witnessSet.bootstraps())) {
-      fixedTransaction.add_bootstrap_witness(bootstrapWitness);
+    if (incomingWitnessSet.vkeywitnesses() != null) {
+      witnessSet.set_vkeywitnesses(vkeyWitnesses);
     }
-    return fixedTransaction.to_hex();
+
+    const bootstrapWitnesses = witnessSet.bootstrap_witnesses() ?? Module.CML.BootstrapWitnessList.new();
+    for (const bootstrapWitness of iterateLenGet(incomingWitnessSet.bootstrap_witnesses())) {
+      bootstrapWitnesses.add(bootstrapWitness);
+    }
+    if (incomingWitnessSet.bootstrap_witnesses() != null) {
+      witnessSet.set_bootstrap_witnesses(bootstrapWitnesses);
+    }
+
+    return Module.CML.Transaction.new(tx.body(), witnessSet, tx.is_valid(), tx.auxiliary_data()).to_cbor_hex();
   });
 }
 

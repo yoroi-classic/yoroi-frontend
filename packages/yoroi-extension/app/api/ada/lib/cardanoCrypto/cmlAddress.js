@@ -23,6 +23,26 @@ export const addressHexToBech32 = (addressHex: string): string =>
 export const addressBech32ToHex = (addressBech32: string): string =>
   RustModule.WasmScope(Module => Module.CML.Address.from_bech32(addressBech32).to_hex());
 
+export const enterpriseAddressHexFromBaseOrPointerAddress = (addressHex: string): string =>
+  RustModule.WasmScope(Module => {
+    const address = Module.CML.Address.from_hex(addressHex);
+    const baseAddress = Module.CML.BaseAddress.from_address(address);
+    if (baseAddress != null) {
+      return Module.CML.EnterpriseAddress.new(address.network_id(), baseAddress.payment())
+        .to_address()
+        .to_hex();
+    }
+
+    const pointerAddress = Module.CML.PointerAddress.from_address(address);
+    if (pointerAddress != null) {
+      return Module.CML.EnterpriseAddress.new(address.network_id(), pointerAddress.payment())
+        .to_address()
+        .to_hex();
+    }
+
+    throw new Error('Address is not a base or pointer address');
+  });
+
 export const credentialCborHexFromKeyHash = (keyHash: string): string =>
   RustModule.WasmScope(Module => Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(keyHash)).to_cbor_hex());
 
