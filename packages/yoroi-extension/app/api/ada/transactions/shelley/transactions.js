@@ -1,6 +1,6 @@
 // @flow
 
-// Handles interfacing w/ cardano-serialization-lib to create transaction
+// Handles interfacing with CML to create Cardano transactions.
 
 import BigNumber from 'bignumber.js';
 import type {
@@ -52,6 +52,16 @@ const COSTMODELS =
 const defaultTtlOffset = 7200;
 const MAX_VALUE_SIZE = 5000;
 const MAX_TRANSACTION_SIZE = 16384;
+
+function parseCmlAddress(cml: any, address: string): any {
+  try {
+    return cml.Address.from_hex(address);
+  } catch (_error) {
+    const byronAddress = cml.ByronAddress.from_base58(address);
+    if (byronAddress == null) throw _error;
+    return byronAddress.to_address();
+  }
+}
 
 export type TxOutput = {|
   ...Address,
@@ -172,7 +182,7 @@ export function sendAllUnsignedTxFromUtxo(
     const txBuilder = cml.TransactionBuilder.new(config);
     // eslint-disable-next-line no-undef
     txBuilder.set_ttl(BigInt(absSlotNumber.plus(defaultTtlOffset).toFixed(0)));
-    const address = cml.Address.from_hex(receiver.address);
+    const address = parseCmlAddress(cml, receiver.address);
     for (const utxo of allUtxos) {
       let value;
       try {
@@ -182,7 +192,7 @@ export function sendAllUnsignedTxFromUtxo(
       }
       // eslint-disable-next-line no-undef
       const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index));
-      const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
+      const output = cml.TransactionOutput.new(parseCmlAddress(cml, utxo.receiver), value);
       txBuilder.add_input(cml.SingleInputBuilder.new(input, output).payment_key());
     }
     if (metadata != null) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata));
@@ -1160,7 +1170,7 @@ function signCmlTransaction(
         derived = derived.derive(index);
       }
       const address = item.receiver ?? item.address;
-      const cmlAddress = cml.Address.from_hex(address);
+      const cmlAddress = parseCmlAddress(cml, address);
       const byronAddress = cml.ByronAddress.from_address(cmlAddress);
       if (byronAddress == null) witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, derived.to_raw_key()));
       else witnessBuilder.add_bootstrap(cml.make_icarus_bootstrap_witness(txHash, byronAddress, derived));

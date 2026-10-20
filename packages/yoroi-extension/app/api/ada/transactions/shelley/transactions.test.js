@@ -23,7 +23,7 @@ import { byronAddrToHex } from '../../lib/storage/bridge/utils';
 
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { CoinTypes, HARD_DERIVATION_START, STAKING_KEY_INDEX, WalletTypePurpose } from '../../../../config/numbersConfig';
-import { defaultAssets, getCardanoHaskellBaseConfig, networks } from '../../lib/storage/database/prepackaged/networks';
+import { defaultAssets, networks } from '../../lib/storage/database/prepackaged/networks';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import {
   cardanoValueFromRemoteFormat,
@@ -45,7 +45,7 @@ const defaultIdentifier = defaultAssets.filter(asset => asset.NetworkId === netw
 const testAssetId = 'd27197682d71905c087c5c3b61b10e6d746db0b9bef351014d75bb26.6e69636f696e';
 
 function bech32ToHex(s: string): string {
-  return RustModule.WalletV4.Address.from_bech32(s).to_hex();
+  return RustModule.WasmScope(Module => Module.CML.Address.from_bech32(s).to_hex());
 }
 
 function inspectCmlTransaction(bytes: Uint8Array): any {
@@ -880,14 +880,14 @@ describe('Create signed transactions', () => {
 
     jest.spyOn(global.Math, 'random').mockRestore();
 
-    const accountPrivateKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-      '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
+    const accountPrivateKey = RustModule.CML.Bip32PrivateKey.from_raw_bytes(
+      hexToBytes('70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d')
     );
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
-      hexToBytes(accountPrivateKey.to_hex()),
+      accountPrivateKey.to_raw_bytes(),
       null,
       undefined
     );
@@ -911,30 +911,43 @@ describe('Create signed transactions', () => {
   });
 
   it('Witness should with addressing from root', () => {
-    const accountPrivateKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-      '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
+    const accountPrivateKey = RustModule.CML.Bip32PrivateKey.from_raw_bytes(
+      hexToBytes('70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d')
     );
-    const inputs = RustModule.WalletV4.TransactionInputs.new();
-    inputs.add(
-      RustModule.WalletV4.TransactionInput.new(
-        RustModule.WalletV4.TransactionHash.from_hex('05ec4a4a7f4645fa66886cef2e34706907a3a7f9d88e0d48b313ad2cdf76fb5f'),
-        0
-      )
-    );
-    inputs.add(
-      RustModule.WalletV4.TransactionInput.new(
-        RustModule.WalletV4.TransactionHash.from_hex('6930f123df83e4178b0324ae617b2028c0b38c6ff4660583a2abf1f7b08195fe'),
-        0
-      )
-    );
-    const outputs = RustModule.WalletV4.TransactionOutputs.new();
-    outputs.add(
-      RustModule.WalletV4.TransactionOutput.new(
-        RustModule.WalletV4.Address.from_hex(byronAddrToHex('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4')),
-        RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str('5001'))
-      )
-    );
-    const txBody = RustModule.WalletV4.TransactionBody.new(inputs, outputs, RustModule.WalletV4.BigNum.from_str('1000'), 0);
+    const txBodyBytes = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const inputs = cml.TransactionInputList.new();
+      inputs.add(
+        cml.TransactionInput.new(
+          cml.TransactionHash.from_hex('05ec4a4a7f4645fa66886cef2e34706907a3a7f9d88e0d48b313ad2cdf76fb5f'),
+          0n
+        )
+      );
+      inputs.add(
+        cml.TransactionInput.new(
+          cml.TransactionHash.from_hex('6930f123df83e4178b0324ae617b2028c0b38c6ff4660583a2abf1f7b08195fe'),
+          0n
+        )
+      );
+      const outputs = cml.TransactionOutputList.new();
+      outputs.add(
+        cml.TransactionOutput.new(
+          cml.Address.from_hex(byronAddrToHex('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4')),
+          cml.Value.new(5001n, cml.MultiAsset.new())
+        )
+      );
+      const body = cml.TransactionBody.new(inputs, outputs, 1000n);
+      body.set_ttl(0n);
+      return body.to_cbor_bytes();
+    });
+    const bodyCompatibility = RustModule.WasmScope(Module => {
+      const body = Module.CML.TransactionBody.from_cbor_bytes(txBodyBytes);
+      return {
+        ttl: body.ttl()?.toString(),
+        hash: Module.CML.hash_transaction(body).to_hex(),
+      };
+    });
+    expect(bodyCompatibility).toEqual({ ttl: '0', hash: 'bac9f1ec48694482149a9963c8b2fc3e7e7406a72b7d0942f201b7562f2c8da5' });
 
     const signedTx = signTransaction(
       [
@@ -963,19 +976,24 @@ describe('Create signed transactions', () => {
           assets: [],
         },
       ],
-      txBody.to_bytes(),
+      txBodyBytes,
       Bip44DerivationLevels.ACCOUNT.level,
-      hexToBytes(accountPrivateKey.to_hex()),
+      accountPrivateKey.to_raw_bytes(),
       null,
       undefined
     );
     const bootstrapWitnesses = RustModule.WasmScope(Module => {
       const witnessSet = Module.CML.Transaction.from_cbor_bytes(signedTx).witness_set();
       const bootstraps = witnessSet.bootstrap_witnesses();
+      const bootstrap = bootstraps?.get(0);
+      const bodyHash = Module.CML.hash_transaction(Module.CML.Transaction.from_cbor_bytes(signedTx).body());
       return {
         vkeyCount: witnessSet.vkeywitnesses()?.len() ?? 0,
         nativeScriptCount: witnessSet.native_scripts()?.len() ?? 0,
-        bootstrapHex: bootstraps?.get(0).to_cbor_hex(),
+        bootstrapHex: bootstrap?.to_cbor_hex(),
+        signatureValid: bootstrap?.public_key().verify(bodyHash.to_raw_bytes(), bootstrap.signature()),
+        chainCodeLength: bootstrap?.chain_code().length,
+        attributesHex: bootstrap?.attributes().to_cbor_hex(),
         bootstrapCount: bootstraps?.len() ?? 0,
       };
     });
@@ -983,6 +1001,9 @@ describe('Create signed transactions', () => {
     expect(bootstrapWitnesses.vkeyCount).toEqual(0);
     expect(bootstrapWitnesses.nativeScriptCount).toEqual(0);
     expect(bootstrapWitnesses.bootstrapCount).toEqual(1); // note: only one witness since we got rid of duplicates
+    expect(bootstrapWitnesses.signatureValid).toBe(true);
+    expect(bootstrapWitnesses.chainCodeLength).toBe(32);
+    expect(bootstrapWitnesses.attributesHex).toBe('a0');
 
     expect(bootstrapWitnesses.bootstrapHex).toEqual(
       '8458208fb03c3aa052f51c086c54bd4059ead2d2e426ac89fa4b3ce41cbfd8800b51c05840593e3d54a9bf9b5e6778ddb8930bdd9a87dd29f046fa3ba9d49bd1b7ddecdb6a1ced6016cdab663ff21596380392786d67f70e8d7c200fc042d669981db11c0658202623fceb96b07408531a5cb259f53845a38d6b68928e7c0c7e390f07545d0e6241a0'
@@ -990,8 +1011,8 @@ describe('Create signed transactions', () => {
   });
 
   it('Transaction should support certificates', async () => {
-    const accountPrivateKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-      '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
+    const accountPrivateKey = RustModule.CML.Bip32PrivateKey.from_raw_bytes(
+      hexToBytes('408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247')
     );
     const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
 
@@ -1029,19 +1050,19 @@ describe('Create signed transactions', () => {
       undefined,
       network.NetworkId
     );
-    const expectedCertificates = RustModule.WalletV4.Certificates.new();
-    const stakeCredential = RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_public().hash());
-    expectedCertificates.add(
-      RustModule.WalletV4.Certificate.new_stake_registration(RustModule.WalletV4.StakeRegistration.new(stakeCredential))
-    );
-    expectedCertificates.add(
-      RustModule.WalletV4.Certificate.new_stake_delegation(
-        RustModule.WalletV4.StakeDelegation.new(
+    const expectedCertificateHex = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_public().hash());
+      const certificates = cml.CertificateList.new();
+      certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
+      certificates.add(
+        cml.Certificate.new_stake_delegation(
           stakeCredential,
-          RustModule.WalletV4.Ed25519KeyHash.from_hex('1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5')
+          cml.Ed25519KeyHash.from_hex('1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5')
         )
-      )
-    );
+      );
+      return Array.from({ length: certificates.len() }, (_, index) => bytesToHex(certificates.get(index).to_cbor_bytes()));
+    });
     const certificateInfo = inspectCmlTransaction(RustModule.WasmScope(Module =>
       Module.CML.Transaction.new(
         Module.CML.TransactionBody.from_cbor_bytes(unsignedTxResponse.txBuilder),
@@ -1049,15 +1070,13 @@ describe('Create signed transactions', () => {
         true
       ).to_cbor_bytes()
     ));
-    expect(certificateInfo.certificatesHex).toEqual(
-      Array.from({ length: expectedCertificates.len() }, (_, index) => bytesToHex(expectedCertificates.get(index).to_bytes()))
-    );
+    expect(certificateInfo.certificatesHex).toEqual(expectedCertificateHex);
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
-      hexToBytes(accountPrivateKey.to_hex()),
-      stakingKey.as_bytes(),
+      accountPrivateKey.to_raw_bytes(),
+      stakingKey.to_raw_bytes(),
       undefined
     );
     const signedInfo = inspectCmlTransaction(signedTx);
@@ -1072,11 +1091,11 @@ describe('Create signed transactions', () => {
   });
 
   it('Transaction should support withdrawals', async () => {
-    const accountPrivateKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-      '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
+    const accountPrivateKey = RustModule.CML.Bip32PrivateKey.from_raw_bytes(
+      hexToBytes('408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247')
     );
     const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
-    const stakingKeyCredential = RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_public().hash());
+    const stakingKeyHash = stakingKey.to_public().hash().to_hex();
 
     if (network.BaseConfig[0].ChainNetworkId == null) {
       throw new Error(`missing network id`);
@@ -1092,13 +1111,13 @@ describe('Create signed transactions', () => {
       [addressedUtxos[3]],
       new BigNumber(0),
       protocolParams,
-      createCertificate(stakingKey.to_public().hash().to_hex(), true, undefined, undefined),
+      createCertificate(stakingKeyHash, true, undefined, undefined),
       [
         {
           address: RustModule.WasmScope(Module =>
             Module.CML.RewardAddress.new(
               Number.parseInt(network.BaseConfig[0].ChainNetworkId, 10),
-              Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakingKey.to_public().hash().to_hex()))
+              Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakingKeyHash))
             ).to_address().to_hex()
           ),
           amount: withdrawAmount,
@@ -1109,10 +1128,11 @@ describe('Create signed transactions', () => {
       network.NetworkId
     );
 
-    const expectedCertificates = RustModule.WalletV4.Certificates.new();
-    expectedCertificates.add(
-      RustModule.WalletV4.Certificate.new_stake_deregistration(RustModule.WalletV4.StakeDeregistration.new(stakingKeyCredential))
-    );
+    const expectedCertificateHex = RustModule.WasmScope(Module => {
+      const credential = Module.CML.Credential.new_pub_key(stakingKey.to_public().hash());
+      const certificate = Module.CML.Certificate.new_stake_deregistration(credential);
+      return [bytesToHex(certificate.to_cbor_bytes())];
+    });
     const unsignedInfo = inspectCmlTransaction(RustModule.WasmScope(Module =>
       Module.CML.Transaction.new(
         Module.CML.TransactionBody.from_cbor_bytes(unsignedTxResponse.txBuilder),
@@ -1123,13 +1143,13 @@ describe('Create signed transactions', () => {
     const cmlReserializedBodyHex = RustModule.WasmScope(Module =>
       bytesToHex(Module.CML.TransactionBody.from_cbor_bytes(unsignedTxResponse.txBuilder).to_cbor_bytes())
     );
-    expect(getStakingKeyHashesInTransactionBody(bytesToHex(unsignedTxResponse.txBuilder)).has(stakingKey.to_public().hash().to_hex())).toBe(true);
-    expect(getStakingKeyHashesInTransactionBody(cmlReserializedBodyHex).has(stakingKey.to_public().hash().to_hex())).toBe(true);
+    expect(getStakingKeyHashesInTransactionBody(bytesToHex(unsignedTxResponse.txBuilder)).has(stakingKeyHash)).toBe(true);
+    expect(getStakingKeyHashesInTransactionBody(cmlReserializedBodyHex).has(stakingKeyHash)).toBe(true);
     expect(
       RustModule.WasmScope(Module =>
-        Module.CML.PrivateKey.from_extended_bytes(stakingKey.as_bytes()).to_public().hash().to_hex()
+        Module.CML.PrivateKey.from_extended_bytes(stakingKey.to_raw_bytes()).to_public().hash().to_hex()
       )
-    ).toBe(stakingKey.to_public().hash().to_hex());
+    ).toBe(stakingKeyHash);
     const expectedPaymentHashes = unsignedTxResponse.senderUtxos.map(utxo => {
       let derived = accountPrivateKey;
       const firstPathIndex = Bip44DerivationLevels.ACCOUNT.level - utxo.addressing.startLevel + 1;
@@ -1137,15 +1157,15 @@ describe('Create signed transactions', () => {
       return derived.to_raw_key().to_public().hash().to_hex();
     });
     expect(unsignedInfo.certificatesHex).toEqual(
-      Array.from({ length: expectedCertificates.len() }, (_, index) => bytesToHex(expectedCertificates.get(index).to_bytes()))
+      expectedCertificateHex
     );
 
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
-      hexToBytes(accountPrivateKey.to_hex()),
-      stakingKey.as_bytes(),
+      accountPrivateKey.to_raw_bytes(),
+      stakingKey.to_raw_bytes(),
       undefined
     );
     const signedInfo = inspectCmlTransaction(signedTx);
@@ -1156,7 +1176,7 @@ describe('Create signed transactions', () => {
     ).toBe(signedInfo.outputCoinTotal);
     expect(expectedPaymentHashes).toEqual([]);
     expect(unsignedTxResponse.senderUtxos).toHaveLength(0);
-    expect(signedInfo.vkeyHashes).toContain(stakingKey.to_public().hash().to_hex());
+    expect(signedInfo.vkeyHashes).toContain(stakingKeyHash);
     expect(signedInfo.vkeyWitnessCount).toEqual(1);
     expect(signedInfo.hasNativeScripts).toEqual(false);
     expect(signedInfo.hasBootstrapWitnesses).toEqual(false);
@@ -1239,8 +1259,10 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       expect(body.inputCount).toBe(2);
       expect(expectedInput.minus(body.outputTotal).toString()).toBe(body.fee);
       expect(new BigNumber(body.fee).gt(0)).toBe(true);
-      const auxiliaryData = RustModule.WalletV4.AuxiliaryData.from_bytes(metadata);
-      expect(body.auxiliaryDataHash).toBe(RustModule.WalletV4.hash_auxiliary_data(auxiliaryData).to_hex());
+      const auxiliaryDataHash = RustModule.WasmScope(Module =>
+        Module.CML.hash_auxiliary_data(Module.CML.AuxiliaryData.from_cbor_bytes(metadata)).to_hex()
+      );
+      expect(body.auxiliaryDataHash).toBe(auxiliaryDataHash);
       expect(sendAllResponse.changeAddr).toHaveLength(1);
       expect(sendAllResponse.changeAddr[0].address).toBe(changeAddress.address);
       expect(sendAllResponse.changeAddr[0].values.getDefaultEntry().amount.toString()).toBe(body.outputs[0]);
@@ -1750,7 +1772,7 @@ describe('CML connector transaction construction', () => {
 });
 
 describe('CML maximum send amount', () => {
-  it('matches CSL fixed-input fee and change for an ADA-only transaction', async () => {
+  it('matches frozen fixed-input fee and change for an ADA-only transaction', async () => {
     const utxo = genSampleUtxos()[3];
     const receiver = genSampleAdaAddresses()[0].address;
     const queriedUtxo = {
@@ -1777,29 +1799,10 @@ describe('CML maximum send amount', () => {
       receiver,
     });
 
-    const cslProtocolParams = getCardanoHaskellBaseConfig(network).reduce((acc, next) => Object.assign(acc, next), {});
-    const cslBuilder = RustModule.WalletV4TxBuilder({
-      linearFee: RustModule.WalletV4.LinearFee.new(
-        RustModule.WalletV4.BigNum.from_str(cslProtocolParams.LinearFee.coefficient),
-        RustModule.WalletV4.BigNum.from_str(cslProtocolParams.LinearFee.constant)
-      ),
-      coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str(cslProtocolParams.CoinsPerUtxoByte),
-      poolDeposit: RustModule.WalletV4.BigNum.zero(),
-      keyDeposit: RustModule.WalletV4.BigNum.zero(),
-    });
-    cslBuilder.set_ttl(7200);
-    cslBuilder.add_regular_input(
-      RustModule.WalletV4.Address.from_hex(utxo.receiver),
-      RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
-      RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount))
-    );
-    const cslReceiver = RustModule.WalletV4.Address.from_hex(receiver);
-    cslBuilder.add_change_if_needed(cslReceiver);
-    const cslOutput = cslBuilder.build().outputs().get(0);
-    const cslMaxAmount = new BigNumber(cslOutput.amount().coin().to_str());
-    const cslFee = new BigNumber(cslBuilder.min_fee().to_str());
-
-    expect(maxAmount.toString()).toBe(cslMaxAmount.toString());
-    expect(new BigNumber(utxo.amount).minus(maxAmount).toString()).toBe(cslFee.toString());
+    // Golden result from the former fixed-input CSL builder using production mainnet params.
+    const legacyMaxAmount = new BigNumber('29834983');
+    const legacyFee = new BigNumber('165017');
+    expect(maxAmount.toString()).toBe(legacyMaxAmount.toString());
+    expect(new BigNumber(utxo.amount).minus(maxAmount).toString()).toBe(legacyFee.toString());
   });
 });
