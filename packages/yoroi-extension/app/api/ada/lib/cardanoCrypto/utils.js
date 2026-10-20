@@ -7,12 +7,8 @@ import {
   poolKeyHashHexToBech32,
   rewardAddressFromKeyHash,
 } from './cmlAddress';
-import { bytesToHex, fail, forceNonNull, iterateLenGet, maybe } from '../../../../coreUtils';
+import { fail, forceNonNull, iterateLenGet, maybe } from '../../../../coreUtils';
 import { base32ToHex, hexToBase32 } from '../storage/bridge/utils';
-
-export function v4PublicToV2(v4Key: RustModule.WalletV4.Bip32PublicKey): RustModule.WalletV2.PublicKey {
-  return RustModule.WalletV2.PublicKey.from_hex(bytesToHex(v4Key.as_bytes()));
-}
 
 export function poolIdHexToBech32(hex: string): string {
   return poolKeyHashHexToBech32(hex);
