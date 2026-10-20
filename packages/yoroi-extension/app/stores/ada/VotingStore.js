@@ -314,11 +314,12 @@ export default class VotingStore extends Store<StoresMap> {
 
     const passBuff = Buffer.from(pinArray);
     const rootKey = generatePrivateKeyForCatalyst();
-    const key = await encryptWithPassword(passBuff, rootKey.to_raw_key().as_bytes());
+    const extendedKeyBytes = rootKey.to_raw_key().to_raw_bytes();
+    const key = await encryptWithPassword(passBuff, extendedKeyBytes);
     runInAction(() => {
       this.encryptedKey = key;
       this.pin = pinArray;
-      this.catalystPrivateKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(rootKey.to_raw_key().as_bytes());
+      this.catalystPrivateKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(extendedKeyBytes);
     });
   };
 

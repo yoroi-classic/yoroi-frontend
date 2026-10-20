@@ -1695,18 +1695,19 @@ export default class AdaApi {
     try {
       // Note: we only restore for 0th account
       const rootPk = generateWalletRootKey(recoveryPhrase);
-      const encryptedRoot = encryptWithPassword(walletPassword, rootPk.as_bytes());
+      const encryptedRoot = encryptWithPassword(walletPassword, rootPk.to_raw_bytes());
       const accountPublicKey = rootPk
         .derive(WalletTypePurpose.CIP1852)
         .derive(CoinTypes.CARDANO)
         .derive(request.accountIndex)
         .to_public();
+      const cslAccountPublicKey = RustModule.WalletV4.Bip32PublicKey.from_bytes(accountPublicKey.to_raw_bytes());
 
       const newPubDerivers = [];
       const wallet = await createStandardCip1852Wallet({
         db: request.db,
         encryptedRoot,
-        accountPublicKey,
+        accountPublicKey: cslAccountPublicKey,
         accountIndex: request.accountIndex,
         walletName,
         accountName: '', // set account name empty now

@@ -55,11 +55,14 @@ describe('app/api/ada/index', () => {
 
     const accountIndex = HARD_DERIVATION_START + 0;
     const response = await AdaApi.prototype.restoreWalletForTransfer({
-      accountPubKey: generateWalletRootKey(recoveryPhrase)
-        .derive(WalletTypePurpose.BIP44)
-        .derive(CoinTypes.CARDANO)
-        .derive(accountIndex)
-        .to_public(),
+      accountPubKey: RustModule.WalletV4.Bip32PublicKey.from_bytes(
+        generateWalletRootKey(recoveryPhrase)
+          .derive(WalletTypePurpose.BIP44)
+          .derive(CoinTypes.CARDANO)
+          .derive(accountIndex)
+          .to_public()
+          .to_raw_bytes()
+      ),
       checkAddressesInUse,
       accountIndex,
       network: networks.CardanoMainnet,

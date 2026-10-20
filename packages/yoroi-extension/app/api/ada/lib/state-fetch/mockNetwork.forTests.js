@@ -326,7 +326,7 @@ export function genUtxoForAddresses(
 export function getSingleAddressString(mnemonic: string, path: Array<number>, isLedger: boolean = false): string {
   const EMPTY_PASSWORD = Buffer.from('');
   const rootKey = isLedger
-    ? generateLedgerWalletRootKey(mnemonic)
+    ? RustModule.WalletV4.Bip32PrivateKey.from_bytes(generateLedgerWalletRootKey(mnemonic).to_raw_bytes())
     : RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), EMPTY_PASSWORD);
   const derivedKey = derivePath(rootKey, path);
 
@@ -359,7 +359,7 @@ export function getMangledAddressString(
 ): string {
   const EMPTY_PASSWORD = Buffer.from('');
   const rootKey = isLedger
-    ? generateLedgerWalletRootKey(mnemonic)
+    ? RustModule.WalletV4.Bip32PrivateKey.from_bytes(generateLedgerWalletRootKey(mnemonic).to_raw_bytes())
     : RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), EMPTY_PASSWORD);
   const derivedKey = derivePath(rootKey, path);
 

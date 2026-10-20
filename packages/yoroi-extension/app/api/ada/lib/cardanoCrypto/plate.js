@@ -20,7 +20,7 @@ export type PlateResponse = {|
 |};
 
 export const generateShelleyPlate = (
-  rootPk: RustModule.WalletV4.Bip32PrivateKey,
+  rootPk: RustModule.CML.Bip32PrivateKey,
   accountIndex: number,
   count: number,
   chainNetworkId: number
@@ -37,15 +37,15 @@ export const generateShelleyPlate = (
     .derive(STAKING_KEY_INDEX)
     .to_raw_key();
 
-  const plate = walletChecksum(bytesToHex(accountPublic.as_bytes()));
+  const plate = walletChecksum(bytesToHex(accountPublic.to_raw_bytes()));
   const generateAddressFunc = genBaseAddressBatchFunc(chainKey, stakingKey, chainNetworkId);
   const addresses = generateAddressFunc([...Array(count).keys()]);
   return { addresses, plate };
 };
 
 export function genBaseAddressBatchFunc(
-  addressChain: RustModule.WalletV4.Bip32PublicKey,
-  stakingKey: RustModule.WalletV4.PublicKey,
+  addressChain: RustModule.CML.Bip32PublicKey,
+  stakingKey: RustModule.CML.PublicKey,
   chainNetworkId: number
 ): GenerateAddressFunc {
   return (indices: Array<number>) => {

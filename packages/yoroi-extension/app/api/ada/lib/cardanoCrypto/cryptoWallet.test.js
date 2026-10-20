@@ -1,7 +1,8 @@
 // @flow
 import '../test-config.forTests';
+import { mnemonicToEntropy } from 'bip39';
 import { RustModule } from './rustLoader';
-import { generateLedgerWalletRootKey } from './cryptoWallet';
+import { generateLedgerWalletRootKey, generateWalletRootKey } from './cryptoWallet';
 import { ChainDerivations, CoinTypes, WalletTypePurpose, HARD_DERIVATION_START } from '../../../../config/numbersConfig';
 import { v4PublicToV2 } from './utils';
 import { getCardanoHaskellBaseConfig, networks } from '../storage/database/prepackaged/networks';
@@ -25,7 +26,8 @@ const getAddressForLedgerMnemonic = (mnemonic: string): string => {
     .derive(0)
     .to_public();
 
-  const v2Key = v4PublicToV2(firstExternalAddressKey);
+  const cslPublicKey = RustModule.WalletV4.Bip32PublicKey.from_bytes(firstExternalAddressKey.to_raw_bytes());
+  const v2Key = v4PublicToV2(cslPublicKey);
   const firstExternalAddressHash = v2Key.bootstrap_era_address(settings).to_base58();
 
   return firstExternalAddressHash;
@@ -56,4 +58,25 @@ test('Generate Ledger wallet', async () => {
     'burden destroy client air agent episode horror orient scrap car point easy local primary grunt seminar goose spin charge olive angry hour start shop'
   );
   expect(address5).toEqual('Ae2tdPwUPEZHiTeWAxzLFm5qYAGqLLwZ35huQJ7Dg5fJ4SN97d1QwhsuDrG');
+});
+
+test('Generate standard wallet root key with CSL-compatible entropy and derivation bytes', () => {
+  const mnemonic = 'business sight another write gadget near where hollow insane dynamic grain hurt slim clip require';
+  const cmlRoot = generateWalletRootKey(mnemonic);
+  const cslRoot = RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(
+    Buffer.from(mnemonicToEntropy(mnemonic), 'hex'),
+    Buffer.from('')
+  );
+  const path = [WalletTypePurpose.CIP1852, CoinTypes.CARDANO, HARD_DERIVATION_START, ChainDerivations.EXTERNAL, 0];
+
+  expect(Buffer.from(cmlRoot.to_raw_bytes())).toEqual(Buffer.from(cslRoot.as_bytes()));
+
+  let cmlChild = cmlRoot;
+  let cslChild = cslRoot;
+  for (const index of path) {
+    cmlChild = cmlChild.derive(index);
+    cslChild = cslChild.derive(index);
+  }
+  expect(Buffer.from(cmlChild.to_raw_bytes())).toEqual(Buffer.from(cslChild.as_bytes()));
+  expect(Buffer.from(cmlChild.to_public().to_raw_bytes())).toEqual(Buffer.from(cslChild.to_public().as_bytes()));
 });

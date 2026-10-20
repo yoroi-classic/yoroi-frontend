@@ -57,6 +57,6 @@ test('Unscramble Yoroi paper matches expected address', async () => {
   expect(words).toBeTruthy();
   if (words != null) {
     const rootPk = generateWalletRootKey(words);
-    expect(bytesToHex(rootPk.as_bytes())).toEqual(VALID_YOROI_PAPER.privateKey);
+    expect(bytesToHex(rootPk.to_raw_bytes())).toEqual(VALID_YOROI_PAPER.privateKey);
   }
 });

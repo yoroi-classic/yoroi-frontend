@@ -31,7 +31,7 @@ function generateWallet(): RustModule.WalletV2.Bip44ChainPublic {
     .derive(HARD_DERIVATION_START + 0)
     .derive(ChainDerivations.EXTERNAL);
   return RustModule.WalletV2.Bip44ChainPublic.new(
-    RustModule.WalletV2.PublicKey.from_hex(bytesToHex(v3Chain.to_public().as_bytes())),
+    RustModule.WalletV2.PublicKey.from_hex(bytesToHex(v3Chain.to_public().to_raw_bytes())),
     RustModule.WalletV2.DerivationScheme.v2()
   );
 }
