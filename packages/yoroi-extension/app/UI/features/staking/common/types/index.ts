@@ -1,4 +1,4 @@
-import type { ExplorerPoolInfo as PoolInfo } from '@emurgo/yoroi-lib';
+import type { ExplorerPoolInfo as PoolInfo } from '../../../../../api/ada/lib/state-fetch/types';
 export type StakingActions = Record<string, never>;
 
 // Define state type

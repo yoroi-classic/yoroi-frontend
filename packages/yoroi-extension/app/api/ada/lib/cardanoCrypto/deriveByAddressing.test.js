@@ -2,7 +2,7 @@
 import '../test-config.forTests';
 import { RustModule } from './rustLoader';
 import { deriveBip32PrivateKeyBytesByAddressing, derivePrivateKeyBytesByAddressing } from './deriveByAddressing';
-import { Bip44DerivationLevels } from '@emurgo/yoroi-lib';
+import { Bip44DerivationLevels } from '../storage/database/walletTypes/bip44/api/utils';
 
 beforeAll(async () => {
   await RustModule.load();

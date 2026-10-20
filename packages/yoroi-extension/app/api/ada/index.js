@@ -11,6 +11,8 @@ import {
   HARD_DERIVATION_START,
   WalletTypePurpose,
 } from '../../config/numbersConfig';
+import { Bip44DerivationLevels } from './lib/storage/database/walletTypes/bip44/api/utils';
+import type { ProtocolParameters } from './lib/state-fetch/protocolParameters';
 import { createHardwareCip1852Wallet, createStandardCip1852Wallet } from './lib/storage/bridge/walletBuilder/shelley';
 import {
   getAllTransactions,
@@ -162,8 +164,6 @@ import type WalletTransaction from '../../domain/WalletTransaction';
 import type { WalletState } from '../../../chrome/extension/background/types';
 import TimeUtils from './lib/storage/bridge/timeUtils';
 import type { IFetcher } from './lib/state-fetch/IFetcher.types';
-import { Bip44DerivationLevels, CoinType } from '@emurgo/yoroi-lib';
-import type { ProtocolParameters } from '@emurgo/yoroi-lib/dist/protocol-parameters/models';
 import { encryptWithPassword } from '../../utils/passwordCipher';
 import { createAndRefreshCip1852Wallet } from './lib/storage/models/ConceptualWallet/traits';
 
@@ -2355,7 +2355,7 @@ export function pubKeyAndAddressingByChainAndIndex(
     addressing: {
       path: [
         WalletTypePurpose.CIP1852,
-        CoinType.CARDANO,
+        CoinTypes.CARDANO,
         HARD_DERIVATION_START,
         chainLevelDerivationIndex,
         addressLevelDerivationIndex,

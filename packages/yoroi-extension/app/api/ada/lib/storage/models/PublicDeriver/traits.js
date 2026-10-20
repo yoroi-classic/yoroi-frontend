@@ -103,7 +103,7 @@ import type { Cip1852PublicDeriver } from './index';
 import { ConceptualWallet } from '../ConceptualWallet/index';
 import { isCardanoHaskell } from '../../database/prepackaged/networks';
 import { GetUtxoAtSafePoint, GetUtxoDiffToBestBlock } from '../../database/utxo/api/read';
-import type { Utxo } from '@emurgo/yoroi-lib/dist/utxo/models';
+import type { Utxo } from '../../../state-fetch/utxoTypes';
 import { deriveBip32PublicKeyHashHex } from '../../../cardanoCrypto/cmlAddress';
 import { addressBech32ToHex } from '../../../cardanoCrypto/utils';
 

@@ -10,7 +10,7 @@ import LocalizableError from '../../i18n/LocalizableError';
 import { PoolMissingApiError, GetPoolInfoApiError } from '../../api/common/errors';
 import type { MangledAmountFunc, MangledAmountsResponse } from '../stateless/mangledAddresses';
 import type { StoresMap } from '../index';
-import type { ExplorerPoolInfo as PoolInfo } from '@emurgo/yoroi-lib';
+import type { ExplorerPoolInfo as PoolInfo } from '../../api/ada/lib/state-fetch/types';
 import type { RemotePoolDisplayInfo } from '../../api/ada/lib/state-fetch/types';
 import { MultiToken } from '../../api/common/lib/MultiToken';
 import { forceNonNull, maybe } from '../../coreUtils';

@@ -3,6 +3,28 @@
 import type { BackendNetworkInfo } from '../../../common/lib/state-fetch/types';
 import type { NetworkRow } from '../storage/database/primitives/tables';
 
+export type ProtocolParameters = {|
+  linearFee: {| constant: string, coefficient: string |},
+  coinsPerUtxoByte: string,
+  poolDeposit: string,
+  keyDeposit: string,
+  epoch: number,
+|};
+
+export type ExplorerPoolInfo = {|
+  id: string,
+  hash: string,
+  ticker: string,
+  name: string,
+  pic: string | null,
+  stake: string,
+  share: string,
+  roa: string,
+  saturation: string,
+  taxFix: string,
+  taxRatio: string,
+|};
+
 // getUTXOsForAddresses
 
 export type AddressUtxoRequest = {|

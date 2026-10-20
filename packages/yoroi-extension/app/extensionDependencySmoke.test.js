@@ -43,13 +43,11 @@ const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
   'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/yoroi-lib',
   'packages/yoroi-extension:devDependencies:@emurgo/cardano-message-signing-nodejs',
   'packages/yoroi-extension:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
 ];
 
 const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
-  'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib:dependencies:@emurgo/cross-csl-core',
   'packages/yoroi-extension:node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap/node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap:dependencies:@emurgo/cip14-js',

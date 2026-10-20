@@ -1,6 +1,6 @@
 // @flow
 import { RustModule } from '../../cardanoCrypto/rustLoader';
-import { isHex } from '@emurgo/yoroi-lib/dist/internals/utils/index';
+import { isHex } from '../../../../../utils/hex';
 
 export type TransactionMetadata = {|
   label: string,

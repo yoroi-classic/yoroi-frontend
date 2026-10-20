@@ -1,7 +1,7 @@
 // @flow
 import type { HandlerType } from './type';
-import type { ProtocolParameters as _ProtocolParameters } from '@emurgo/yoroi-lib/dist/protocol-parameters/models';
-import { ProtocolParametersApi } from '@emurgo/yoroi-lib/dist/protocol-parameters/emurgo-api';
+import type { ProtocolParameters as _ProtocolParameters } from '../../../../../app/api/ada/lib/state-fetch/types';
+import ProtocolParametersApi from '../../../../../app/api/ada/lib/state-fetch/protocolParametersApi';
 import {
   getNetworkById,
   getCardanoHaskellBaseConfigCombined,
@@ -11,10 +11,7 @@ import type { CardanoHaskellConfig, NetworkRow } from '../../../../../app/api/ad
 import { type StorageField, createStorageField } from '../../../../../app/api/localStorage';
 
 // tmp measure before lib update
-type ProtocolParameters = {|
-  ...$Exact<_ProtocolParameters>,
-  epoch: number,
-|};
+type ProtocolParameters = _ProtocolParameters;
 
 // cache protocol parameters of the current epoch
 // also may cache for the future epoch should the backend provides them

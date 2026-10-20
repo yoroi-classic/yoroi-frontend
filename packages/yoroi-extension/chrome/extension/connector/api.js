@@ -46,7 +46,7 @@ import { ChainDerivations, DREP_KEY_INDEX, STAKING_KEY_INDEX } from '../../../ap
 import { pubKeyHashToRewardAddress, transactionHexToHash } from '../../../app/api/ada/lib/cardanoCrypto/utils';
 import { sendTx } from '../../../app/api/ada/lib/state-fetch/remoteFetcher';
 import type { WalletState } from '../background/types';
-import type { ProtocolParameters } from '@emurgo/yoroi-lib/dist/protocol-parameters/models';
+import type { ProtocolParameters } from '../../../app/api/ada/lib/state-fetch/protocolParameters';
 import { isCertificateKindDrepDelegation } from '../../../app/api/ada/lib/storage/bridge/utils';
 import { signCip103Batch } from './cip103';
 

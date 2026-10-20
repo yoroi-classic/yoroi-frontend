@@ -51,7 +51,7 @@ import { getCardanoHaskellBaseConfig, networks } from '../storage/database/prepa
 import { bech32 } from 'bech32';
 import { Bech32Prefix } from '../../../../config/stringConfig';
 import { parseTokenList } from '../../transactions/utils';
-import type { UtxoApiContract } from '@emurgo/yoroi-lib/dist/utxo/api';
+import type { UtxoApiContract } from './utxoTypes';
 import type {
   TipStatusReference,
   Utxo,
@@ -60,8 +60,8 @@ import type {
   UtxoDiff,
   UtxoDiffItem,
   UtxoDiffSincePointRequest,
-} from '@emurgo/yoroi-lib/dist/utxo/models';
-import { UtxoApiResult } from '@emurgo/yoroi-lib/dist/utxo/models';
+} from './utxoTypes';
+import { UtxoApiResult } from './utxoTypes';
 import { bytesToHex, forceNonNull, hexToBytes, last } from '../../../../coreUtils';
 
 function byronAddressToHex(byronAddrOrHex: string): string {
