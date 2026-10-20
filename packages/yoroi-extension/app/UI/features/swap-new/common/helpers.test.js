@@ -10,7 +10,7 @@ beforeAll(async () => {
 test('swap input conversion preserves legacy UTxO CBOR for ADA, assets, datum, and script references', async () => {
   // Frozen bytes captured from the prior serialized UTxO contract. The fixture
   // keeps the historical native script-ref and inline datum wire shape without
-  // requiring a CSL test oracle.
+  // requiring the retired serialization package as a test oracle.
   const fixture = {
     address: '6011111111111111111111111111111111111111111111111111111111',
     datumCborHex: '182a',

@@ -1,6 +1,6 @@
 // @flow
 
-/** Certificate.Kind is persisted as the numeric CSL enum value. Keep this
+/** Certificate.Kind is persisted as the legacy numeric enum value. Keep this
  * storage contract independent from the serialization library implementation.
  */
 export const StoredCertificateKind = Object.freeze({

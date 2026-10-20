@@ -39,12 +39,9 @@ const PACKAGE_ROOT = path.resolve(__dirname, '..');
 const WORKSPACE_ROOT = path.resolve(PACKAGE_ROOT, '..', '..');
 
 const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
-  'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
   'packages/yoroi-extension:devDependencies:@emurgo/cardano-message-signing-nodejs',
-  'packages/yoroi-extension:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
 ];
 
 const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
@@ -112,15 +109,16 @@ function currentAdaPriceFixture(asOf = Math.floor(Date.now() / 1000)) {
 
 function rewardAddressFixture(keyByte, networkId = 0) {
   return RustModule.WasmScope(Module => {
-    const keyHash = Module.WalletV4.Ed25519KeyHash.from_hex(keyByte.repeat(28));
-    const address = Module.WalletV4.RewardAddress.new(networkId, Module.WalletV4.Credential.from_keyhash(keyHash)).to_address();
+    const cml = Module.CML;
+    const keyHash = cml.Ed25519KeyHash.from_raw_bytes(hexToBytes(keyByte.repeat(28)));
+    const address = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(keyHash)).to_address();
     return { bech32: address.to_bech32(), hex: address.to_hex() };
   });
 }
 
 function poolFixture(keyByte) {
   return RustModule.WasmScope(Module => {
-    const keyHash = Module.WalletV4.Ed25519KeyHash.from_hex(keyByte.repeat(28));
+    const keyHash = Module.CML.Ed25519KeyHash.from_raw_bytes(hexToBytes(keyByte.repeat(28)));
     return { bech32: keyHash.to_bech32('pool'), hex: keyHash.to_hex() };
   });
 }
@@ -461,7 +459,7 @@ describe('extension dependency smoke', () => {
       preprod: 'http://localhost:3011/',
     };
     const displayAddress = 'addr1vxq0nckg3ekgzuqg7w5p9mvgnd9ym28qh5grlph8xd2z92su77c6m';
-    const storedAddress = RustModule.WalletV4.Address.from_bech32(displayAddress).to_hex();
+    const storedAddress = RustModule.WasmScope(Module => Module.CML.Address.from_bech32(displayAddress).to_hex());
     (global: any).fetch = jest.fn(() => successfulJsonResponse([displayAddress]));
     (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
@@ -1456,15 +1454,17 @@ describe('extension dependency smoke', () => {
       undefined,
       CARDANO_MAINNET.NetworkId
     );
-    const accountPrivateKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-      '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
+    const accountPrivateKey = RustModule.WasmScope(Module =>
+      Module.CML.Bip32PrivateKey.from_raw_bytes(
+        hexToBytes('70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d')
+      ).to_raw_bytes()
     );
     const unsignedBytes = unsignedTx.txBuilder instanceof Uint8Array ? unsignedTx.txBuilder : unsignedTx.txBuilder.build().to_bytes();
     const signedTx = signTransaction(
       unsignedTx.senderUtxos,
       unsignedBytes,
       Bip44DerivationLevels.ACCOUNT.level,
-      hexToBytes(accountPrivateKey.to_hex()),
+      accountPrivateKey,
       null,
       undefined
     );

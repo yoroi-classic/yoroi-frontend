@@ -79,7 +79,7 @@ test('CML restoration scanning preserves batched gap-limit expansion and default
   expect(restored.filter(({ isUsed }) => isUsed).map(({ index }) => index)).toEqual([2, 5]);
 });
 
-test('CML derives restore addresses with the same bytes and network IDs as CSL', () => {
+test('CML derives restore addresses with the frozen bytes and network IDs', () => {
   const accountPublicKey = getAccountPublicKey();
   for (const networkId of [0, 1, 42]) {
     const [payment, stake] = RustModule.WasmScope(Module => {

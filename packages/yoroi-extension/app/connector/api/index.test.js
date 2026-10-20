@@ -10,7 +10,7 @@ beforeAll(async () => {
   await RustModule.load();
 });
 
-test('connector payload signature matches the legacy CSL vector', async () => {
+test('connector payload signature matches the frozen compatibility vector', async () => {
   const privateKeyHex = '01'.repeat(64);
   const payloadHex = 'a1b2c3d4';
   const expected =
@@ -18,7 +18,7 @@ test('connector payload signature matches the legacy CSL vector', async () => {
   await expect(authSignHexPayload({ privKey: privateKeyHex, payloadHex })).resolves.toEqual(expected);
 });
 
-test('CML connector login address, COSE signature, and generated key match legacy CSL vectors', async () => {
+test('CML connector login address, COSE signature, and generated key match legacy vectors', async () => {
   const root = generateWalletRootKey(
     'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon share'
   );

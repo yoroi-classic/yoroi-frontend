@@ -1799,7 +1799,7 @@ describe('CML maximum send amount', () => {
       receiver,
     });
 
-    // Golden result from the former fixed-input CSL builder using production mainnet params.
+    // Golden result from the former fixed-input builder using production mainnet params.
     const legacyMaxAmount = new BigNumber('29834983');
     const legacyFee = new BigNumber('165017');
     expect(maxAmount.toString()).toBe(legacyMaxAmount.toString());

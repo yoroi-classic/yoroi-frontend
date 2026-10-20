@@ -1,13 +1,6 @@
 // @flow
 
-import typeof * as WasmV2 from 'cardano-wallet-browser';
-import type { BigNum, LinearFee, TransactionBuilder } from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
-import typeof * as WasmV4 from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import typeof * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
-
-// TODO: unmagic the constants
-const MAX_VALUE_BYTES = 5000;
-const MAX_TX_BYTES = 16384;
 
 function isWasmPointer(o: ?any): boolean {
   return o != null && typeof o.__wbg_ptr === 'number' && typeof o.free === 'function';
@@ -80,7 +73,7 @@ function createWasmScope(): {|
         // In case the real field value is a function, we implement a special wrapper
         if (typeof realValue === 'function' && realValue.prototype == null) {
           /* Note that we're also checking that the function has no prototype.
-           * The reason for this is that a field like `RustModule.WalletV4.BigNum`
+           * The reason for this is that a field like `RustModule.CML.BigNum`
            * also has a type `function`, because it's a class constructor,
            * but it is never used as a constructor directly, and instead only used
            * to access static fields, including Rust constructor functions like `.new()`.
@@ -136,21 +129,15 @@ function createWasmScope(): {|
 }
 
 class Module {
-  _wasmv2: WasmV2;
-  _wasmv4: WasmV4;
   _messageSigning: WasmMessageSigning;
   _cml: any;
 
   async load(): Promise<void> {
     if (
-      this._wasmv2 != null &&
-      this._wasmv4 != null &&
       this._messageSigning != null &&
       this._cml != null
     )
       return;
-    this._wasmv2 = await import('cardano-wallet-browser');
-    this._wasmv4 = await import('@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib');
     this._messageSigning = await import('@emurgo/cardano-message-signing-browser/cardano_message_signing');
     // $FlowFixMe[untyped-import]
     this._cml = await import('@dcspark/cardano-multiplatform-lib-browser');
@@ -234,88 +221,9 @@ class Module {
     return InternalMonad<T>(callback);
   }
 
-  // Need to expose through a getter to get Flow to detect the type correctly
-  get WalletV2(): WasmV2 {
-    return this._wasmv2;
-  }
-  // Need to expose through a getter to get Flow to detect the type correctly
-  get WalletV4(): WasmV4 {
-    return this._wasmv4;
-  }
   get CML(): any {
     return this._cml;
   }
-  WalletV4TxBuilderFromConfig(config: {
-    +LinearFee: {|
-      +coefficient: string,
-      +constant: string,
-    |},
-    +CoinsPerUtxoByte: string,
-    +PoolDeposit: string,
-    +KeyDeposit: string,
-    ...
-  }): TransactionBuilder {
-    return this.WalletV4TxBuilder({
-      linearFee: RustModule.WalletV4.LinearFee.new(
-        RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
-        RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant)
-      ),
-      coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str(config.CoinsPerUtxoByte),
-      poolDeposit: RustModule.WalletV4.BigNum.from_str(config.PoolDeposit),
-      keyDeposit: RustModule.WalletV4.BigNum.from_str(config.KeyDeposit),
-    });
-  }
-  // Need to expose through a getter to get Flow to detect the type correctly
-  WalletV4TxBuilder(
-    params:
-      | {
-          linearFee: LinearFee,
-          coinsPerUtxoByte: BigNum,
-          poolDeposit: BigNum,
-          keyDeposit: BigNum,
-          maxValueBytes: ?number,
-          maxTxBytes: ?number,
-          ...
-        }
-      | {
-          linearFee: LinearFee,
-          coinsPerUtxoByte: BigNum,
-          poolDeposit: BigNum,
-          keyDeposit: BigNum,
-          ...
-        }
-  ): TransactionBuilder {
-    const {
-      linearFee,
-      coinsPerUtxoByte,
-      poolDeposit,
-      keyDeposit,
-      // $FlowFixMe[prop-missing]
-      maxValueBytes,
-      // $FlowFixMe[prop-missing]
-      maxTxBytes,
-    } = params;
-    const w4 = this.WalletV4;
-
-    return w4.TransactionBuilder.new(
-      w4.TransactionBuilderConfigBuilder.new()
-        .fee_algo(linearFee)
-        .pool_deposit(poolDeposit)
-        .key_deposit(keyDeposit)
-        .coins_per_utxo_byte(coinsPerUtxoByte)
-        .max_value_size(maxValueBytes ?? MAX_VALUE_BYTES)
-        .max_tx_size(maxTxBytes ?? MAX_TX_BYTES)
-        .ex_unit_prices(
-          w4.ExUnitPrices.new(
-            w4.UnitInterval.new(w4.BigNum.from_str('577'), w4.BigNum.from_str('10000')),
-            w4.UnitInterval.new(w4.BigNum.from_str('721'), w4.BigNum.from_str('10000000'))
-          )
-        )
-        .prefer_pure_change(true)
-        .build()
-    );
-  }
-
   get MessageSigning(): WasmMessageSigning {
     return this._messageSigning;
   }

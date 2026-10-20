@@ -165,5 +165,4 @@ test('does not leak transaction-summary fixtures between tests', () => {
   expect(loadSubmittedTransactions).not.toHaveBeenCalled();
   expect(multiTokenFromCardanoValue).not.toHaveBeenCalled();
   expect(RustModule.WasmScope).toBeUndefined();
-  expect(RustModule.WalletV4).toBeUndefined();
 });

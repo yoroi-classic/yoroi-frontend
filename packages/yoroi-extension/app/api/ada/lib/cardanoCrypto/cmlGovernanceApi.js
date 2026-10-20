@@ -2,7 +2,7 @@ import axios from 'axios';
 import { RustModule } from './rustLoader';
 
 // Extension-owned replacement for the governance API in yoroi-lib. Keeping
-// this boundary local avoids yoroi-lib's CrossCsl-backed WasmScope.
+// this boundary local avoids yoroi-lib's Cardano serialization bridge.
 export default class CmlGovernanceApi {
   constructor({ oldBackendUrl, newBackendUrl, networkId }) {
     this.oldBackendUrl = oldBackendUrl;

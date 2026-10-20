@@ -286,7 +286,7 @@ function getCertificateKeyHashesFromTransactionBody(txBody: any): Set<string> {
           credential = certificate.as_stake_vote_reg_deleg_cert()?.stake_credential();
           break;
         // The legacy registration variant has no explicit deposit and was
-        // deliberately excluded by the previous CSL parser.
+        // deliberately excluded by the previous certificate parser.
         default:
           break;
       }

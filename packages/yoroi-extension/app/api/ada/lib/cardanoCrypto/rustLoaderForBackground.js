@@ -7,18 +7,11 @@
 // Somehow the dyanmic imports in `rustLoader.js` do not work in the background
 // service worker. This module replaces `rustLoader.js` in the background service
 // worker with the help of webpack NormalModuleReplacementPlugin.
-// Note this won't work even here:
-// import * as WasmV2 from 'cardano-wallet-browser';
-import type { BigNum, LinearFee, TransactionBuilder } from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
-import * as WasmV4 from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
 // $FlowFixMe[untyped-import]
 import * as CMLBrowser from '@dcspark/cardano-multiplatform-lib-browser';
 
 // TODO: unmagic the constants
-const MAX_VALUE_BYTES = 5000;
-const MAX_TX_BYTES = 16384;
-
 function isWasmPointer(o: ?any): boolean {
   return o != null && (typeof o.ptr === 'number' || typeof o.__wbg_ptr === 'number') && typeof o.free === 'function';
 }
@@ -95,7 +88,7 @@ function createWasmScope(): {|
         // In case the real field value is a function, we implement a special wrapper
         if (typeof realValue === 'function' && realValue.prototype == null) {
           /* Note that we're also checking that the function has no prototype.
-           * The reason for this is that a field like `RustModule.WalletV4.BigNum`
+           * The reason for this is that a field like `RustModule.CML.BigNum`
            * also has a type `function`, because it's a class constructor,
            * but it is never used as a constructor directly, and instead only used
            * to access static fields, including Rust constructor functions like `.new()`.
@@ -220,10 +213,6 @@ class Module {
     return scopedResult.result;
   }
 
-  get WalletV4(): typeof WasmV4 {
-    return WasmV4;
-  }
-
   get MessageSigning(): typeof WasmMessageSigning {
     return WasmMessageSigning;
   }
@@ -232,76 +221,6 @@ class Module {
     return CMLBrowser;
   }
 
-  WalletV4TxBuilderFromConfig(config: {
-    +LinearFee: {|
-      +coefficient: string,
-      +constant: string,
-    |},
-    +CoinsPerUtxoByte: string,
-    +PoolDeposit: string,
-    +KeyDeposit: string,
-    ...
-  }): TransactionBuilder {
-    return this.WalletV4TxBuilder({
-      linearFee: RustModule.WalletV4.LinearFee.new(
-        RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
-        RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant)
-      ),
-      coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str(config.CoinsPerUtxoByte),
-      poolDeposit: RustModule.WalletV4.BigNum.from_str(config.PoolDeposit),
-      keyDeposit: RustModule.WalletV4.BigNum.from_str(config.KeyDeposit),
-    });
-  }
-  // Need to expose through a getter to get Flow to detect the type correctly
-  WalletV4TxBuilder(
-    params:
-      | {
-          linearFee: LinearFee,
-          coinsPerUtxoByte: BigNum,
-          poolDeposit: BigNum,
-          keyDeposit: BigNum,
-          maxValueBytes: ?number,
-          maxTxBytes: ?number,
-          ...
-        }
-      | {
-          linearFee: LinearFee,
-          coinsPerUtxoByte: BigNum,
-          poolDeposit: BigNum,
-          keyDeposit: BigNum,
-          ...
-        }
-  ): TransactionBuilder {
-    const {
-      linearFee,
-      coinsPerUtxoByte,
-      poolDeposit,
-      keyDeposit,
-      // $FlowFixMe[prop-missing]
-      maxValueBytes,
-      // $FlowFixMe[prop-missing]
-      maxTxBytes,
-    } = params;
-    const w4 = this.WalletV4;
-
-    return w4.TransactionBuilder.new(
-      w4.TransactionBuilderConfigBuilder.new()
-        .fee_algo(linearFee)
-        .pool_deposit(poolDeposit)
-        .key_deposit(keyDeposit)
-        .coins_per_utxo_byte(coinsPerUtxoByte)
-        .max_value_size(maxValueBytes ?? MAX_VALUE_BYTES)
-        .max_tx_size(maxTxBytes ?? MAX_TX_BYTES)
-        .ex_unit_prices(
-          w4.ExUnitPrices.new(
-            w4.UnitInterval.new(w4.BigNum.from_str('577'), w4.BigNum.from_str('10000')),
-            w4.UnitInterval.new(w4.BigNum.from_str('721'), w4.BigNum.from_str('10000000'))
-          )
-        )
-        .prefer_pure_change(true)
-        .build()
-    );
-  }
 }
 
 export const RustModule: Module = new Module();

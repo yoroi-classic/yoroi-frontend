@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// The extension runtime is being migrated away from CSL incrementally. Keep
-// remaining package dependencies explicit until their callers are removed.
-// This guard fails if that active dependency surface changes outside inventory.
+// Keep the extension's remaining Emurgo package dependencies explicit. The
+// retired serialization packages are not accepted runtime or test dependencies.
 
 const fs = require('fs');
 const path = require('path');
@@ -19,21 +18,15 @@ const FORBIDDEN_SOURCE_FIXTURES = [
 ];
 
 const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
-  'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
   'packages/yoroi-extension:devDependencies:@emurgo/cardano-message-signing-nodejs',
-  'packages/yoroi-extension:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
 ];
 
 const EXPECTED_LOCKFILE_EMURGO_PACKAGE_ENTRIES = [
-  'packages/e2e-tests:node_modules/@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-message-signing-browser',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-message-signing-nodejs',
-  'packages/yoroi-extension:node_modules/@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@emurgo/cip14-js',
 ];
 

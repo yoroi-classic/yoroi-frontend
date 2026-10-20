@@ -43,7 +43,7 @@ function getProtocolParams(): {|
 
 function getByronAddress(derivationId: number): {| ...Address, ...Addressing |} {
   return {
-    // Frozen output from the legacy WalletV2 derivation path for this fixture key.
+    // Frozen output from the legacy derivation path for this fixture key.
     address: 'Ae2tdPwUPEZEv5eQSvigCELuNxVTkn6yAomCbo2FKoxZUPXME9g6CJ4CyCW',
     addressing: {
       path: [ChainDerivations.EXTERNAL, derivationId],
