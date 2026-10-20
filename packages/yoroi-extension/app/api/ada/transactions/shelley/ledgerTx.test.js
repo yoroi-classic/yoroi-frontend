@@ -57,7 +57,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        addressHex: wasmAddr.to_hex(),
+        addressHex: wasmAddr,
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -79,7 +79,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        addressHex: wasmAddr.to_hex(),
+        addressHex: wasmAddr,
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -103,7 +103,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        addressHex: wasmAddr.to_hex(),
+        addressHex: wasmAddr,
         path,
         networkId: Number.parseInt(ChainNetworkId, 10),
         addressingMap: address => {
@@ -134,7 +134,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        addressHex: wasmAddr.to_hex(),
+        addressHex: wasmAddr,
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -156,7 +156,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        addressHex: wasmAddr.to_hex(),
+        addressHex: wasmAddr,
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -184,7 +184,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        addressHex: wasmAddr.to_hex(),
+        addressHex: wasmAddr,
         networkId: Number.parseInt(ChainNetworkId, 10),
         path: stakingKeyPath,
         addressingMap: () => undefined,

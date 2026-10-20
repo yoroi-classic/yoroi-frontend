@@ -1214,6 +1214,8 @@ describe('Create sendAll unsigned TX from UTXO', () => {
         KeyDeposit: new BigNumber('500'),
       },
     });
+    signRequest.setMetadata(extracted.metadataBytes);
+    expect(signRequest.metadata).toEqual(extracted.metadataBytes);
     expect(Array.from(signRequest.self())).toEqual(Array.from(response.txBuilder));
     expect(signRequest.isEqual(response.txBuilder)).toBe(true);
     const serializedSignRequestHex = signRequest.serializedUnsignedTxHex();
