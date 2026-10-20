@@ -1,7 +1,5 @@
 // @flow
 
-import { RustModule } from '../lib/cardanoCrypto/rustLoader';
-
 import type { Address, Value, Addressing } from '../lib/storage/models/PublicDeriver/interfaces';
 import { MultiToken } from '../../common/lib/MultiToken';
 
@@ -15,8 +13,6 @@ export const transactionTypes = Object.freeze({
   MULTI: 'multi',
 });
 export type TransactionDirectionType = $Values<typeof transactionTypes>;
-
-export type AddressKeyMap = { [addr: string]: RustModule.WalletV2.PrivateKey, ... };
 
 export type UserAnnotation = {|
   +type: TransactionDirectionType,
