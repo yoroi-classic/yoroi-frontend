@@ -469,7 +469,7 @@ export function toRemoteByronTx(blockchain: Array<RemoteTransaction>, request: S
 
   const outputs = iterateLenGet(body.outputs())
     .map(output => ({
-      address: toHexOrBase58(output.address()),
+      address: toHexOrBase58(output.address().to_hex()),
       amount: output.amount().coin().to_str(),
       assets: parseTokenList(output.amount().multiasset()),
     }))

@@ -1143,12 +1143,12 @@ export function signTransaction(
   const seenKeyHashes: Set<string> = new Set();
   const deduped: Array<UtxoOrAddressing> = [];
   function addIfUnique(address: string, item: UtxoOrAddressing): void {
-    const wasmAddr = normalizeToAddress(address);
-    if (wasmAddr == null) {
+    const addressHex = normalizeToAddress(address);
+    if (addressHex == null) {
       throw new Error(`${nameof(signTransaction)} utxo not a valid Shelley address`);
     }
-    const keyHash = getCardanoSpendingKeyHash(wasmAddr);
-    const addrHex = wasmAddr.to_hex();
+    const keyHash = getCardanoSpendingKeyHash(addressHex);
+    const addrHex = addressHex;
     if (keyHash === null) {
       if (!seenByronKeys.has(addrHex)) {
         seenByronKeys.add(addrHex);
@@ -1347,11 +1347,11 @@ function addWitnesses(
       if (uniqueAddressing.address != null) return uniqueAddressing.address;
       throw new Error(`[addWitnesses] Unexpected addressing for signing: ${JSON.stringify(uniqueAddressing)}`);
     };
-    const wasmAddr = normalizeToAddress(resolveAddress());
-    if (wasmAddr == null) {
+    const addressHex = normalizeToAddress(resolveAddress());
+    if (addressHex == null) {
       throw new Error(`${nameof(addWitnesses)} utxo not a valid Shelley address`);
     }
-    const byronAddr = RustModule.WalletV4.ByronAddress.from_address(wasmAddr);
+    const byronAddr = RustModule.WalletV4.ByronAddress.from_address(RustModule.WalletV4.Address.from_hex(addressHex));
     if (byronAddr == null) {
       const vkeyWit = RustModule.WalletV4.make_vkey_witness(txHash, privateKeys[i].to_raw_key());
       vkeyWits.add(vkeyWit);
@@ -1376,12 +1376,14 @@ export function genFilterSmallUtxo(request: {|
   });
 
   return utxo => {
-    const wasmAddr = normalizeToAddress(utxo.receiver);
-    if (wasmAddr == null) {
+    const addressHex = normalizeToAddress(utxo.receiver);
+    if (addressHex == null) {
       throw new Error(`${nameof(genFilterSmallUtxo)} input not a valid Shelley address`);
     }
     const wasmAmount = cardanoValueFromRemoteFormat(utxo);
-    const feeForInput = new BigNumber(txBuilder.fee_for_input(wasmAddr, utxoToTxInput(utxo), wasmAmount).to_str());
+    const feeForInput = new BigNumber(
+      txBuilder.fee_for_input(RustModule.WalletV4.Address.from_hex(addressHex), utxoToTxInput(utxo), wasmAmount).to_str()
+    );
     return feeForInput.lte(utxo.amount);
   };
 }

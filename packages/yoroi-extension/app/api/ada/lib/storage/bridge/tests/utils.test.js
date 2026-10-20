@@ -10,6 +10,7 @@ import {
   getAddressPayload,
   normalizeToAddress,
   normalizeToBase58,
+  toHexOrBase58,
   toEnterprise,
 } from '../utils';
 import { CoreAddressTypes } from '../../database/primitives/enums';
@@ -130,6 +131,11 @@ test('uses CML for Byron and Shelley string address conversions', async () => {
   expect(addressToDisplayString(legacyHex, networks.CardanoMainnet)).toBe(legacyBase58);
   expect(getAddressPayload(baseAddressBech32, networks.CardanoMainnet)).toBe(baseAddressHex);
   expect(getAddressPayload(legacyBase58, networks.CardanoMainnet)).toBe(legacyBase58);
+  expect(normalizeToAddress(baseAddressBech32)).toBe(baseAddressHex);
+  expect(normalizeToAddress(legacyBase58)).toBe(legacyHex);
+  expect(toHexOrBase58(legacyHex)).toBe(legacyBase58);
+  expect(toHexOrBase58(baseAddressHex)).toBe(baseAddressHex);
+  expect(normalizeToAddress('not-an-address')).toBeUndefined();
 });
 
 test('normalizeToAddress parses ByronAddress', async done => {
