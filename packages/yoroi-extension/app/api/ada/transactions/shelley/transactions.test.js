@@ -1095,11 +1095,13 @@ describe('Create signed transactions', () => {
       createCertificate(stakingKey.to_public().hash().to_hex(), true, undefined, undefined),
       [
         {
-          address: RustModule.WalletV4.RewardAddress.new(
-            Number.parseInt(network.BaseConfig[0].ChainNetworkId, 10),
-            stakingKeyCredential
+          address: RustModule.WasmScope(Module =>
+            Module.CML.RewardAddress.new(
+              Number.parseInt(network.BaseConfig[0].ChainNetworkId, 10),
+              Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakingKey.to_public().hash().to_hex()))
+            ).to_address().to_hex()
           ),
-          amount: RustModule.WalletV4.BigNum.from_str(withdrawAmount),
+          amount: withdrawAmount,
         },
       ],
       true,

@@ -235,8 +235,8 @@ export async function newAdaUnsignedTx(
   |},
   certificates: $ReadOnlyArray<string>,
   withdrawals: $ReadOnlyArray<{|
-    address: RustModule.WalletV4.RewardAddress,
-    amount: RustModule.WalletV4.BigNum,
+    address: string,
+    amount: string,
   |}>,
   allowNoOutputs: boolean,
   metadata: Uint8Array | void,
@@ -436,8 +436,8 @@ export async function newAdaUnsignedTxFromUtxo(
   |},
   certificates: $ReadOnlyArray<string>,
   withdrawals: $ReadOnlyArray<{|
-    address: RustModule.WalletV4.RewardAddress,
-    amount: RustModule.WalletV4.BigNum,
+    address: string,
+    amount: string,
   |}>,
   allowNoOutputs: boolean,
   auxiliaryData: Uint8Array | void,
@@ -482,9 +482,9 @@ export async function newAdaUnsignedTxFromUtxo(
     for (const withdrawal of withdrawals) {
       txBuilder.add_withdrawal(
         cml.SingleWithdrawalBuilder.new(
-          cml.RewardAddress.from_address(cml.Address.from_hex(withdrawal.address.to_address().to_hex())),
+          cml.RewardAddress.from_address(cml.Address.from_hex(withdrawal.address)),
           // eslint-disable-next-line no-undef
-          BigInt(withdrawal.amount.to_str())
+          BigInt(withdrawal.amount)
         ).payment_key()
       );
     }

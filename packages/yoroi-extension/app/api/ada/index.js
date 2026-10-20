@@ -1371,20 +1371,19 @@ export default class AdaApi {
             return list;
           }
 
-          const rewardAddress = RustModule.WalletV4.RewardAddress.from_address(RustModule.WalletV4.Address.from_hex(address));
-          if (rewardAddress == null) {
+          const isRewardAddress = RustModule.WasmScope(Module =>
+            Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(address)) != null
+          );
+          if (!isRewardAddress) {
             throw new Error(`${nameof(AdaApi)}::${nameof(this.createUnsignedTx)} withdrawal not a reward address`);
           }
           list.push({
-            address: rewardAddress,
-            amount: RustModule.WalletV4.BigNum.from_str(rewardForAddress.remainingAmount),
+            address,
+            amount: rewardForAddress.remainingAmount,
           });
           return list;
         },
-        ([]: Array<{|
-          address: RustModule.WalletV4.RewardAddress,
-          amount: RustModule.WalletV4.BigNum,
-        |}>)
+        ([]: Array<{| address: string, amount: string |}>)
       );
       // if the end result is no withdrawals and no deregistrations, throw an error
       if (finalWithdrawals.length === 0 && certificates.length === 0) {
