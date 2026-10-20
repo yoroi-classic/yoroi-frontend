@@ -15,7 +15,6 @@ import type { IGetAllUtxosResponse } from '../lib/storage/models/PublicDeriver/i
 import { formatBigNumberToFloatString } from '../../../utils/formatters';
 import type { DefaultTokenEntry } from '../../common/lib/MultiToken';
 import { MultiToken } from '../../common/lib/MultiToken';
-import type { WasmMonad } from '../lib/cardanoCrypto/rustLoader';
 import { RustModule } from '../lib/cardanoCrypto/rustLoader';
 import { PRIMARY_ASSET_CONSTANTS } from '../lib/storage/database/primitives/enums';
 import { bytesToHex, hexToBytes, iterateLenGet, iterateLenGetMap } from '../../../coreUtils';
@@ -345,23 +344,24 @@ export function asAddressedUtxo(utxos: IGetAllUtxosResponse): Array<CardanoAddre
   });
 }
 
-function cardanoUtxoMonadFromRemoteFormat(
-  u: RemoteUnspentOutput | CardanoAddressedUtxo
-): WasmMonad<RustModule.WalletV4.TransactionUnspentOutput> {
-  return RustModule.ScopeMonad(Module => {
-    const W4 = Module.WalletV4;
-    const input = W4.TransactionInput.new(W4.TransactionHash.from_hex(u.tx_hash), u.tx_index);
-    const value = W4.Value.new(W4.BigNum.from_str(u.amount));
-    if ((u.assets || []).length > 0) {
-      value.set_multiasset(assetToRustMultiasset(u.assets));
-    }
-    const output = W4.TransactionOutput.new(W4.Address.from_hex(u.receiver), value);
-    return W4.TransactionUnspentOutput.new(input, output);
-  });
-}
-
 export function cardanoUtxoHexFromRemoteFormat(u: RemoteUnspentOutput | CardanoAddressedUtxo): string {
-  return cardanoUtxoMonadFromRemoteFormat(u).unwrap(output => output.to_hex());
+  return RustModule.WasmScope(Module => {
+    const CML = Module.CML;
+    const multiAsset = CML.MultiAsset.new();
+    for (const asset of u.assets ?? []) {
+      // eslint-disable-next-line no-undef
+      multiAsset.set(CML.ScriptHash.from_hex(asset.policyId), CML.AssetName.from_hex(asset.name), BigInt(asset.amount));
+    }
+    const value = multiAsset.policy_count() > 0
+      // eslint-disable-next-line no-undef
+      ? CML.Value.new(BigInt(u.amount), multiAsset)
+      // eslint-disable-next-line no-undef
+      : CML.Value.from_coin(BigInt(u.amount));
+    // eslint-disable-next-line no-undef
+    const input = CML.TransactionInput.new(CML.TransactionHash.from_hex(u.tx_hash), BigInt(u.tx_index));
+    const output = CML.TransactionOutput.new(CML.Address.from_hex(u.receiver), value);
+    return CML.TransactionUnspentOutput.new(input, output).to_cbor_hex();
+  });
 }
 
 function cardanoMinAdaRequiredFromOutput(

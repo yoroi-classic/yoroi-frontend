@@ -1,7 +1,8 @@
 // @flow
 import '../lib/test-config.forTests';
 import BigNumber from 'bignumber.js';
-import { convertAdaTransactionsToExportRows, sumInputsOutputs, getFromUserPerspective } from './utils';
+import { convertAdaTransactionsToExportRows, sumInputsOutputs, getFromUserPerspective, cardanoUtxoHexFromRemoteFormat } from './utils';
+import { RustModule } from '../lib/cardanoCrypto/rustLoader';
 import { formatBigNumberToFloatString } from '../../../utils/formatters';
 import type { TransactionExportRow } from '../../export';
 import type { UtxoTransactionInputRow, UtxoTransactionOutputRow } from '../lib/storage/database/transactionModels/utxo/tables';
@@ -12,6 +13,37 @@ import type { CardanoByronTxIO } from '../lib/storage/database/transactionModels
 import type { DbBlock, DbTokenInfo, TokenListRow } from '../lib/storage/database/primitives/tables';
 import type { UserAnnotation } from './types';
 import { defaultAssets, networks } from '../lib/storage/database/prepackaged/networks';
+
+beforeAll(async () => {
+  await RustModule.load();
+});
+
+test('serializes remote swap UTxOs with CML byte-for-byte like CSL', () => {
+  const utxo = {
+    tx_hash: '33'.repeat(32),
+    tx_index: 7,
+    receiver: RustModule.WasmScope(Module =>
+      Module.CML.Address.from_bech32(
+        'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
+      ).to_hex()
+    ),
+    amount: '2000000',
+    assets: [{ policyId: '44'.repeat(28), name: 'aabb', amount: '3' }],
+  };
+  const expected = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const assets = CSL.Assets.new();
+    assets.insert(CSL.AssetName.new(Buffer.from('aabb', 'hex')), CSL.BigNum.from_str('3'));
+    const multiAsset = CSL.MultiAsset.new();
+    multiAsset.insert(CSL.ScriptHash.from_hex(utxo.assets[0].policyId), assets);
+    const value = CSL.Value.new(CSL.BigNum.from_str(utxo.amount));
+    value.set_multiasset(multiAsset);
+    const input = CSL.TransactionInput.new(CSL.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index);
+    const output = CSL.TransactionOutput.new(CSL.Address.from_hex(utxo.receiver), value);
+    return CSL.TransactionUnspentOutput.new(input, output).to_hex();
+  });
+  expect(cardanoUtxoHexFromRemoteFormat(utxo)).toEqual(expected);
+});
 
 const cardanoToken = {
   TokenId: 0,
