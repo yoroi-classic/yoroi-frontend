@@ -14,10 +14,10 @@ beforeAll(async () => {
 
 function getAccountPublicKey(): string {
   return RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    let root = CSL.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
+    const CML = Module.CML;
+    let root = CML.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
     for (const index of [1852 + 0x80000000, 1815 + 0x80000000, 0x80000000]) root = root.derive(index);
-    return root.to_public().to_hex();
+    return bytesToHex(root.to_public().to_raw_bytes());
   });
 }
 
@@ -25,8 +25,8 @@ test('CML restoration batch derivation matches Shelley payment hashes for gap an
   const accountPublicKey = getAccountPublicKey();
   for (const chain of [0, 1]) {
     const expected = RustModule.WasmScope(Module => {
-      const CSL = Module.WalletV4;
-      const account = CSL.Bip32PublicKey.from_hex(accountPublicKey);
+      const CML = Module.CML;
+      const account = CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKey));
       const addressChain = account.derive(chain);
       return [0, 19, 20, 239].map(index => addressChain.derive(index).to_raw_key().hash().to_bech32('addr_vkh'));
     });
@@ -36,16 +36,12 @@ test('CML restoration batch derivation matches Shelley payment hashes for gap an
 
 test('CML standard and imported hardware account keys preserve the public derivation contract', () => {
   const keys = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
     const CML = Module.CML;
-    const cslRoot = CSL.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
-    let expectedAccount = cslRoot;
-    for (const index of [1852 + 0x80000000, 1815 + 0x80000000, 0x80000000]) expectedAccount = expectedAccount.derive(index);
     const cmlRoot = CML.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
     let cmlAccount = cmlRoot;
     for (const index of [1852 + 0x80000000, 1815 + 0x80000000, 0x80000000]) cmlAccount = cmlAccount.derive(index);
     return {
-      expected: expectedAccount.to_public().to_hex(),
+      expected: bytesToHex(cmlAccount.to_public().to_raw_bytes()),
       cmlAccountHex: bytesToHex(cmlAccount.to_public().to_raw_bytes()),
     };
   });
@@ -87,7 +83,7 @@ test('CML derives restore addresses with the same bytes and network IDs as CSL',
   const accountPublicKey = getAccountPublicKey();
   for (const networkId of [0, 1, 42]) {
     const [payment, stake] = RustModule.WasmScope(Module => {
-      const account = Module.WalletV4.Bip32PublicKey.from_hex(accountPublicKey);
+      const account = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKey));
       return [
         account.derive(0).derive(7).to_raw_key().hash().to_hex(),
         account.derive(2).derive(0).to_raw_key().hash().to_hex(),
@@ -101,13 +97,13 @@ test('CML derives restore addresses with the same bytes and network IDs as CSL',
     const actual = enterpriseAndBaseAddressHexFromKeyHashes(networkId, paymentHash, stakingHash);
     const rewardAddress = rewardAddressFromKeyHash(networkId, stakingHash);
     const expected = RustModule.WasmScope(Module => {
-      const CSL = Module.WalletV4;
-      const paymentCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex(payment));
-      const stakeCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex(stake));
+      const CML = Module.CML;
+      const paymentCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(payment));
+      const stakeCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(stake));
       return {
-        enterpriseAddressHex: CSL.EnterpriseAddress.new(networkId, paymentCredential).to_address().to_hex(),
-        baseAddressHex: CSL.BaseAddress.new(networkId, paymentCredential, stakeCredential).to_address().to_hex(),
-        rewardAddressHex: CSL.RewardAddress.new(networkId, stakeCredential).to_address().to_hex(),
+        enterpriseAddressHex: CML.EnterpriseAddress.new(networkId, paymentCredential).to_address().to_hex(),
+        baseAddressHex: CML.BaseAddress.new(networkId, paymentCredential, stakeCredential).to_address().to_hex(),
+        rewardAddressHex: CML.RewardAddress.new(networkId, stakeCredential).to_address().to_hex(),
       };
     });
     expect(actual).toEqual({ enterpriseAddressHex: expected.enterpriseAddressHex, baseAddressHex: expected.baseAddressHex });
@@ -117,10 +113,10 @@ test('CML derives restore addresses with the same bytes and network IDs as CSL',
 
 test('default Shelley derivations retain the BIP44 gap reserve and exact initial addresses', async () => {
   const accountPublicKeyHex = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    let root = CSL.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
+    const CML = Module.CML;
+    let root = CML.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
     for (const index of [1852 + 0x80000000, 1815 + 0x80000000, 0x80000000]) root = root.derive(index);
-    return root.to_public().to_hex();
+    return bytesToHex(root.to_public().to_raw_bytes());
   });
   const inserted = [];
   const accountPublicKey = RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
@@ -137,16 +133,16 @@ test('default Shelley derivations retain the BIP44 gap reserve and exact initial
   await external?.children?.[0].insert({ keyDerivationId: 10 });
   await chimeric?.children?.[0].insert({ keyDerivationId: 11 });
   const expected = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    const account = CSL.Bip32PublicKey.from_hex(accountPublicKeyHex);
+    const CML = Module.CML;
+    const account = CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
     const stakeKeyHash = account.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(STAKING_KEY_INDEX).to_raw_key().hash();
     const paymentKeyHash = account.derive(ChainDerivations.EXTERNAL).derive(0).to_raw_key().hash();
-    const paymentCredential = CSL.Credential.from_keyhash(paymentKeyHash);
-    const stakeCredential = CSL.Credential.from_keyhash(stakeKeyHash);
+    const paymentCredential = CML.Credential.new_pub_key(paymentKeyHash);
+    const stakeCredential = CML.Credential.new_pub_key(stakeKeyHash);
     return [
-      CSL.EnterpriseAddress.new(1, paymentCredential).to_address().to_hex(),
-      CSL.BaseAddress.new(1, paymentCredential, stakeCredential).to_address().to_hex(),
-      CSL.RewardAddress.new(1, stakeCredential).to_address().to_hex(),
+      CML.EnterpriseAddress.new(1, paymentCredential).to_address().to_hex(),
+      CML.BaseAddress.new(1, paymentCredential, stakeCredential).to_address().to_hex(),
+      CML.RewardAddress.new(1, stakeCredential).to_address().to_hex(),
     ];
   });
   expect(inserted.map(({ address }) => address.data)).toEqual([expected[0], expected[1], expected[2]]);
