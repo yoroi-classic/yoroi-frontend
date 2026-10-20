@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Direct package replacement is intentionally not attempted here yet: extension
-// runtime imports still use EMURGO CSL, message-signing, cross-csl, Bring,
-// yoroi-eutxo-txs, and yoroi-lib APIs, while e2e still depends on CSL nodejs.
+// Extension runtime imports still use EMURGO CSL, message-signing, cross-csl,
+// Bring, yoroi-eutxo-txs, and yoroi-lib APIs. E2E helpers are migrating to CML.
 // This guard fails if that active dependency surface changes outside inventory.
 
 const fs = require('fs');
@@ -20,7 +19,6 @@ const FORBIDDEN_SOURCE_FIXTURES = [
 ];
 
 const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
-  'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
@@ -34,7 +32,6 @@ const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
 ];
 
 const EXPECTED_LOCKFILE_EMURGO_PACKAGE_ENTRIES = [
-  'packages/e2e-tests:node_modules/@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-message-signing-browser',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-message-signing-nodejs',

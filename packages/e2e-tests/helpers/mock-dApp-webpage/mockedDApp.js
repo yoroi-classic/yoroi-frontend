@@ -3,8 +3,8 @@ import {
   addressToCbor,
   addressesFromCborIfNeeded,
   getAmountInHex,
-  getCSLPubKeyHash,
-  getCslValue,
+  getPubKeyHashFromHex,
+  getCmlValue,
   getDRepIDHexAndBechFromHex,
   mapCborUtxos,
   bytesToHex,
@@ -259,8 +259,8 @@ export class MockDAppWebpage {
     });
     this.logger.info(`MockDApp::getBalance The response is ${JSON.stringify(balanceResponse, null, 2)}`);
     if (balanceResponse.success) {
-      const value = getCslValue(balanceResponse.retValue);
-      const valueStr = value.coin().to_str();
+      const value = getCmlValue(balanceResponse.retValue);
+      const valueStr = value.coin().toString();
       this.logger.info(`MockDApp::getBalance The balance is ${valueStr}`);
       balanceResponse.retValue = valueStr;
     }
@@ -565,7 +565,7 @@ export class MockDAppWebpage {
     });
     if (response.success && response.retValue.length > 0 && convert) {
       const regPubStakeKey = response.retValue[0];
-      response.retValue = [getCSLPubKeyHash(regPubStakeKey).to_hex()];
+      response.retValue = [getPubKeyHashFromHex(regPubStakeKey).to_hex()];
     }
     this.logger.info(`MockDApp::getRegisteredPubStakeKeys The response is ${JSON.stringify(response, null, 2)}`);
     return response;
@@ -586,7 +586,7 @@ export class MockDAppWebpage {
     });
     if (response.success && response.retValue.length > 0 && convert) {
       const unregPubStakeKey = response.retValue[0];
-      response.retValue = [getCSLPubKeyHash(unregPubStakeKey).to_hex()];
+      response.retValue = [getPubKeyHashFromHex(unregPubStakeKey).to_hex()];
     }
     this.logger.info(`MockDApp::getUnregisteredPubStakeKeys The response is ${JSON.stringify(response, null, 2)}`);
     return response;

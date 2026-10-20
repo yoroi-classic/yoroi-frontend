@@ -38,7 +38,6 @@ const PACKAGE_ROOT = path.resolve(__dirname, '..');
 const WORKSPACE_ROOT = path.resolve(PACKAGE_ROOT, '..', '..');
 
 const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
-  'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
