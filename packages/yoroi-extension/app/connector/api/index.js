@@ -61,6 +61,7 @@ export const authSignHexPayload: ({| privKey: string, payloadHex: string |}) => 
   privKey,
   payloadHex,
 }) => {
-  const appPrivKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(hexToBytes(privKey));
-  return appPrivKey.sign(hexToBytes(payloadHex)).to_hex();
+  return RustModule.WasmScope(Module =>
+    Module.CML.PrivateKey.from_extended_bytes(hexToBytes(privKey)).sign(hexToBytes(payloadHex)).to_hex()
+  );
 };
