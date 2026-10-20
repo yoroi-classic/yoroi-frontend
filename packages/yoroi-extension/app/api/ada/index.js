@@ -685,18 +685,10 @@ export default class AdaApi {
           password,
           request.signRequest.metadata
         );
-        if (signedTx instanceof Uint8Array) {
-          const cmlTx = Scope.CML.Transaction.from_cbor_bytes(signedTx);
-          return {
-            txHash: Scope.CML.hash_transaction(cmlTx.body()).to_hex(),
-            encodedTx: signedTx,
-          };
-        }
+        const cmlTx = Scope.CML.Transaction.from_cbor_bytes(signedTx);
         return {
-          txHash: Scope.WalletV4.FixedTransaction.from_hex(signedTx.to_hex())
-            .transaction_hash()
-            .to_hex(),
-          encodedTx: signedTx.to_bytes(),
+          txHash: Scope.CML.hash_transaction(cmlTx.body()).to_hex(),
+          encodedTx: signedTx,
         };
       });
 
@@ -1070,7 +1062,7 @@ export default class AdaApi {
       const { script, assetName } = mintEntry;
       const policyId = RustModule.WasmScope(Scope => {
         return bytesToHex(
-          Scope.WalletV4.NativeScript.from_bytes(hexToBytes(script))
+          Scope.CML.NativeScript.from_cbor_bytes(hexToBytes(script))
             .hash()
             .to_bytes()
         );
