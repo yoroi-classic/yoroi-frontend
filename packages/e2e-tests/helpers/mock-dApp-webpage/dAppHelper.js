@@ -8,8 +8,9 @@ import {
   getLargestFirstMultiAsset,
   getTransactionOutput,
   getTxBuilder,
-  getCslUtxos,
+  addCmlUtxosToBuilder,
 } from './dAppTxHelper.js';
+import * as CML from '@dcspark/cardano-multiplatform-lib-nodejs';
 
 /**
  * The function to request non-authorised connection the a wallet.
@@ -57,19 +58,18 @@ export const connectNonAuth = async (webdriver, logger, windowManager, mockedDAp
 export const buildSimpleTx = (receiverAddrBech32, amount, changeAddressHex, utxosHex) => {
   const buildTransactionInput = { amount, address: receiverAddrBech32 };
   const txBuilder = getTxBuilder();
-  const cslChangeAddress = getAddressFromBytes(changeAddressHex);
-  const cslOutputAddress = getAddressFromBech32(receiverAddrBech32);
-  const cslOutput = getTransactionOutput(cslOutputAddress, buildTransactionInput);
-  txBuilder.add_output(cslOutput);
-  const cslUtxos = getCslUtxos(utxosHex);
-  txBuilder.add_inputs_from(cslUtxos, getLargestFirstMultiAsset());
-  txBuilder.add_change_if_needed(cslChangeAddress);
-  const cslUnsignedTransaction = txBuilder.build_tx();
-  const txFee = cslUnsignedTransaction.body().fee().to_str();
-  const cslUnsignedTxHex = bytesToHex(cslUnsignedTransaction.to_bytes());
+  const changeAddress = getAddressFromBytes(changeAddressHex);
+  const outputAddress = getAddressFromBech32(receiverAddrBech32);
+  txBuilder.add_output(getTransactionOutput(outputAddress, buildTransactionInput));
+  addCmlUtxosToBuilder(txBuilder, utxosHex);
+  txBuilder.select_utxos(getLargestFirstMultiAsset());
+  txBuilder.add_change_if_needed(changeAddress, false);
+  const unsignedTransaction = txBuilder.build(CML.ChangeSelectionAlgo.Default, changeAddress).build_unchecked();
+  const txFee = unsignedTransaction.body().fee().toString();
+  const unsignedTxHex = bytesToHex(unsignedTransaction.to_cbor_bytes());
 
   return {
-    uTxHex: cslUnsignedTxHex,
+    uTxHex: unsignedTxHex,
     txFee,
   };
 };

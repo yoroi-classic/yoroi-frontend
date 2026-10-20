@@ -69,7 +69,7 @@
   "author": "Yoroi Classic Contributors",
   "license": "ISC",
   "devDependencies": {
-    "@emurgo/cardano-serialization-lib-nodejs": "13.2.1",
+    "@dcspark/cardano-multiplatform-lib-nodejs": "6.2.0",
     "bignumber.js": "^9.1.2",
     "chai": "^4.3.10",
     "cross-env": "^7.0.3",
