@@ -1635,7 +1635,7 @@ export default class AdaApi {
       throw new Error('unable to get public key');
     }
     const publicKey = await withPublicKey.getPublicKey();
-    const accountPublicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(publicKey.Hash);
+    const accountPublicKey = RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(publicKey.Hash));
 
     const conceptualWallet = publicDeriver.getParent();
     const walletName = (await conceptualWallet.getFullConceptualWalletInfo()).Name;
@@ -1718,13 +1718,13 @@ export default class AdaApi {
         .derive(CoinTypes.CARDANO)
         .derive(request.accountIndex)
         .to_public();
-      const cslAccountPublicKey = RustModule.WalletV4.Bip32PublicKey.from_bytes(accountPublicKey.to_raw_bytes());
+      const cmlAccountPublicKey = RustModule.CML.Bip32PublicKey.from_raw_bytes(accountPublicKey.to_raw_bytes());
 
       const newPubDerivers = [];
       const wallet = await createStandardCip1852Wallet({
         db: request.db,
         encryptedRoot,
-        accountPublicKey: cslAccountPublicKey,
+        accountPublicKey: cmlAccountPublicKey,
         accountIndex: request.accountIndex,
         walletName,
         accountName: '', // set account name empty now
@@ -1934,7 +1934,7 @@ export default class AdaApi {
       }
       const wallet = await createHardwareCip1852Wallet({
         db: request.db,
-        accountPublicKey: RustModule.WalletV4.Bip32PublicKey.from_hex(request.publicKey),
+        accountPublicKey: RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(request.publicKey)),
         accountIndex: request.addressing.path[Bip44DerivationLevels.ACCOUNT.level - request.addressing.startLevel],
         walletName: request.walletName,
         accountName: '',

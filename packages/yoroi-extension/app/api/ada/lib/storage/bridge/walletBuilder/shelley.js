@@ -38,12 +38,12 @@ import { deriveBip32PublicKeyHashHex, deriveBip32PublicKeyHashesHex } from '../.
  */
 export async function getAccountDefaultDerivations(
   chainNetworkId: number,
-  accountPublicKey: RustModule.WalletV4.Bip32PublicKey,
+  accountPublicKey: RustModule.CML.Bip32PublicKey,
   addByHash: AddByHashFunc
 ): Promise<TreeInsert<Bip44ChainInsert>> {
   const addressesIndex = range(0, BIP44_SCAN_SIZE);
 
-  const accountPublicKeyHex = accountPublicKey.to_hex();
+  const accountPublicKeyHex = bytesToHex(accountPublicKey.to_raw_bytes());
   const stakingKeyHash = deriveBip32PublicKeyHashHex(accountPublicKeyHex, [ChainDerivations.CHIMERIC_ACCOUNT, STAKING_KEY_INDEX]);
   const addressKeyHashes = deriveBip32PublicKeyHashesHex(
     accountPublicKeyHex,
@@ -118,7 +118,7 @@ export async function getAccountDefaultDerivations(
 export async function createStandardCip1852Wallet(request: {|
   db: lf$Database,
   encryptedRoot: string,
-  accountPublicKey: RustModule.WalletV4.Bip32PublicKey,
+  accountPublicKey: RustModule.CML.Bip32PublicKey,
   accountIndex: number,
   walletName: string,
   accountName: string,
@@ -192,7 +192,7 @@ export async function createStandardCip1852Wallet(request: {|
           deriverRequest: {
             decryptPrivateDeriver: {
               preDerived: true,
-              result: { pubKeyHex: request.accountPublicKey.to_hex() },
+              result: { pubKeyHex: bytesToHex(request.accountPublicKey.to_raw_bytes()) },
             },
             publicDeriverMeta: {
               name: request.accountName,
@@ -225,7 +225,7 @@ export async function createStandardCip1852Wallet(request: {|
 
 export async function createHardwareCip1852Wallet(request: {|
   db: lf$Database,
-  accountPublicKey: RustModule.WalletV4.Bip32PublicKey,
+  accountPublicKey: RustModule.CML.Bip32PublicKey,
   accountIndex: number,
   walletName: string,
   accountName: string,
@@ -312,7 +312,7 @@ export async function createHardwareCip1852Wallet(request: {|
                 KeyDerivationId: insertRequest.keyDerivationId,
               }),
             publicKey: {
-              Hash: bytesToHex(request.accountPublicKey.as_bytes()),
+              Hash: bytesToHex(request.accountPublicKey.to_raw_bytes()),
               IsEncrypted: false,
               PasswordLastUpdate: null,
               Type: KeyKind.BIP32ED25519,

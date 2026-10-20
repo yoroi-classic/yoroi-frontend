@@ -6,6 +6,7 @@ import { discoverAllAddressesFrom } from '../../../common/lib/restoration/bip44A
 import { getAccountDefaultDerivations } from '../../lib/storage/bridge/walletBuilder/shelley';
 import { deriveBip32PublicKeyHashHex, enterpriseAndBaseAddressHexFromKeyHashes, rewardAddressFromKeyHash } from '../../lib/cardanoCrypto/cmlAddress';
 import { BIP44_SCAN_SIZE, ChainDerivations, STAKING_KEY_INDEX } from '../../../../config/numbersConfig';
+import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -31,6 +32,33 @@ test('CML restoration batch derivation matches Shelley payment hashes for gap an
     });
     expect(genKeyhashBatchFunc(accountPublicKey, chain)([0, 19, 20, 239])).toEqual(expected);
   }
+});
+
+test('CML standard and imported hardware account keys preserve the public derivation contract', () => {
+  const keys = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const CML = Module.CML;
+    const cslRoot = CSL.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
+    let expectedAccount = cslRoot;
+    for (const index of [1852 + 0x80000000, 1815 + 0x80000000, 0x80000000]) expectedAccount = expectedAccount.derive(index);
+    const cmlRoot = CML.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
+    let cmlAccount = cmlRoot;
+    for (const index of [1852 + 0x80000000, 1815 + 0x80000000, 0x80000000]) cmlAccount = cmlAccount.derive(index);
+    return {
+      expected: expectedAccount.to_public().to_hex(),
+      cmlAccountHex: bytesToHex(cmlAccount.to_public().to_raw_bytes()),
+    };
+  });
+  expect(keys.cmlAccountHex).toEqual(keys.expected);
+
+  const importedHardwareAccountKey = RustModule.WasmScope(Module =>
+    bytesToHex(Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(keys.expected)).to_raw_bytes())
+  );
+  expect(importedHardwareAccountKey).toEqual(keys.expected);
+  const accountKeyHashes = [keys.expected, importedHardwareAccountKey].map(accountKey =>
+    deriveBip32PublicKeyHashHex(accountKey, [ChainDerivations.EXTERNAL, 0])
+  );
+  expect(accountKeyHashes[0]).toEqual(accountKeyHashes[1]);
 });
 
 test('CML restoration scanning preserves batched gap-limit expansion and default address reserve', async () => {
@@ -95,7 +123,7 @@ test('default Shelley derivations retain the BIP44 gap reserve and exact initial
     return root.to_public().to_hex();
   });
   const inserted = [];
-  const accountPublicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(accountPublicKeyHex);
+  const accountPublicKey = RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
   const tree = await getAccountDefaultDerivations(1, accountPublicKey, async address => {
     inserted.push(address);
   });
