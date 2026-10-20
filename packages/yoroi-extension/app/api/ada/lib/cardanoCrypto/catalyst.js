@@ -22,7 +22,7 @@ export function generateRegistrationMetadata(
   rewardAddress: string,
   nonce: number,
   signer: Uint8Array => string
-): any {
+): Uint8Array {
   /**
    * Catalyst follows CIP 36 to prove the voting power
    * A transaction is submitted with following metadata format for the registration process
@@ -51,7 +51,7 @@ export function generateRegistrationMetadata(
   );
 }
 
-function createCip36AuxiliaryData(registrationData: Object, signer: Uint8Array => string): any {
+function createCip36AuxiliaryData(registrationData: Object, signer: Uint8Array => string): Uint8Array {
   return RustModule.WasmScope(Module => {
     const CML = Module.CML;
     const generalMetadata = CML.Metadata.new();
@@ -83,7 +83,7 @@ function createCip36AuxiliaryData(registrationData: Object, signer: Uint8Array =
     auxiliaryMetadata.add(CML.TransactionMetadatum.from_cbor_bytes(finalAuxiliaryData.to_cbor_bytes()));
     auxiliaryMetadata.add(CML.TransactionMetadatum.new_list(CML.MetadatumList.new()));
     const bytes = Buffer.from(CML.TransactionMetadatum.new_list(auxiliaryMetadata).to_cbor_bytes());
-    return { to_bytes: () => Buffer.from(bytes) };
+    return bytes;
   });
 }
 
@@ -100,7 +100,7 @@ export function generateRegistration(request: {|
   catalystPrivateKeyHex: string,
   receiverAddress: string,
   slotNumber: number,
-|}): RustModule.WalletV4.AuxiliaryData {
+|}): Uint8Array {
   return generateRegistrationMetadata(
     privateKeyPublicKeyHex(request.catalystPrivateKeyHex, true),
     privateKeyPublicKeyHex(request.stakePrivateKeyHex),

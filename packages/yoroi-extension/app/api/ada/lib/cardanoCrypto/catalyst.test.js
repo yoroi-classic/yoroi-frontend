@@ -30,7 +30,7 @@ test('Generate Catalyst registration tx', async () => {
     });
 
     const result = Scope.WalletV4.GeneralTransactionMetadata.from_bytes(
-      Scope.WalletV4.MetadataList.from_bytes(metadata.to_bytes()).get(0).to_bytes()
+      Scope.WalletV4.MetadataList.from_bytes(metadata).get(0).to_bytes()
     );
 
     const data = result.get(Scope.WalletV4.BigNum.from_str(CatalystLabels.DATA.toString()));
