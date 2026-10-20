@@ -171,6 +171,12 @@ export const cip8Sign = async (
   signKey: RustModule.WalletV4.PrivateKey,
   payload: Buffer
 ): Promise<RustModule.MessageSigning.COSESign1> => {
+  const toSign = cip8DataToSign(address, payload);
+  const signedSigStruct = signKey.sign(toSign).to_bytes();
+  return buildCoseSign1FromSignature(address, Buffer.from(signedSigStruct), payload);
+};
+
+export const cip8DataToSign = (address: Buffer, payload: Buffer): Buffer => {
   const protectedHeader = RustModule.MessageSigning.HeaderMap.new();
   protectedHeader.set_algorithm_id(
     RustModule.MessageSigning.Label.from_algorithm_id(RustModule.MessageSigning.AlgorithmId.EdDSA)
@@ -183,9 +189,7 @@ export const cip8Sign = async (
   const unprotected = RustModule.MessageSigning.HeaderMap.new();
   const headers = RustModule.MessageSigning.Headers.new(protectedSerialized, unprotected);
   const builder = RustModule.MessageSigning.COSESign1Builder.new(headers, payload, false);
-  const toSign = builder.make_data_to_sign().to_bytes();
-  const signedSigStruct = signKey.sign(toSign).to_bytes();
-  return builder.build(signedSigStruct);
+  return Buffer.from(builder.make_data_to_sign().to_bytes());
 };
 
 export const buildCoseSign1FromSignature = async (
