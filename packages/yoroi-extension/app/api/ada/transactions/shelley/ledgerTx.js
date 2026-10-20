@@ -37,6 +37,7 @@ import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { WalletTypePurpose, HARD_DERIVATION_START } from '../../../../config/numbersConfig';
 import { bytesToHex, forceNonNull, hexToBytes, iterateLenGet, iterateLenGetMap, maybe } from '../../../../coreUtils';
 import { transactionHexToHash } from '../../lib/cardanoCrypto/utils';
+import { transactionSetTagState } from '../../lib/cardanoCrypto/cmlTransaction';
 import { stakePointerFromRawBytes } from '../../lib/cardanoCrypto/cmlAddress';
 
 // ==================== LEDGER ==================== //
@@ -439,17 +440,13 @@ export function toLedgerSignRequest(
   ledgerSupportsCip36?: boolean,
   catalystData?: LedgerNanoCatalystRegistrationTxSignData
 ): SignTransactionRequest {
-  const tagsState = RustModule.WasmScope(Module =>
-    Module.WalletV4.has_transaction_set_tag(
-      Module.WalletV4.FixedTransaction.new_from_body_bytes(hexToBytes(txBodyHex)).to_bytes()
-    )
-  );
+  const tagsState = transactionSetTagState(txBodyHex);
 
-  if (tagsState === RustModule.WalletV4.TransactionSetsState.MixedSets) {
+  if (tagsState === 'mixed') {
     throw new Error('Transaction with mixed sets cannot be signed by Ledger');
   }
 
-  const txHasSetTags = tagsState === RustModule.WalletV4.TransactionSetsState.AllSetsHaveTag;
+  const txHasSetTags = tagsState === 'all';
 
   const txBody = RustModule.WalletV4.TransactionBody.from_hex(txBodyHex);
 

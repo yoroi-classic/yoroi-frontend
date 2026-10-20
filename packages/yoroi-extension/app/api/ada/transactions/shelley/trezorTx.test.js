@@ -7,6 +7,7 @@ import { networks } from '../../lib/storage/database/prepackaged/networks';
 import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage/bridge/utils';
 import { CardanoCertificateType, CardanoAddressType, CardanoTxWitnessType } from 'trezor-connect-flow';
 import { ChainDerivations } from '../../../../config/numbersConfig';
+import { hexToBytes } from '../../../../coreUtils';
 import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
 
 beforeAll(async () => {
@@ -256,10 +257,16 @@ test('Create Trezor transaction', async () => {
       );
     }
   }
+  const outputValue = RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str('6323634'));
+  const outputAssets = RustModule.WalletV4.Assets.new();
+  outputAssets.insert(RustModule.WalletV4.AssetName.new(hexToBytes('aabb')), RustModule.WalletV4.BigNum.from_str('4'));
+  const outputMultiAsset = RustModule.WalletV4.MultiAsset.new();
+  outputMultiAsset.insert(RustModule.WalletV4.ScriptHash.from_hex('11'.repeat(28)), outputAssets);
+  outputValue.set_multiasset(outputMultiAsset);
   txBuilder.add_output(
     RustModule.WalletV4.TransactionOutput.new(
       RustModule.WalletV4.Address.from_bech32('addr1stvpskppsdvpezg6ex464jvekztus84rcpzskramdy7sh53jh67q7j3er7sqqxhjlalzzsk0pgc'),
-      RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str('6323634'))
+      outputValue
     )
   );
   const certs = RustModule.WalletV4.Certificates.new();
@@ -318,6 +325,12 @@ test('Create Trezor transaction', async () => {
       {
         address: 'addr1stvpskppsdvpezg6ex464jvekztus84rcpzskramdy7sh53jh67q7j3er7sqqxhjlalzzsk0pgc',
         amount: `6323634`,
+        tokenBundle: [
+          {
+            policyId: '11'.repeat(28),
+            tokenAmounts: [{ assetNameBytes: 'aabb', amount: '4' }],
+          },
+        ],
       },
     ],
     certificates: [
