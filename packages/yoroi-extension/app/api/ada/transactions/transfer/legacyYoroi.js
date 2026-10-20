@@ -21,10 +21,11 @@ export async function yoroiTransferTxFromAddresses(payload: {|
   network: $ReadOnly<NetworkRow>,
   absSlotNumber: BigNumber,
   protocolParams: {|
-    keyDeposit: RustModule.WalletV4.BigNum,
-    linearFee: RustModule.WalletV4.LinearFee,
-    coinsPerUtxoByte: RustModule.WalletV4.BigNum,
-    poolDeposit: RustModule.WalletV4.BigNum,
+    keyDeposit: string,
+    linearFeeCoefficient: string,
+    linearFeeConstant: string,
+    coinsPerUtxoByte: string,
+    poolDeposit: string,
     networkId: number,
   |},
 |}): Promise<TransferTx> {

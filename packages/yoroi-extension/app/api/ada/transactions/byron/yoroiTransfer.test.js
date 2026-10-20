@@ -33,13 +33,11 @@ test('builds and signs legacy-wallet transfer summary from the CML send-all tran
     signingKey,
     absSlotNumber: new BigNumber(0),
     protocolParams: {
-      keyDeposit: RustModule.WalletV4.BigNum.from_str('2000000'),
-      linearFee: RustModule.WalletV4.LinearFee.new(
-        RustModule.WalletV4.BigNum.from_str('44'),
-        RustModule.WalletV4.BigNum.from_str('155381')
-      ),
-      coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str('4310'),
-      poolDeposit: RustModule.WalletV4.BigNum.from_str('500000000'),
+      keyDeposit: '2000000',
+      linearFeeCoefficient: '44',
+      linearFeeConstant: '155381',
+      coinsPerUtxoByte: '4310',
+      poolDeposit: '500000000',
       networkId: networks.CardanoMainnet.NetworkId,
     },
     networkId: networks.CardanoMainnet.NetworkId,

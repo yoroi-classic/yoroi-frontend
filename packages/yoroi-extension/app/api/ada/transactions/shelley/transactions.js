@@ -83,13 +83,14 @@ export function sendAllUnsignedTx(
   allUtxos: Array<CardanoAddressedUtxo>,
   absSlotNumber: BigNumber,
   protocolParams: {|
-    linearFee: RustModule.WalletV4.LinearFee,
-    coinsPerUtxoByte: RustModule.WalletV4.BigNum,
-    poolDeposit: RustModule.WalletV4.BigNum,
-    keyDeposit: RustModule.WalletV4.BigNum,
+    linearFeeCoefficient: string,
+    linearFeeConstant: string,
+    coinsPerUtxoByte: string,
+    poolDeposit: string,
+    keyDeposit: string,
     networkId: number,
   |},
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: Uint8Array | void,
   networkId: number
 ): V4UnsignedTxAddressedUtxoResponse {
   const addressingMap = new Map<RemoteUnspentOutput, CardanoAddressedUtxo>();
@@ -136,13 +137,14 @@ export function sendAllUnsignedTxFromUtxo(
   allUtxos: Array<RemoteUnspentOutput>,
   absSlotNumber: BigNumber,
   protocolParams: {|
-    linearFee: RustModule.WalletV4.LinearFee,
-    coinsPerUtxoByte: RustModule.WalletV4.BigNum,
-    poolDeposit: RustModule.WalletV4.BigNum,
-    keyDeposit: RustModule.WalletV4.BigNum,
+    linearFeeCoefficient: string,
+    linearFeeConstant: string,
+    coinsPerUtxoByte: string,
+    poolDeposit: string,
+    keyDeposit: string,
     networkId: number,
   |},
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: Uint8Array | void,
   _networkId: number
 ): V4UnsignedTxUtxoResponse {
   if (allUtxos.length === 0) {
@@ -153,17 +155,17 @@ export function sendAllUnsignedTxFromUtxo(
     const config = cml.TransactionBuilderConfigBuilder.new()
       .fee_algo(cml.LinearFee.new(
         // eslint-disable-next-line no-undef
-        BigInt(protocolParams.linearFee.coefficient().to_str()),
+        BigInt(protocolParams.linearFeeCoefficient),
         // eslint-disable-next-line no-undef
-        BigInt(protocolParams.linearFee.constant().to_str()),
+        BigInt(protocolParams.linearFeeConstant),
         0n
       ))
       // eslint-disable-next-line no-undef
-      .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte.to_str()))
+      .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte))
       // eslint-disable-next-line no-undef
-      .pool_deposit(BigInt(protocolParams.poolDeposit.to_str()))
+      .pool_deposit(BigInt(protocolParams.poolDeposit))
       // eslint-disable-next-line no-undef
-      .key_deposit(BigInt(protocolParams.keyDeposit.to_str()))
+      .key_deposit(BigInt(protocolParams.keyDeposit))
       .max_value_size(MAX_VALUE_SIZE)
       .max_tx_size(MAX_TRANSACTION_SIZE)
       .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
@@ -186,7 +188,7 @@ export function sendAllUnsignedTxFromUtxo(
       const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
       txBuilder.add_input(cml.SingleInputBuilder.new(input, output).payment_key());
     }
-    if (metadata != null) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes()));
+    if (metadata != null) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata));
     try {
       if (!txBuilder.add_change_if_needed(address, false)) throw new NotEnoughMoneyToSendError();
     } catch (error) {

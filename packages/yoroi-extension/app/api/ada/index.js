@@ -798,16 +798,14 @@ export default class AdaApi {
           request.utxos,
           request.absSlotNumber,
           {
-            keyDeposit: RustModule.WalletV4.BigNum.from_str(protocolParameters.keyDeposit),
-            linearFee: RustModule.WalletV4.LinearFee.new(
-              RustModule.WalletV4.BigNum.from_str(protocolParameters.linearFee.coefficient),
-              RustModule.WalletV4.BigNum.from_str(protocolParameters.linearFee.constant)
-            ),
-            coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str(protocolParameters.coinsPerUtxoByte),
-            poolDeposit: RustModule.WalletV4.BigNum.from_str(protocolParameters.poolDeposit),
+            keyDeposit: protocolParameters.keyDeposit,
+            linearFeeCoefficient: protocolParameters.linearFee.coefficient,
+            linearFeeConstant: protocolParameters.linearFee.constant,
+            coinsPerUtxoByte: protocolParameters.coinsPerUtxoByte,
+            poolDeposit: protocolParameters.poolDeposit,
             networkId: Number(request.network.BaseConfig[0].ChainNetworkId),
           },
-          trxMetadata,
+          trxMetadata?.to_bytes(),
           request.network.NetworkId
         );
       } else {
