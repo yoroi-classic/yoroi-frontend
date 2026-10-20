@@ -17,7 +17,6 @@ import { networks } from '../../lib/storage/database/prepackaged/networks';
 import { HARD_DERIVATION_START, WalletTypePurpose, CoinTypes, ChainDerivations } from '../../../../config/numbersConfig';
 import { hexToBytes } from '../../../../coreUtils';
 import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
-import { derivePublicByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -511,13 +510,8 @@ test('Create Ledger transaction', async () => {
   );
   expect(signedSummary.bootstrapCount).toEqual(1);
   const byronPath = [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1];
-  const bootstrapKey = derivePublicByAddressing({
-    addressing: { path: byronPath, startLevel: 1 },
-    startingFrom: {
-      level: 3,
-      key: accountKey.to_public(),
-    },
-  });
+  let bootstrapKey = accountKey.to_public();
+  for (const index of byronPath.slice(3)) bootstrapKey = bootstrapKey.derive(index);
   expect(signedSummary.bootstrapHex).toEqual(
     RustModule.WalletV4.BootstrapWitness.new(
       RustModule.WalletV4.Vkey.new(bootstrapKey.to_raw_key()),

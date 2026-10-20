@@ -33,7 +33,6 @@ import {
   multiTokenFromRemote,
 } from '../utils';
 import { getStakingKeyHashesInTransactionBody } from '../../lib/cardanoCrypto/utils';
-import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 import { createCertificate } from '../../lib/storage/bridge/delegationUtils';
 import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
@@ -1122,16 +1121,12 @@ describe('Create signed transactions', () => {
         Module.CML.PrivateKey.from_extended_bytes(stakingKey.as_bytes()).to_public().hash().to_hex()
       )
     ).toBe(stakingKey.to_public().hash().to_hex());
-    const expectedPaymentHashes = unsignedTxResponse.senderUtxos.map(utxo =>
-      derivePrivateByAddressing({
-        addressing: utxo.addressing,
-        startingFrom: { level: Bip44DerivationLevels.ACCOUNT.level, key: accountPrivateKey },
-      })
-        .to_raw_key()
-        .to_public()
-        .hash()
-        .to_hex()
-    );
+    const expectedPaymentHashes = unsignedTxResponse.senderUtxos.map(utxo => {
+      let derived = accountPrivateKey;
+      const firstPathIndex = Bip44DerivationLevels.ACCOUNT.level - utxo.addressing.startLevel + 1;
+      for (let i = firstPathIndex; i < utxo.addressing.path.length; i++) derived = derived.derive(utxo.addressing.path[i]);
+      return derived.to_raw_key().to_public().hash().to_hex();
+    });
     expect(unsignedInfo.certificatesHex).toEqual(
       Array.from({ length: expectedCertificates.len() }, (_, index) => bytesToHex(expectedCertificates.get(index).to_bytes()))
     );
