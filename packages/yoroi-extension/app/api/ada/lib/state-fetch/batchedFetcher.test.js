@@ -10,7 +10,6 @@ import { HARD_DERIVATION_START, WalletTypePurpose, CoinTypes, ChainDerivations }
 import type { ConfigType } from '../../../../../config/config-types';
 import config from '../../../../config';
 import { networks } from '../storage/database/prepackaged/networks';
-import { bytesToHex } from '../../../../coreUtils';
 
 // populated by ConfigWebpackPlugin
 declare var CONFIG: ConfigType;
@@ -21,40 +20,32 @@ beforeAll(async () => {
   await RustModule.load();
 });
 
-function generateWallet(): RustModule.WalletV2.Bip44ChainPublic {
-  const rootPk = generateWalletRootKey(
+function generateAddresses(count: number): Array<string> {
+  const rootKeyBytes = generateWalletRootKey(
     'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon share'
-  );
-  const v3Chain = rootPk
-    .derive(WalletTypePurpose.BIP44)
-    .derive(CoinTypes.CARDANO)
-    .derive(HARD_DERIVATION_START + 0)
-    .derive(ChainDerivations.EXTERNAL);
-  return RustModule.WalletV2.Bip44ChainPublic.new(
-    RustModule.WalletV2.PublicKey.from_hex(bytesToHex(v3Chain.to_public().to_raw_bytes())),
-    RustModule.WalletV2.DerivationScheme.v2()
-  );
+  ).to_raw_bytes();
+  const byronNetworkId = network.BaseConfig[0].ByronNetworkId;
+  if (byronNetworkId == null) throw new Error('missing Byron network id');
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const chainKey = cml.Bip32PrivateKey.from_raw_bytes(rootKeyBytes)
+      .derive(WalletTypePurpose.BIP44)
+      .derive(CoinTypes.CARDANO)
+      .derive(HARD_DERIVATION_START)
+      .derive(ChainDerivations.EXTERNAL);
+    return Array.from({ length: count }, (_, index) =>
+      cml.AddressContent.icarus_from_key(
+        chainKey.derive(index).to_public(),
+        cml.ProtocolMagic.new(Number(byronNetworkId))
+      ).to_address().to_base58()
+    );
+  });
 }
 
 test('Batched history pagination', async done => {
-  const chainKey = generateWallet();
-
   // We want to make sure both batching on addresses and transactions is executed
   const numIterations = Math.max(CONFIG.app.addressRequestSize, config.wallets.TRANSACTION_REQUEST_SIZE) * 2 + 1;
-
-  const addresses = [];
-  for (let i = 0; i < numIterations; i++) {
-    const pubKey = chainKey.address_key(RustModule.WalletV2.AddressKeyIndex.new(i));
-    if (network.BaseConfig[0].ByronNetworkId == null) {
-      throw new Error(`missing Byron network id`);
-    }
-    const settings = RustModule.WalletV2.BlockchainSettings.from_json({
-      protocol_magic: network.BaseConfig[0].ByronNetworkId,
-    });
-    const addr = pubKey.bootstrap_era_address(settings);
-    const hex = addr.to_base58();
-    addresses.push(hex);
-  }
+  const addresses = generateAddresses(numIterations);
 
   const transactions = [];
   for (let i = 0; i < numIterations; i++) {
@@ -103,21 +94,7 @@ test('Batched history pagination', async done => {
 });
 
 test('Batched history edge case: full response with a pending transaction', async done => {
-  const chainKey = generateWallet();
-
-  const addresses = [];
-  for (let i = 0; i < config.wallets.TRANSACTION_REQUEST_SIZE; i++) {
-    const pubKey = chainKey.address_key(RustModule.WalletV2.AddressKeyIndex.new(i));
-    if (network.BaseConfig[0].ByronNetworkId == null) {
-      throw new Error(`missing Byron network id`);
-    }
-    const settings = RustModule.WalletV2.BlockchainSettings.from_json({
-      protocol_magic: network.BaseConfig[0].ByronNetworkId,
-    });
-    const addr = pubKey.bootstrap_era_address(settings);
-    const hex = addr.to_base58();
-    addresses.push(hex);
-  }
+  const addresses = generateAddresses(config.wallets.TRANSACTION_REQUEST_SIZE);
 
   const transactions = [];
   const genesisBlockHash = '0'; // fake hash just for the test
