@@ -8,6 +8,8 @@ import {
   cardanoUtxoHexFromRemoteFormat,
   cardanoMinAdaRequiredFromAssets,
   cardanoValueFromMultiToken,
+  multiTokenFromCMLValue,
+  parseCMLTransactionOutput,
 } from './utils';
 import { RustModule } from '../lib/cardanoCrypto/rustLoader';
 import { formatBigNumberToFloatString } from '../../../utils/formatters';
@@ -75,6 +77,64 @@ test('calculates min-ADA for token outputs with CML parity', () => {
     ).to_str();
   });
   expect(cardanoMinAdaRequiredFromAssets(tokens, coinsPerByte).toString()).toEqual(legacyMinimum);
+});
+
+test('parses CML transaction output values into wallet token entries', () => {
+  const defaults = { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId };
+  const outputBytes = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const assets = CSL.Assets.new();
+    assets.insert(CSL.AssetName.new(Buffer.from('aabb', 'hex')), CSL.BigNum.from_str('3'));
+    const multiAsset = CSL.MultiAsset.new();
+    multiAsset.insert(CSL.ScriptHash.from_hex('44'.repeat(28)), assets);
+    const value = CSL.Value.new(CSL.BigNum.from_str('2000000'));
+    value.set_multiasset(multiAsset);
+    const output = CSL.TransactionOutput.new(
+      CSL.Address.from_bech32(
+        'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
+      ),
+      value
+    );
+    return output.to_bytes();
+  });
+  const actual = RustModule.WasmScope(Module => {
+    const output = Module.CML.TransactionOutput.from_cbor_bytes(outputBytes);
+    return multiTokenFromCMLValue(output.amount(), defaults).entries().map(entry => ({
+      identifier: entry.identifier,
+      networkId: entry.networkId,
+      amount: entry.amount.toString(),
+    }));
+  });
+  expect(actual).toEqual([
+    { identifier: '.', networkId: defaults.defaultNetworkId, amount: '2000000' },
+    { identifier: `${'44'.repeat(28)}.aabb`, networkId: defaults.defaultNetworkId, amount: '3' },
+  ]);
+});
+
+test('parses Byron outputs, datum hashes, and unknown assets for connector display', () => {
+  const defaults = { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId };
+  const fixture = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const address = CSL.Address.from_bytes(
+      CSL.ByronAddress.from_base58('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4').to_bytes()
+    );
+    const assets = CSL.Assets.new();
+    assets.insert(CSL.AssetName.new(Buffer.from('aabb', 'hex')), CSL.BigNum.from_str('5'));
+    const multiAsset = CSL.MultiAsset.new();
+    multiAsset.insert(CSL.ScriptHash.from_hex('55'.repeat(28)), assets);
+    const value = CSL.Value.new(CSL.BigNum.from_str('3000000'));
+    value.set_multiasset(multiAsset);
+    const output = CSL.TransactionOutput.new(address, value);
+    output.set_data_hash(CSL.DataHash.from_hex('66'.repeat(32)));
+    return { hex: output.to_hex(), address: address.to_hex(), dataHash: '66'.repeat(32) };
+  });
+  const parsed = parseCMLTransactionOutput(fixture.hex, defaults);
+  expect(parsed.address).toEqual(fixture.address);
+  expect(parsed.dataHash).toEqual(fixture.dataHash);
+  expect(parsed.amount.entries().map(entry => [entry.identifier, entry.amount.toString()])).toEqual([
+    ['.', '3000000'],
+    [`${'55'.repeat(28)}.aabb`, '5'],
+  ]);
 });
 
 const cardanoToken = {

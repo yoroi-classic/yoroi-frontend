@@ -106,6 +106,51 @@ export function multiTokenFromCardanoValue(value: RustModule.WalletV4.Value, def
   }
   return multiToken;
 }
+
+export function multiTokenFromCMLValue(value: RustModule.CML.Value, defaults: DefaultTokenEntry): MultiToken {
+  const multiToken = new MultiToken([], defaults);
+  multiToken.add({
+    amount: new BigNumber(value.coin().toString()),
+    identifier: defaults.defaultIdentifier,
+    networkId: defaults.defaultNetworkId,
+  });
+  const multiAsset = value.multi_asset();
+  const policies = multiAsset.keys();
+  for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
+    const policy = policies.get(policyIndex);
+    const assets = multiAsset.get_assets(policy);
+    if (assets == null) continue;
+    const names = assets.keys();
+    for (let nameIndex = 0; nameIndex < names.len(); nameIndex++) {
+      const name = names.get(nameIndex);
+      const amount = assets.get(name);
+      if (amount == null) continue;
+      multiToken.add({
+        amount: new BigNumber(amount.toString()),
+        identifier: `${policy.to_hex()}.${name.to_hex()}`,
+        networkId: defaults.defaultNetworkId,
+      });
+    }
+  }
+  return multiToken;
+}
+
+export function parseCMLTransactionOutput(outputCborHex: string, defaults: DefaultTokenEntry): {|
+  address: string,
+  amount: MultiToken,
+  dataHash?: string,
+|} {
+  return RustModule.WasmScope(Module => {
+    const output = Module.CML.TransactionOutput.from_cbor_hex(outputCborHex);
+    const parsed = {
+      address: output.address().to_hex(),
+      amount: multiTokenFromCMLValue(output.amount(), defaults),
+    };
+    const dataHash = output.datum_hash();
+    if (dataHash != null) parsed.dataHash = dataHash.to_hex();
+    return parsed;
+  });
+}
 export function cardanoValueFromRemoteFormat(utxo: RemoteUnspentOutput): RustModule.WalletV4.Value {
   const value = RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount));
   if (utxo.assets.length === 0) return value;

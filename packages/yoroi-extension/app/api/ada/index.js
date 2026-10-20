@@ -126,8 +126,8 @@ import {
   asAddressedUtxo,
   cardanoMinAdaRequiredFromAssets,
   convertAdaTransactionsToExportRows,
-  multiTokenFromCardanoValue,
   multiTokenFromRemote,
+  parseCMLTransactionOutput,
 } from './transactions/utils';
 import type { TransactionExportRow } from '../export';
 
@@ -1007,7 +1007,6 @@ export default class AdaApi {
     const allUtxoIds = new Set(utxos.map(utxo => utxo.utxo_id));
     const foreignUtxoIds: Array<string> = [];
     const includeInputMap = (includeInputs || []).reduce((acc, e: CardanoTxRequestInput) => {
-      // eslint-disable-next-line no-nested-ternary
       const id = typeof e === 'string' ? e : typeof e.id === 'string' ? e.id : null;
       if (id == null) {
         throw new Error(`Unrecognised input request format: ${JSON.stringify(e)}`);
@@ -1083,21 +1082,9 @@ export default class AdaApi {
       return { policyId, assetId };
     }
 
-    RustModule.WasmScope(Scope => {
-      for (const outputHex of includeOutputs ?? []) {
-        const output = Scope.WalletV4.TransactionOutput.from_bytes(hexToBytes(outputHex));
-        const newOutput = {
-          address: bytesToHex(output.address().to_bytes()),
-          amount: multiTokenFromCardanoValue(output.amount(), defaultToken),
-        };
-        const outputDataHash = output.data_hash();
-        if (outputDataHash != null) {
-          // $FlowFixMe[prop-missing]
-          newOutput.dataHash = bytesToHex(outputDataHash.to_bytes());
-        }
-        outputs.push(newOutput);
-      }
-    });
+    for (const outputHex of includeOutputs ?? []) {
+      outputs.push(parseCMLTransactionOutput(outputHex, defaultToken));
+    }
 
     for (const target of includeTargets ?? []) {
       const targetAssets = { ...(target.assets || {}) };
