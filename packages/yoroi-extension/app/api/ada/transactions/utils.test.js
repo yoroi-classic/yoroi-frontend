@@ -7,6 +7,7 @@ import {
   getFromUserPerspective,
   cardanoUtxoHexFromRemoteFormat,
   cardanoMinAdaRequiredFromAssets,
+  cardanoMinAdaRequiredFromRemoteFormat,
   cardanoValueFromMultiToken,
   multiTokenFromCMLValue,
   parseCMLTransactionOutput,
@@ -73,6 +74,24 @@ test('calculates min-ADA for token outputs with CML parity', () => {
     return CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString();
   });
   expect(cardanoMinAdaRequiredFromAssets(tokens, coinsPerByte).toString()).toEqual(cmlMinimum);
+});
+
+test('wallet reserve min-ADA covers the maximum address, multiasset value, and datum hash', () => {
+  const utxo = {
+    utxo_id: `${'33'.repeat(32)}#0`,
+    tx_hash: '33'.repeat(32),
+    tx_index: 0,
+    receiver: '00'.repeat(57),
+    amount: '2000000',
+    assets: [{ assetId: `${'44'.repeat(28)}.aabb`, policyId: '44'.repeat(28), name: 'aabb', amount: '3' }],
+  };
+  const maxAddress = '00'.repeat(57);
+  const coinsPerByte = new BigNumber('4310');
+  const withoutDatum = cardanoMinAdaRequiredFromRemoteFormat(utxo, coinsPerByte, maxAddress);
+  const withDatum = cardanoMinAdaRequiredFromRemoteFormat(utxo, coinsPerByte, maxAddress, '66'.repeat(32));
+
+  expect(withoutDatum.toString()).toBe('1129220');
+  expect(withDatum.toString()).toBe('1275760');
 });
 
 test('parses CML transaction output values into wallet token entries', () => {

@@ -415,6 +415,25 @@ export function cardanoMinAdaRequiredFromAssets(tokens: MultiToken, coinsPerByte
   });
 }
 
+export function cardanoMinAdaRequiredFromRemoteFormat(
+  utxo: RemoteUnspentOutput,
+  coinsPerByte: BigNumber,
+  addressHex: string,
+  datumHash?: string
+): BigNumber {
+  return RustModule.WasmScope(Module => {
+    const CML = Module.CML;
+    const datumOption = datumHash == null ? undefined : CML.DatumOption.new_hash(CML.DatumHash.from_hex(datumHash));
+    const output = CML.TransactionOutput.new(
+      CML.Address.from_hex(addressHex),
+      cardanoValueFromRemoteFormat(utxo),
+      datumOption
+    );
+    // eslint-disable-next-line no-undef
+    return new BigNumber(CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString());
+  });
+}
+
 /**
  * Shallow-parses the passed transaction CBOR HEX and returns the BigNumber of the fee lovelaces
  */

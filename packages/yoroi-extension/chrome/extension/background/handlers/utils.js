@@ -21,7 +21,7 @@ import { getForeignAddresses } from '../../../../app/api/ada/lib/storage/bridge/
 import { isLedgerNanoWallet, isAnyTrezorWallet } from '../../../../app/api/ada/lib/storage/models/ConceptualWallet/index';
 import { isCardanoHaskell, isTestnet, getNetworkById } from '../../../../app/api/ada/lib/storage/database/prepackaged/networks';
 import BigNumber from 'bignumber.js';
-import { asAddressedUtxo, cardanoValueFromRemoteFormat } from '../../../../app/api/ada/transactions/utils';
+import { asAddressedUtxo, cardanoMinAdaRequiredFromRemoteFormat } from '../../../../app/api/ada/transactions/utils';
 import { MultiToken } from '../../../../app/api/common/lib/MultiToken';
 import { RustModule } from '../../../../app/api/ada/lib/cardanoCrypto/rustLoader';
 import { loadSubmittedTransactions } from '../../../../app/api/localStorage';
@@ -127,16 +127,12 @@ async function getWalletState(publicDeriver: PublicDeriver<>): Promise<WalletSta
   const deposits: Array<BigNumber> = addressedUtxos.map(u => {
     try {
       return new BigNumber(
-        RustModule.WasmScope(Module => {
-          const cml = Module.CML;
-          // Use a maximum-length Shelley base address to keep the legacy conservative reserve.
-          const output = cml.TransactionOutput.new(
-            cml.Address.from_hex('0'.repeat(114)),
-            cardanoValueFromRemoteFormat(u)
-          );
-          // eslint-disable-next-line no-undef
-          return cml.min_ada_required(output, BigInt(protocolParameters.coinsPerUtxoByte)).toString();
-        })
+        cardanoMinAdaRequiredFromRemoteFormat(
+          u,
+          new BigNumber(protocolParameters.coinsPerUtxoByte),
+          // Maximum-length Shelley base address keeps the legacy conservative reserve.
+          '0'.repeat(114)
+        ).toString()
       );
     } catch (e) {
       console.error(`Failed to calculate min-required ADA for utxo: ${JSON.stringify(u)}`, e);
