@@ -80,7 +80,7 @@ describe('app/api/ada/index', () => {
 
     const accountIndex = HARD_DERIVATION_START + 0;
     const response = await AdaApi.prototype.restoreWalletForTransfer({
-      accountPubKey: RustModule.WalletV4.Bip32PublicKey.from_bytes(
+      accountPubKey: RustModule.CML.Bip32PublicKey.from_raw_bytes(
         generateWalletRootKey(recoveryPhrase)
           .derive(WalletTypePurpose.BIP44)
           .derive(CoinTypes.CARDANO)

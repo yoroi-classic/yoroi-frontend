@@ -442,7 +442,7 @@ export type GenerateWalletRecoveryPhraseFunc = (
 // restoreWalletForTransfer
 
 export type RestoreWalletForTransferRequest = {|
-  accountPubKey: RustModule.WalletV4.Bip32PublicKey,
+  accountPubKey: RustModule.CML.Bip32PublicKey,
   accountIndex: number,
   checkAddressesInUse: FilterFunc,
   network: $ReadOnly<NetworkRow>,
@@ -457,8 +457,8 @@ export type RestoreWalletForTransferFunc = (
 // transferToCip1852
 
 export type TransferToCip1852Request = {|
-  cip1852AccountPubKey: RustModule.WalletV4.Bip32PublicKey,
-  bip44AccountPubKey: RustModule.WalletV4.Bip32PublicKey,
+  cip1852AccountPubKey: RustModule.CML.Bip32PublicKey,
+  bip44AccountPubKey: RustModule.CML.Bip32PublicKey,
   accountIndex: number,
   checkAddressesInUse: FilterFunc,
   absSlotNumber: BigNumber,
@@ -470,7 +470,7 @@ export type TransferToCip1852Request = {|
 export type TransferToCip1852Response = {|
   signRequest: CreateUnsignedTxResponse,
   publicKey: {|
-    key: RustModule.WalletV4.Bip32PublicKey,
+    key: RustModule.CML.Bip32PublicKey,
     ...Addressing,
   |},
 |};
@@ -1750,7 +1750,7 @@ export default class AdaApi {
         return Promise.resolve();
       };
 
-      const accountPublicKeyHex = bytesToHex(request.accountPubKey.as_bytes());
+      const accountPublicKeyHex = bytesToHex(request.accountPubKey.to_raw_bytes());
       const insertTree = await scanBip44Account({
         network: request.network,
         generateInternalAddresses: v2genAddressBatchFunc(accountPublicKeyHex, 0, config.ByronNetworkId),
