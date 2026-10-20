@@ -179,6 +179,7 @@ export const createCurrrentWalletInfo = (stores: any): CurrentWalletType | undef
       if (a.address?.Hash) {
         return addressHexToBech32(a.address?.Hash);
       }
+      return undefined;
     });
 
     const isStakeRegistered = stores.delegation.isStakeRegistered(selectedWallet.publicDeriverId);

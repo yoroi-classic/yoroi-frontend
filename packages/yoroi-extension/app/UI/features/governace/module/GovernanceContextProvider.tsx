@@ -59,7 +59,7 @@ export const GovernanceContextProvider = ({
   const [state, dispatch] = React.useReducer(GovernanceReducer, {
     ...defaultGovernanceState,
   });
-  const [stakingKeyHex, setStakingKeyHex] = React.useState(null);
+  const [stakingKeyHex, setStakingKeyHex] = React.useState<string | null>(null);
   const [governanceStatus, setGovernanceStatus] = React.useState<drepDelegation>({ status: null, drep: null });
   const {
     walletId,

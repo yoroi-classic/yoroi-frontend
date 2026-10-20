@@ -25,7 +25,7 @@ import { toBaseUnits, useGetInputs } from '../common/helpers';
 import { ASSET_DIRECTION_IN, USDA_TOKEN_ID } from '../common/constants';
 import { useStrings } from '../common/hooks/useStrings';
 
-export const convertBech32ToHex = async (bech32Address: string) => {
+export const convertBech32ToHex = (bech32Address: string) => {
   return addressBech32ToHex(bech32Address);
 };
 

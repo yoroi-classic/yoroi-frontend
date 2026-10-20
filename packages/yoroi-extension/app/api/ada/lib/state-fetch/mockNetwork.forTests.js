@@ -51,10 +51,10 @@ import { getCardanoHaskellBaseConfig, networks } from '../storage/database/prepa
 import { bech32 } from 'bech32';
 import { Bech32Prefix } from '../../../../config/stringConfig';
 import { parseTokenList } from '../../transactions/utils';
-import type { UtxoApiContract } from './utxoTypes';
 import type {
   TipStatusReference,
   Utxo,
+  UtxoApiContract,
   UtxoApiResponse,
   UtxoAtPointRequest,
   UtxoDiff,

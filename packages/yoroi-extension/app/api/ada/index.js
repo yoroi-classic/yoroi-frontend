@@ -11,7 +11,7 @@ import {
   HARD_DERIVATION_START,
   WalletTypePurpose,
 } from '../../config/numbersConfig';
-import { Bip44DerivationLevels } from './lib/storage/database/walletTypes/bip44/api/utils';
+import { Bip44DerivationLevels, flattenInsertTree } from './lib/storage/database/walletTypes/bip44/api/utils';
 import type { ProtocolParameters } from './lib/state-fetch/protocolParameters';
 import { createHardwareCip1852Wallet, createStandardCip1852Wallet } from './lib/storage/bridge/walletBuilder/shelley';
 import {
@@ -32,7 +32,6 @@ import type { TransactionMetadata } from './lib/storage/bridge/metadataUtils';
 import { createMetadata } from './lib/storage/bridge/metadataUtils';
 
 import type { HWFeatures } from './lib/storage/database/walletTypes/core/tables';
-import { flattenInsertTree } from './lib/storage/database/walletTypes/bip44/api/utils';
 import type { CoreAddressT } from './lib/storage/database/primitives/enums';
 import { CoreAddressTypes } from './lib/storage/database/primitives/enums';
 import type { NetworkRow, TokenRow } from './lib/storage/database/primitives/tables';

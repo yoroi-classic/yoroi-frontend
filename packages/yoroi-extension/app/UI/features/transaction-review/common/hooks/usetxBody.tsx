@@ -29,11 +29,11 @@ export const useTxBody = ({
   return query.data;
 };
 
-export const getCborTxBody = async (cbor: string) => {
+export const getCborTxBody = async (cbor: string): Promise<TransactionBody> => {
   try {
     return RustModule.WasmScope(Module => {
       const body = Module.CML.Transaction.from_cbor_hex(cbor).body();
-      const txBody = JSON.parse(body.to_json());
+      const txBody = JSON.parse(body.to_json()) as TransactionBody;
 
       // CML's JSON serializer emits coin quantities as JSON numbers. Convert them
       // from the integer accessors instead so JSON.parse cannot round Lovelace or
@@ -50,12 +50,15 @@ export const getCborTxBody = async (cbor: string) => {
         for (let policyIndex = 0; policyIndex < policyIds.len(); policyIndex++) {
           const policyId = policyIds.get(policyIndex);
           const assets = multiAsset.get_assets(policyId);
+          if (assets == null) continue;
           const assetNames = assets.keys();
           const formattedPolicyAssets = {};
 
           for (let assetIndex = 0; assetIndex < assetNames.len(); assetIndex++) {
             const assetName = assetNames.get(assetIndex);
-            formattedPolicyAssets[assetName.to_hex()] = assets.get(assetName).toString();
+            const quantity = assets.get(assetName);
+            if (quantity == null) continue;
+            formattedPolicyAssets[assetName.to_hex()] = quantity.toString();
           }
 
           formattedAssets[policyId.to_hex()] = formattedPolicyAssets;
