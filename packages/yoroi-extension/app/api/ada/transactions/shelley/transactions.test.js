@@ -887,7 +887,7 @@ describe('Create signed transactions', () => {
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
-      accountPrivateKey,
+      hexToBytes(accountPrivateKey.to_hex()),
       null,
       undefined
     );
@@ -963,21 +963,28 @@ describe('Create signed transactions', () => {
           assets: [],
         },
       ],
-      txBody,
+      txBody.to_bytes(),
       Bip44DerivationLevels.ACCOUNT.level,
-      accountPrivateKey,
+      hexToBytes(accountPrivateKey.to_hex()),
       null,
       undefined
     );
-    const witnesses = signedTx.witness_set();
+    const bootstrapWitnesses = RustModule.WasmScope(Module => {
+      const witnessSet = Module.CML.Transaction.from_cbor_bytes(signedTx).witness_set();
+      const bootstraps = witnessSet.bootstrap_witnesses();
+      return {
+        vkeyCount: witnessSet.vkeywitnesses()?.len() ?? 0,
+        nativeScriptCount: witnessSet.native_scripts()?.len() ?? 0,
+        bootstrapHex: bootstraps?.get(0).to_cbor_hex(),
+        bootstrapCount: bootstraps?.len() ?? 0,
+      };
+    });
 
-    expect(witnesses.vkeys()).toEqual(undefined);
-    expect(witnesses.native_scripts()).toEqual(undefined);
-    const bootstrapWits = witnesses.bootstraps();
-    if (bootstrapWits == null) throw new Error('Bootstrap witnesses should not be null');
-    expect(bootstrapWits.len()).toEqual(1); // note: only one witness since we got rid of duplicates
+    expect(bootstrapWitnesses.vkeyCount).toEqual(0);
+    expect(bootstrapWitnesses.nativeScriptCount).toEqual(0);
+    expect(bootstrapWitnesses.bootstrapCount).toEqual(1); // note: only one witness since we got rid of duplicates
 
-    expect(bootstrapWits.get(0).to_hex()).toEqual(
+    expect(bootstrapWitnesses.bootstrapHex).toEqual(
       '8458208fb03c3aa052f51c086c54bd4059ead2d2e426ac89fa4b3ce41cbfd8800b51c05840593e3d54a9bf9b5e6778ddb8930bdd9a87dd29f046fa3ba9d49bd1b7ddecdb6a1ced6016cdab663ff21596380392786d67f70e8d7c200fc042d669981db11c0658202623fceb96b07408531a5cb259f53845a38d6b68928e7c0c7e390f07545d0e6241a0'
     );
   });
@@ -1049,7 +1056,7 @@ describe('Create signed transactions', () => {
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
-      accountPrivateKey,
+      hexToBytes(accountPrivateKey.to_hex()),
       stakingKey.as_bytes(),
       undefined
     );
@@ -1135,7 +1142,7 @@ describe('Create signed transactions', () => {
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
-      accountPrivateKey,
+      hexToBytes(accountPrivateKey.to_hex()),
       stakingKey.as_bytes(),
       undefined
     );

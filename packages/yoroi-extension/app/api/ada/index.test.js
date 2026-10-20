@@ -559,7 +559,7 @@ describe('app/api/ada/index', () => {
       response.senderUtxos,
       response.unsignedTx,
       Bip44DerivationLevels.ACCOUNT.level,
-      accountPrivateKey,
+      accountPrivateKey.to_raw_bytes(),
       null,
       undefined
     );

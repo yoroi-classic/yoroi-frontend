@@ -23,6 +23,7 @@ import {
   SendTransactionApiError,
 } from './api/common/errors';
 import { Logger } from './utils/logging';
+import { hexToBytes } from './coreUtils';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
@@ -1465,7 +1466,7 @@ describe('extension dependency smoke', () => {
       unsignedTx.senderUtxos,
       unsignedBytes,
       Bip44DerivationLevels.ACCOUNT.level,
-      accountPrivateKey,
+      hexToBytes(accountPrivateKey.to_hex()),
       null,
       undefined
     );

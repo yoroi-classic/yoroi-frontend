@@ -31,12 +31,10 @@ import {
   asAddressedUtxo,
   multiTokenFromRemote,
 } from '../utils';
-import { iterateLenGet, forceNonNull } from '../../../../coreUtils';
+import { forceNonNull, hexToBytes } from '../../../../coreUtils';
 import { getCardanoHaskellBaseConfig, getNetworkById } from '../../lib/storage/database/prepackaged/networks';
 import { builtSendTokenList } from '../../../common';
 import type { TokenRow } from '../../lib/storage/database/primitives/tables';
-import blake2b from 'blake2b';
-import { deriveBip32PrivateKeyBytesByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 import { PublicDeriver } from '../../lib/storage/models/PublicDeriver';
 import { asGetAllAccounting, asGetSigningKey } from '../../lib/storage/models/PublicDeriver/traits';
 import { genOwnStakingKey } from '../../staking';
@@ -1039,17 +1037,12 @@ type UtxoOrAddressing = CardanoAddressedUtxo | {| ...Address, ...Addressing |};
 
 export async function signTransactionFromWallet(
   senderUtxos: Array<CardanoAddressedUtxo>,
-  unsignedTx:
-    | RustModule.WalletV4.Transaction
-    | RustModule.WalletV4.TransactionBuilder
-    | RustModule.WalletV4.TransactionBody
-    | Buffer
-    | Uint8Array,
+  unsignedTx: Uint8Array,
   wallet: PublicDeriver<>,
   password: string,
   metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
-): Promise<RustModule.WalletV4.Transaction | Uint8Array> {
+): Promise<Uint8Array> {
   const withSigning = asGetSigningKey(wallet);
   if (withSigning == null) {
     throw new Error('unexpected missing asGetSigningKey result');
@@ -1074,22 +1067,10 @@ export async function signTransactionFromWallet(
     addressPathByHash.set(address.Hash.slice(2), { address: address.Hash, path });
   }
 
-  let requiredSignerHashes: Array<string>;
-  if (unsignedTx instanceof RustModule.WalletV4.Transaction) {
-    requiredSignerHashes = iterateLenGet(unsignedTx.body().required_signers()).map(hash => hash.to_hex()).toArray();
-  } else if (unsignedTx instanceof RustModule.WalletV4.TransactionBuilder) {
-    const tx = unsignedTx.build_tx();
-    requiredSignerHashes = iterateLenGet(tx.body().required_signers()).map(hash => hash.to_hex()).toArray();
-  } else if (unsignedTx instanceof RustModule.WalletV4.TransactionBody) {
-    requiredSignerHashes = iterateLenGet(unsignedTx.required_signers()).map(hash => hash.to_hex()).toArray();
-  } else if (unsignedTx instanceof Buffer || unsignedTx instanceof Uint8Array) {
-    requiredSignerHashes = RustModule.WasmScope(Module => {
-      const required = Module.CML.TransactionBody.from_cbor_bytes(unsignedTx).required_signers();
-      return required == null ? [] : Array.from({ length: required.len() }, (_, index) => required.get(index).to_hex());
-    });
-  } else {
-    throw new Error('unexpected tx body type');
-  }
+  const requiredSignerHashes = RustModule.WasmScope(Module => {
+    const required = Module.CML.TransactionBody.from_cbor_bytes(unsignedTx).required_signers();
+    return required == null ? [] : Array.from({ length: required.len() }, (_, index) => required.get(index).to_hex());
+  });
 
   requiredSignerHashes.forEach(requiredSignerKeyHash => {
       if (addressPathByHash.has(requiredSignerKeyHash)) {
@@ -1108,7 +1089,7 @@ export async function signTransactionFromWallet(
     senderUtxos,
     unsignedTx,
     wallet.getParent().getPublicDeriverLevel(),
-    RustModule.WalletV4.Bip32PrivateKey.from_hex(normalizedKey.prvKeyHex),
+    hexToBytes(normalizedKey.prvKeyHex),
     stakingKey,
     metadata,
     otherRequiredSigners
@@ -1117,130 +1098,21 @@ export async function signTransactionFromWallet(
 
 export function signTransaction(
   senderUtxos: Array<CardanoAddressedUtxo>,
-  unsignedTx:
-    | RustModule.WalletV4.Transaction
-    | RustModule.WalletV4.TransactionBuilder
-    | RustModule.WalletV4.TransactionBody
-    | Buffer
-    | Uint8Array,
+  unsignedTx: Uint8Array,
   keyLevel: number,
-  signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
+  signingKey: Uint8Array,
   stakingKey: ?Uint8Array,
   metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
-): RustModule.WalletV4.Transaction | Uint8Array {
-  if (unsignedTx instanceof Buffer || unsignedTx instanceof Uint8Array) {
-    return signCmlTransaction(
-      senderUtxos,
-      unsignedTx,
-      keyLevel,
-      signingKey,
-      stakingKey,
-      metadata,
-      otherRequiredSigners
-    );
-  }
-  const seenByronKeys: Set<string> = new Set();
-  const seenKeyHashes: Set<string> = new Set();
-  const deduped: Array<UtxoOrAddressing> = [];
-  function addIfUnique(address: string, item: UtxoOrAddressing): void {
-    const addressHex = normalizeToAddress(address);
-    if (addressHex == null) {
-      throw new Error(`${nameof(signTransaction)} utxo not a valid Shelley address`);
-    }
-    const keyHash = getCardanoSpendingKeyHash(addressHex);
-    const addrHex = addressHex;
-    if (keyHash === null) {
-      if (!seenByronKeys.has(addrHex)) {
-        seenByronKeys.add(addrHex);
-        deduped.push(item);
-      }
-      return;
-    }
-    if (keyHash === undefined) {
-      throw new Error(`${nameof(signTransaction)} cannot sign script inputs`);
-    }
-    {
-      if (!seenKeyHashes.has(keyHash)) {
-        seenKeyHashes.add(keyHash);
-        deduped.push(item);
-      }
-    }
-  }
-  for (const senderUtxo of senderUtxos) {
-    addIfUnique(senderUtxo.receiver, senderUtxo);
-  }
-  for (const otherSigner of otherRequiredSigners) {
-    addIfUnique(otherSigner.address, otherSigner);
-  }
-
-  let txBody;
-  let txHash;
-  let txWitSet;
-  if (unsignedTx instanceof RustModule.WalletV4.Transaction) {
-    txBody = unsignedTx.body();
-    txWitSet = unsignedTx.witness_set();
-    txHash = RustModule.WalletV4.FixedTransaction.from_hex(unsignedTx.to_hex()).transaction_hash();
-  } else if (unsignedTx instanceof RustModule.WalletV4.TransactionBuilder) {
-    const tx = unsignedTx.build_tx();
-    txBody = tx.body();
-    txWitSet = tx.witness_set();
-    txHash = RustModule.WalletV4.FixedTransaction.from_hex(tx.to_hex()).transaction_hash();
-  } else if (unsignedTx instanceof RustModule.WalletV4.TransactionBody) {
-    txBody = unsignedTx;
-    txHash = RustModule.WalletV4.FixedTransaction.new_from_body_bytes(txBody.to_bytes()).transaction_hash();
-  } else if (unsignedTx instanceof Buffer || unsignedTx instanceof Uint8Array) {
-    // note: we are calculating the tx hash from the raw tx body bytes, which
-    // probably won't match the serialized `txBody`. But this happens only for
-    // connector signing and only the witness will be returned so this is more
-    // likely to match what the client expects.
-    txBody = RustModule.WalletV4.TransactionBody.from_bytes(unsignedTx);
-    txHash = RustModule.WalletV4.TransactionHash.from_bytes(
-      blake2b(256 / 8)
-        .update(unsignedTx)
-        .digest('binary')
-    );
-  } else {
-    throw new Error('unexpected tx body type');
-  }
-
-  const witnessSet = txWitSet ?? RustModule.WalletV4.TransactionWitnessSet.new();
-  const vkeyWits = witnessSet.vkeys() ?? RustModule.WalletV4.Vkeywitnesses.new();
-  const bootstrapWits = witnessSet.bootstraps() ?? RustModule.WalletV4.BootstrapWitnesses.new();
-
-  addWitnesses(txHash, deduped, keyLevel, (signingKey: any), vkeyWits, bootstrapWits);
-
-  const stakingKeyHashesInTx = getStakingKeyHashesInTransactionBody(txBody.to_hex());
-  if (stakingKeyHashesInTx.size > 0) {
-    if (stakingKey == null) {
-      console.warn('Transaction in signing contains staking credentials but no staking key is provided. Cannot fully sign.');
-    } else {
-      const legacyStakingKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(stakingKey);
-      const ownStakingKeyHash = legacyStakingKey.to_public().hash().to_hex();
-      if (stakingKeyHashesInTx.has(ownStakingKeyHash)) {
-        vkeyWits.add(RustModule.WalletV4.make_vkey_witness(txHash, legacyStakingKey));
-      }
-      if (stakingKeyHashesInTx.size > 1) {
-        const foreignStakingKeyHashes = [...stakingKeyHashesInTx].filter(x => x !== ownStakingKeyHash);
-        console.warn(
-          `Transaction in signing contains foreign staking credentials hashes '${JSON.stringify(foreignStakingKeyHashes)}' which do not match own staking key '${String(ownStakingKeyHash)}'. Cannot fully sign.`
-        );
-      }
-    }
-  }
-
-  if (bootstrapWits.len() > 0) witnessSet.set_bootstraps(bootstrapWits);
-  if (vkeyWits.len() > 0) witnessSet.set_vkeys(vkeyWits);
-
-  // Have to do this, because `Transaction.new` receives by value instead of reference
-  // <TODO:SERLIB_REFERENCE_CALL_FIX>
-  const metadataClone = metadata == null ? null : RustModule.WalletV4.AuxiliaryData.from_bytes(Buffer.from(metadata));
-
-  return RustModule.WalletV4.Transaction.new(
-    txBody,
-    witnessSet,
-    // $FlowFixMe[incompatible-call]
-    metadataClone
+): Uint8Array {
+  return signCmlTransaction(
+    senderUtxos,
+    unsignedTx,
+    keyLevel,
+    signingKey,
+    stakingKey,
+    metadata,
+    otherRequiredSigners
   );
 }
 
@@ -1248,7 +1120,7 @@ function signCmlTransaction(
   senderUtxos: Array<CardanoAddressedUtxo>,
   bodyBytes: Uint8Array,
   keyLevel: number,
-  signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
+  signingKeyBytes: Uint8Array,
   stakingKey: ?Uint8Array,
   metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}>
@@ -1273,20 +1145,18 @@ function signCmlTransaction(
     const body = cml.TransactionBody.from_cbor_bytes(bodyBytes);
     const txHash = cml.hash_transaction(body);
     const witnessBuilder = cml.TransactionWitnessSetBuilder.new();
-    const signingKeyBytes =
-      typeof ((signingKey: any).to_raw_bytes) === 'function' ? (signingKey: any).to_raw_bytes() : (signingKey: any).as_bytes();
     const cmlSigningKey = cml.Bip32PrivateKey.from_raw_bytes(signingKeyBytes);
     for (const item of uniqueAddressings) {
       const lastLevelSpecified = item.addressing.startLevel + item.addressing.path.length - 1;
       if (lastLevelSpecified !== Bip44DerivationLevels.ADDRESS.level) {
-        throw new Error(`${nameof(addWitnesses)} incorrect addressing size`);
+        throw new Error(`${nameof(signTransaction)} incorrect addressing size`);
       }
       const firstPathIndex = keyLevel - item.addressing.startLevel + 1;
-      if (firstPathIndex < 0) throw new Error(`${nameof(addWitnesses)} key level is before the addressing start level`);
+      if (firstPathIndex < 0) throw new Error(`${nameof(signTransaction)} key level is before the addressing start level`);
       let derived = cmlSigningKey;
       for (let i = firstPathIndex; i < item.addressing.path.length; i++) {
         const index = item.addressing.path[i];
-        if (index == null) throw new Error(`${nameof(addWitnesses)} invalid key derivation path`);
+        if (index == null) throw new Error(`${nameof(signTransaction)} invalid key derivation path`);
         derived = derived.derive(index);
       }
       const address = item.receiver ?? item.address;
@@ -1308,51 +1178,6 @@ function signCmlTransaction(
     const cmlMetadata = metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(metadata);
     return cml.Transaction.new(body, witnesses, true, cmlMetadata).to_cbor_bytes();
   });
-}
-
-function addWitnesses(
-  txHash: RustModule.WalletV4.TransactionHash,
-  uniqueAddressings: Array<UtxoOrAddressing>, // pre-req: does not contain duplicate keys
-  keyLevel: number,
-  signingKey: RustModule.WalletV4.Bip32PrivateKey,
-  vkeyWits: RustModule.WalletV4.Vkeywitnesses,
-  bootstrapWits: RustModule.WalletV4.BootstrapWitnesses
-): void {
-  // get private keys
-  const privateKeys = uniqueAddressings.map(utxo => {
-    const lastLevelSpecified = utxo.addressing.startLevel + utxo.addressing.path.length - 1;
-    if (lastLevelSpecified !== Bip44DerivationLevels.ADDRESS.level) {
-      throw new Error(`${nameof(addWitnesses)} incorrect addressing size`);
-    }
-    const derivedKeyBytes = deriveBip32PrivateKeyBytesByAddressing({
-      privateKeyHex: signingKey.to_hex(),
-      addressing: utxo.addressing,
-      level: keyLevel,
-    });
-    return RustModule.WalletV4.Bip32PrivateKey.from_bytes(derivedKeyBytes);
-  });
-
-  // sign the transactions
-  for (let i = 0; i < uniqueAddressings.length; i++) {
-    const uniqueAddressing = uniqueAddressings[i];
-    const resolveAddress = (): string => {
-      if (uniqueAddressing.receiver != null) return uniqueAddressing.receiver;
-      if (uniqueAddressing.address != null) return uniqueAddressing.address;
-      throw new Error(`[addWitnesses] Unexpected addressing for signing: ${JSON.stringify(uniqueAddressing)}`);
-    };
-    const addressHex = normalizeToAddress(resolveAddress());
-    if (addressHex == null) {
-      throw new Error(`${nameof(addWitnesses)} utxo not a valid Shelley address`);
-    }
-    const byronAddr = RustModule.WalletV4.ByronAddress.from_address(RustModule.WalletV4.Address.from_hex(addressHex));
-    if (byronAddr == null) {
-      const vkeyWit = RustModule.WalletV4.make_vkey_witness(txHash, privateKeys[i].to_raw_key());
-      vkeyWits.add(vkeyWit);
-    } else {
-      const bootstrapWit = RustModule.WalletV4.make_icarus_bootstrap_witness(txHash, byronAddr, privateKeys[i]);
-      bootstrapWits.add(bootstrapWit);
-    }
-  }
 }
 
 export function genFilterSmallUtxo(request: {|
