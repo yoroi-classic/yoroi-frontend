@@ -553,31 +553,33 @@ export function toTrezorSignRequest(
 export function buildConnectorSignedTransaction(
   rawTxHex: string,
   witnesses: Array<CardanoSignedTxWitness>,
-  metadata: ?RustModule.WalletV4.AuxiliaryData
+  metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array)
 ): {| txHex: string, txId: string |} {
-  const fixedTx = RustModule.WalletV4.FixedTransaction.from_hex(rawTxHex);
-  if (metadata) {
-    fixedTx.set_auxiliary_data(metadata.to_bytes());
-    const body = fixedTx.body();
-    body.set_auxiliary_data_hash(RustModule.WalletV4.hash_auxiliary_data(metadata));
-    fixedTx.set_body(body.to_bytes());
-  }
+  const txHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const tx = cml.Transaction.from_cbor_hex(rawTxHex);
+    const body = tx.body();
+    const auxiliaryData = metadata == null
+      ? tx.auxiliary_data()
+      : cml.AuxiliaryData.from_cbor_bytes(metadata instanceof Uint8Array ? metadata : metadata.to_bytes());
+    if (metadata != null) body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
+    const witnessSet = tx.witness_set();
+    const vkeyWitnesses = witnessSet.vkeywitnesses() ?? cml.VkeywitnessList.new();
 
-  for (const witness of witnesses) {
-    if (witness.type === CardanoTxWitnessType.BYRON_WITNESS) {
-      throw new Error('Byron wallet does not support connector API');
-    } else if (witness.type === CardanoTxWitnessType.SHELLEY_WITNESS) {
-      const vkeyWitness = RustModule.WalletV4.Vkeywitness.new(
-        RustModule.WalletV4.Vkey.new(RustModule.WalletV4.PublicKey.from_hex(witness.pubKey)),
-        RustModule.WalletV4.Ed25519Signature.from_hex(witness.signature)
-      );
-
-      fixedTx.add_vkey_witness(vkeyWitness);
-    } else {
-      throw new Error('unexpected witness type');
+    for (const witness of witnesses) {
+      if (witness.type === CardanoTxWitnessType.BYRON_WITNESS) {
+        throw new Error('Byron wallet does not support connector API');
+      } else if (witness.type === CardanoTxWitnessType.SHELLEY_WITNESS) {
+        const vkey = cml.PublicKey.from_bytes(hexToBytes(witness.pubKey));
+        const signature = cml.Ed25519Signature.from_raw_bytes(hexToBytes(witness.signature));
+        vkeyWitnesses.add(cml.Vkeywitness.new(vkey, signature));
+      } else {
+        throw new Error('unexpected witness type');
+      }
     }
-  }
 
-  const txHex = fixedTx.to_hex();
+    if (vkeyWitnesses.len() > 0) witnessSet.set_vkeywitnesses(vkeyWitnesses);
+    return cml.Transaction.new(body, witnessSet, tx.is_valid(), auxiliaryData).to_cbor_hex();
+  });
   return { txHex, txId: transactionHexToHash(txHex) };
 }

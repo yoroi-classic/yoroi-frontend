@@ -936,57 +936,50 @@ export function buildConnectorSignedTransaction(
     ...Addressing,
     key: RustModule.WalletV4.Bip32PublicKey,
   |},
-  metadata: ?RustModule.WalletV4.AuxiliaryData,
+  metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
   // to support transfering from Byron address when initializing Ledger wallets
   pathToReceiverMapping: Map<string, string> = new Map()
 ): {| txHex: string, txId: string |} {
-  const fixedTx = RustModule.WalletV4.FixedTransaction.from_hex(rawTxHex);
-  if (metadata) {
-    fixedTx.set_auxiliary_data(metadata.to_bytes());
-    const body = fixedTx.body();
-    body.set_auxiliary_data_hash(RustModule.WalletV4.hash_auxiliary_data(metadata));
-    fixedTx.set_body(body.to_bytes());
-  }
   const keyLevel = publicKey.addressing.startLevel + publicKey.addressing.path.length - 1;
+  const txHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const tx = cml.Transaction.from_cbor_hex(rawTxHex);
+    const body = tx.body();
+    const auxiliaryData = metadata == null
+      ? tx.auxiliary_data()
+      : cml.AuxiliaryData.from_cbor_bytes(metadata instanceof Uint8Array ? metadata : metadata.to_bytes());
+    if (metadata != null) body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
+    const witnessSet = tx.witness_set();
+    const vkeyWitnesses = witnessSet.vkeywitnesses() ?? cml.VkeywitnessList.new();
+    const bootstrapWitnesses = witnessSet.bootstrap_witnesses() ?? cml.BootstrapWitnessList.new();
 
-  for (const witness of witnesses) {
-    const addressing = {
-      path: witness.path,
-      startLevel: 1,
-    };
-    verifyFromDerivationRoot(addressing);
+    for (const witness of witnesses) {
+      const addressing = { path: witness.path, startLevel: 1 };
+      verifyFromDerivationRoot(addressing);
+      const witnessKey = derivePublicByAddressing({
+        addressing,
+        startingFrom: { level: keyLevel, key: publicKey.key },
+      });
+      const cmlPublicKey = cml.PublicKey.from_bytes(witnessKey.to_raw_key().as_bytes());
+      const signature = cml.Ed25519Signature.from_raw_bytes(hexToBytes(witness.witnessSignatureHex));
 
-    const witnessKey = derivePublicByAddressing({
-      addressing,
-      startingFrom: {
-        level: keyLevel,
-        key: publicKey.key,
-      },
-    });
-    if (witness.path[0] === WalletTypePurpose.BIP44) {
-      const receiver = pathToReceiverMapping.get(witness.path.join('/'));
-      if (!receiver) {
-        continue;
+      if (witness.path[0] === WalletTypePurpose.BIP44) {
+        const receiver = pathToReceiverMapping.get(witness.path.join('/'));
+        if (!receiver) continue;
+        const byronAddress = cml.ByronAddress.from_base58(receiver);
+        bootstrapWitnesses.add(
+          cml.BootstrapWitness.new(cmlPublicKey, signature, witnessKey.chaincode(), byronAddress.content().addr_attributes())
+        );
+      } else if (witness.path[0] === WalletTypePurpose.CIP1852) {
+        vkeyWitnesses.add(cml.Vkeywitness.new(cmlPublicKey, signature));
+      } else {
+        throw new Error(`unexpected witness path purpose value ${witness.path[0]}`);
       }
-      const bootstrapWit = RustModule.WalletV4.BootstrapWitness.new(
-        RustModule.WalletV4.Vkey.new(witnessKey.to_raw_key()),
-        RustModule.WalletV4.Ed25519Signature.from_hex(witness.witnessSignatureHex),
-        witnessKey.chaincode(),
-        RustModule.WalletV4.ByronAddress.from_base58(receiver).attributes()
-      );
-
-      fixedTx.add_bootstrap_witness(bootstrapWit);
-    } else if (witness.path[0] === WalletTypePurpose.CIP1852) {
-      const vkeyWit = RustModule.WalletV4.Vkeywitness.new(
-        RustModule.WalletV4.Vkey.new(witnessKey.to_raw_key()),
-        RustModule.WalletV4.Ed25519Signature.from_hex(witness.witnessSignatureHex)
-      );
-
-      fixedTx.add_vkey_witness(vkeyWit);
-    } else {
-      throw new Error(`unexpected witness path purpose value ${witness.path[0]}`);
     }
-  }
-  const txHex = fixedTx.to_hex();
+
+    if (vkeyWitnesses.len() > 0) witnessSet.set_vkeywitnesses(vkeyWitnesses);
+    if (bootstrapWitnesses.len() > 0) witnessSet.set_bootstrap_witnesses(bootstrapWitnesses);
+    return cml.Transaction.new(body, witnessSet, tx.is_valid(), auxiliaryData).to_cbor_hex();
+  });
   return { txHex, txId: transactionHexToHash(txHex) };
 }

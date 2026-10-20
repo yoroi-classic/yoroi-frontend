@@ -2,11 +2,12 @@
 
 import '../../lib/test-config.forTests';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
-import { toTrezorSignRequest, toTrezorAddressParameters } from './trezorTx';
+import { toTrezorSignRequest, toTrezorAddressParameters, buildConnectorSignedTransaction } from './trezorTx';
 import { networks } from '../../lib/storage/database/prepackaged/networks';
 import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage/bridge/utils';
-import { CardanoCertificateType, CardanoAddressType } from 'trezor-connect-flow';
+import { CardanoCertificateType, CardanoAddressType, CardanoTxWitnessType } from 'trezor-connect-flow';
 import { ChainDerivations } from '../../../../config/numbersConfig';
+import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -97,6 +98,73 @@ test('Generate address parameters', async () => {
       path: "m/44'/1815'/0'/2/0",
     });
   }
+});
+
+test('Assemble Trezor witnesses and metadata with CML', () => {
+  const metadata = createMetadata([{ label: '0', data: { hardware: 'trezor' } }]);
+  const incomingPublicKeyHex = '02'.repeat(32);
+  const existingSignatureHex = '03'.repeat(64);
+  const incomingSignatureHex = '04'.repeat(64);
+  const rawTxHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const inputs = cml.TransactionInputList.new();
+    inputs.add(cml.TransactionInput.new(cml.TransactionHash.from_hex('11'.repeat(32)), 0n));
+    const outputs = cml.TransactionOutputList.new();
+    const address = cml.Address.from_bech32(
+      'addr1q8v42wjda8r6mpfj40d36znlgfdcqp7jtj03ah8skh6u8wnrqua2vw243tmjfjt0h5wsru6appuz8c0pfd75ur7myyeqsx9990'
+    );
+    outputs.add(cml.TransactionOutput.new(address, cml.Value.new(5_000_000n, cml.MultiAsset.new())));
+    const body = cml.TransactionBody.new(inputs, outputs, 170_000n);
+    const witnessSet = cml.TransactionWitnessSet.new();
+    const existingVkeys = cml.VkeywitnessList.new();
+    existingVkeys.add(
+      cml.Vkeywitness.new(
+        cml.PublicKey.from_bytes(new Uint8Array(32).fill(1)),
+        cml.Ed25519Signature.from_raw_bytes(new Uint8Array(64).fill(3))
+      )
+    );
+    witnessSet.set_vkeywitnesses(existingVkeys);
+    return cml.Transaction.new(body, witnessSet, true).to_cbor_hex();
+  });
+
+  const signed = buildConnectorSignedTransaction(
+    rawTxHex,
+    [
+      {
+        type: CardanoTxWitnessType.SHELLEY_WITNESS,
+        pubKey: incomingPublicKeyHex,
+        signature: incomingSignatureHex,
+      },
+    ],
+    metadata
+  );
+  const summary = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const transaction = cml.Transaction.from_cbor_hex(signed.txHex);
+    const body = transaction.body();
+    const vkeys = transaction.witness_set().vkeywitnesses();
+    return {
+      txId: cml.hash_transaction(body).to_hex(),
+      keyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
+      signatures: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).ed25519_signature().to_hex()),
+      metadataHex: transaction.auxiliary_data().to_cbor_hex(),
+      metadataHash: body.auxiliary_data_hash().to_hex(),
+      expectedMetadataHex: cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes()).to_cbor_hex(),
+      expectedMetadataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes())).to_hex(),
+    };
+  });
+
+  expect(signed.txId).toEqual(summary.txId);
+  expect(summary.keyHashes).toHaveLength(2);
+  expect(summary.keyHashes[0]).toEqual(
+    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
+  );
+  expect(summary.keyHashes[1]).toEqual(
+    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(2)).hash().to_hex())
+  );
+  expect(summary.signatures).toEqual([existingSignatureHex, incomingSignatureHex]);
+  expect(summary.metadataHex).toEqual(summary.expectedMetadataHex);
+  expect(summary.metadataHash).toEqual(summary.expectedMetadataHash);
 });
 
 test('Create Trezor transaction', async () => {

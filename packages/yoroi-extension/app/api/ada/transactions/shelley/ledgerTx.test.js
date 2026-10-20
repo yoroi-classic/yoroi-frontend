@@ -16,6 +16,8 @@ import type { DeviceOwnedAddress, SignTransactionRequest } from '@cardano-founda
 import { networks } from '../../lib/storage/database/prepackaged/networks';
 import { HARD_DERIVATION_START, WalletTypePurpose, CoinTypes, ChainDerivations } from '../../../../config/numbersConfig';
 import { hexToBytes } from '../../../../coreUtils';
+import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
+import { derivePublicByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -403,8 +405,18 @@ test('Create Ledger transaction', async () => {
     }: SignTransactionRequest)
   );
 
-  buildConnectorSignedTransaction(
-    txBuilder.build_tx().to_hex(),
+  const metadata = createMetadata([{ label: '0', data: { hardware: 'ledger' } }]);
+  const originalBodyHex = txBuilder.build().to_hex();
+  const signedResult = buildConnectorSignedTransaction(
+    RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const original = cml.Transaction.from_cbor_hex(txBuilder.build_tx().to_hex());
+      const existingWitnessBuilder = cml.TransactionWitnessSetBuilder.new();
+      const existingKey = cml.PublicKey.from_bytes(new Uint8Array(32).fill(1));
+      const existingSignature = cml.Ed25519Signature.from_raw_bytes(new Uint8Array(64).fill(2));
+      existingWitnessBuilder.add_vkey(cml.Vkeywitness.new(existingKey, existingSignature));
+      return cml.Transaction.new(original.body(), existingWitnessBuilder.build(), true).to_cbor_hex();
+    }),
     [
       // this witnesses doesn't belong to the transaction / key. Just used to test wit generation
       {
@@ -440,6 +452,64 @@ test('Create Ledger transaction', async () => {
       },
       key: accountKey.to_public(),
     },
-    undefined
+    metadata,
+    new Map([
+      [
+        [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1].join('/'),
+        senderUtxos[0].receiver,
+      ],
+    ])
   );
+  const signedSummary = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const tx = cml.Transaction.from_cbor_hex(signedResult.txHex);
+    const body = tx.body();
+    const witnesses = tx.witness_set();
+    const vkeys = witnesses.vkeywitnesses();
+    const bootstraps = witnesses.bootstrap_witnesses();
+    const auxiliaryData = tx.auxiliary_data();
+    return {
+      bodyHex: body.to_cbor_hex(),
+      txId: cml.hash_transaction(body).to_hex(),
+      vkeyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
+      finalVkeySignatureHex: vkeys.get(vkeys.len() - 1).ed25519_signature().to_hex(),
+      bootstrapCount: bootstraps.len(),
+      bootstrapHex: bootstraps.get(0).to_cbor_hex(),
+      auxiliaryDataHex: auxiliaryData.to_cbor_hex(),
+      auxiliaryDataHash: body.auxiliary_data_hash().to_hex(),
+      expectedAuxiliaryDataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes())).to_hex(),
+    };
+  });
+  expect(signedSummary.bodyHex).not.toEqual(originalBodyHex);
+  expect(signedResult.txId).toEqual(signedSummary.txId);
+  expect(signedSummary.vkeyHashes).toHaveLength(2);
+  expect(signedSummary.vkeyHashes[0]).toEqual(
+    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
+  );
+  expect(signedSummary.finalVkeySignatureHex).toEqual(
+    'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207'
+  );
+  expect(signedSummary.bootstrapCount).toEqual(1);
+  const byronPath = [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1];
+  const bootstrapKey = derivePublicByAddressing({
+    addressing: { path: byronPath, startLevel: 1 },
+    startingFrom: {
+      level: 3,
+      key: accountKey.to_public(),
+    },
+  });
+  expect(signedSummary.bootstrapHex).toEqual(
+    RustModule.WalletV4.BootstrapWitness.new(
+      RustModule.WalletV4.Vkey.new(bootstrapKey.to_raw_key()),
+      RustModule.WalletV4.Ed25519Signature.from_hex(
+        'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207'
+      ),
+      bootstrapKey.chaincode(),
+      RustModule.WalletV4.ByronAddress.from_base58(senderUtxos[0].receiver).attributes()
+    ).to_hex()
+  );
+  expect(signedSummary.auxiliaryDataHex).toEqual(
+    RustModule.WasmScope(Module => Module.CML.AuxiliaryData.from_cbor_bytes(metadata.to_bytes()).to_cbor_hex())
+  );
+  expect(signedSummary.auxiliaryDataHash).toEqual(signedSummary.expectedAuxiliaryDataHash);
 });
