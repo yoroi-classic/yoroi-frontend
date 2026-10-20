@@ -36,7 +36,7 @@ import { getCardanoHaskellBaseConfig, getNetworkById } from '../../lib/storage/d
 import { builtSendTokenList } from '../../../common';
 import type { TokenRow } from '../../lib/storage/database/primitives/tables';
 import blake2b from 'blake2b';
-import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
+import { deriveBip32PrivateKeyBytesByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 import { PublicDeriver } from '../../lib/storage/models/PublicDeriver';
 import { asGetAllAccounting, asGetSigningKey } from '../../lib/storage/models/PublicDeriver/traits';
 import { genOwnStakingKey } from '../../staking';
@@ -1328,13 +1328,12 @@ function addWitnesses(
     if (lastLevelSpecified !== Bip44DerivationLevels.ADDRESS.level) {
       throw new Error(`${nameof(addWitnesses)} incorrect addressing size`);
     }
-    return derivePrivateByAddressing({
+    const derivedKeyBytes = deriveBip32PrivateKeyBytesByAddressing({
+      privateKeyHex: signingKey.to_hex(),
       addressing: utxo.addressing,
-      startingFrom: {
-        level: keyLevel,
-        key: signingKey,
-      },
+      level: keyLevel,
     });
+    return RustModule.WalletV4.Bip32PrivateKey.from_bytes(derivedKeyBytes);
   });
 
   // sign the transactions

@@ -1,7 +1,11 @@
 // @flow
 import '../test-config.forTests';
 import { RustModule } from './rustLoader';
-import { derivePrivateByAddressing, derivePrivateKeyBytesByAddressing } from './deriveByAddressing';
+import {
+  deriveBip32PrivateKeyBytesByAddressing,
+  derivePrivateByAddressing,
+  derivePrivateKeyBytesByAddressing,
+} from './deriveByAddressing';
 import { Bip44DerivationLevels } from '@emurgo/yoroi-lib';
 
 beforeAll(async () => {
@@ -17,10 +21,14 @@ test('derives private key bytes with CML matching the legacy Shelley path', () =
   };
   const expected = RustModule.WasmScope(Module => {
     const key = Module.WalletV4.Bip32PrivateKey.from_hex(privateKeyHex);
-    return derivePrivateByAddressing({
+    const derived = derivePrivateByAddressing({
       addressing,
       startingFrom: { key, level: Bip44DerivationLevels.ACCOUNT.level },
-    }).to_raw_key().as_bytes();
+    });
+    return {
+      privateBytes: derived.to_raw_key().as_bytes(),
+      extendedBytes: Uint8Array.from(Buffer.from(derived.to_hex(), 'hex')),
+    };
   });
   expect(
     derivePrivateKeyBytesByAddressing({
@@ -28,5 +36,12 @@ test('derives private key bytes with CML matching the legacy Shelley path', () =
       addressing,
       level: Bip44DerivationLevels.ACCOUNT.level,
     })
-  ).toEqual(expected);
+  ).toEqual(expected.privateBytes);
+  expect(
+    deriveBip32PrivateKeyBytesByAddressing({
+      privateKeyHex,
+      addressing,
+      level: Bip44DerivationLevels.ACCOUNT.level,
+    })
+  ).toEqual(expected.extendedBytes);
 });
