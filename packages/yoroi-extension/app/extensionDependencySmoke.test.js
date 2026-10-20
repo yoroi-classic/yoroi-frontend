@@ -58,10 +58,7 @@ const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
   'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cross-csl-core',
   'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs:dependencies:@emurgo/cross-csl-core',
   'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
-  'packages/yoroi-extension:node_modules/@yoroi/staking:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap/node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap:dependencies:@emurgo/cip14-js',
 ];
@@ -1472,20 +1469,27 @@ describe('extension dependency smoke', () => {
     const accountPrivateKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
       '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
     );
+    const unsignedBytes = unsignedTx.txBuilder instanceof Uint8Array ? unsignedTx.txBuilder : unsignedTx.txBuilder.build().to_bytes();
     const signedTx = signTransaction(
       unsignedTx.senderUtxos,
-      unsignedTx.txBuilder.build().to_bytes(),
+      unsignedBytes,
       Bip44DerivationLevels.ACCOUNT.level,
       accountPrivateKey,
       null,
       undefined
     );
-    const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx.body().fee().to_str();
+    const signedDetails = RustModule.WasmScope(Module => {
+      const transaction = Module.CML.Transaction.from_cbor_bytes(signedTx instanceof Uint8Array ? signedTx : signedTx.to_bytes());
+      const bootstrapWitnesses = transaction.witness_set().bootstrap_witnesses();
+      return {
+        bootstrapCount: bootstrapWitnesses?.len() ?? 0,
+        fee: transaction.body().fee().toString(),
+      };
+    });
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
-    expect(new BigNumber(signedFee).gt(0)).toEqual(true);
-    expect(bootstrapWitnesses == null ? 0 : bootstrapWitnesses.len()).toEqual(1);
+    expect(new BigNumber(signedDetails.fee).gt(0)).toEqual(true);
+    expect(signedDetails.bootstrapCount).toEqual(1);
   });
 
   test('keeps dApp connector public methods wired to expected RPC contracts', async () => {

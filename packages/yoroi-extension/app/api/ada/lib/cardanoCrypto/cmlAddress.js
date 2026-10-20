@@ -140,3 +140,36 @@ export const deriveRewardAddressFromAddress = (address: string, networkId: numbe
       .to_address()
       .to_bech32();
   });
+
+const readPointerComponent = (bytes: Uint8Array, start: number): {| value: bigint, next: number |} => {
+  let value = 0n;
+  let index = start;
+  while (index < bytes.length) {
+    const byte = bytes[index];
+    if (byte === undefined) throw new Error('Invalid pointer address');
+    // eslint-disable-next-line no-undef
+    value = (value << 7n) | BigInt(byte & 0x7f);
+    index += 1;
+    if ((byte & 0x80) === 0) return { value, next: index };
+  }
+  throw new Error('Invalid pointer address');
+};
+
+export const stakePointerFromAddressBech32 = (addressBech32: string): [string, string, string] =>
+  RustModule.WasmScope(Module => {
+    const address = Module.CML.Address.from_bech32(addressBech32);
+    const pointerAddress = Module.CML.PointerAddress.from_address(address);
+    if (pointerAddress == null) throw new Error('Address is not a pointer address');
+
+    // Pointer addresses encode the three chain coordinates as base-128 varints
+    // after the header and 28-byte payment credential.
+    const bytes = address.to_raw_bytes();
+    let offset = 29;
+    const slot = readPointerComponent(bytes, offset);
+    offset = slot.next;
+    const transactionIndex = readPointerComponent(bytes, offset);
+    offset = transactionIndex.next;
+    const certificateIndex = readPointerComponent(bytes, offset);
+    if (certificateIndex.next !== bytes.length) throw new Error('Invalid pointer address');
+    return [slot.value.toString(), transactionIndex.value.toString(), certificateIndex.value.toString()];
+  });

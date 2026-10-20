@@ -112,7 +112,7 @@ export function genCheckAddressesInUse(blockchain: Array<RemoteTransaction>, net
         } else {
           const enterpriseWasm = toEnterprise(found);
           if (enterpriseWasm != null) {
-            const enterprise = enterpriseWasm.to_address().to_hex();
+            const enterprise = enterpriseWasm;
             if (addressSet.has(enterprise)) {
               origAddr = mapToOriginal[enterprise];
             }
@@ -135,7 +135,7 @@ function isOurAddress(address: string, ownAddresses: Set<string>): boolean {
   }
   const enterpriseWasm = toEnterprise(address);
   if (enterpriseWasm != null) {
-    const enterprise = enterpriseWasm.to_address().to_hex();
+    const enterprise = enterpriseWasm;
     if (ownAddresses.has(enterprise)) {
       return true;
     }
@@ -719,7 +719,7 @@ export class MockUtxoApi implements UtxoApiContract {
         if (
           !(
             hexAddresses.includes(byronAddressToHex(output.address)) ||
-            hexAddresses.includes(toEnterprise(output.address)?.to_address().to_hex() ?? '')
+            hexAddresses.includes(toEnterprise(output.address) ?? '')
           )
         ) {
           continue;
@@ -793,7 +793,7 @@ export class MockUtxoApi implements UtxoApiContract {
           if (
             !(
               hexAddresses.includes(byronAddressToHex(output.address)) ||
-              hexAddresses.includes(toEnterprise(output.address)?.to_address().to_hex() ?? '')
+              hexAddresses.includes(toEnterprise(output.address) ?? '')
             )
           ) {
             return;
@@ -823,7 +823,7 @@ export class MockUtxoApi implements UtxoApiContract {
           .filter(
             input =>
               hexAddresses.includes(byronAddressToHex(input.address)) ||
-              hexAddresses.includes(toEnterprise(input.address)?.to_address().to_hex() ?? '')
+              hexAddresses.includes(toEnterprise(input.address) ?? '')
           )
           .forEach(input => {
             utxoDiffItems.push(

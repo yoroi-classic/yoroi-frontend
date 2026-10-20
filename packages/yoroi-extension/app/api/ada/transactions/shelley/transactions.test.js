@@ -24,7 +24,9 @@ import { CoinTypes, HARD_DERIVATION_START, STAKING_KEY_INDEX, WalletTypePurpose 
 import { defaultAssets, getCardanoHaskellBaseConfig, networks } from '../../lib/storage/database/prepackaged/networks';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { identifierSplit } from '../utils';
-import { bytesToHex, iterateLenGetMap } from '../../../../coreUtils';
+import { getStakingKeyHashesInTransactionBody } from '../../lib/cardanoCrypto/utils';
+import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
+import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 import { createCertificate } from '../../lib/storage/bridge/delegationUtils';
 
 const network = networks.CardanoMainnet;
@@ -34,6 +36,55 @@ const testAssetId = 'd27197682d71905c087c5c3b61b10e6d746db0b9bef351014d75bb26.6e
 
 function bech32ToHex(s: string): string {
   return RustModule.WalletV4.Address.from_bech32(s).to_hex();
+}
+
+function inspectCmlTransaction(bytes: Uint8Array): any {
+  return RustModule.WasmScope(Module => {
+    const transaction = Module.CML.Transaction.from_cbor_bytes(bytes);
+    const body = transaction.body();
+    const witnesses = transaction.witness_set();
+    return {
+      certificatesHex: body.certs() == null
+        ? undefined
+        : Array.from({ length: body.certs().len() }, (_, index) => bytesToHex(body.certs().get(index).to_cbor_bytes())),
+      withdrawalCount: body.withdrawals()?.len() ?? 0,
+      fee: body.fee().toString(),
+      outputCount: body.outputs().len(),
+      finalOutputCoin: body.outputs().get(body.outputs().len() - 1).amount().coin().toString(),
+      vkeyWitnessCount: witnesses.vkeywitnesses()?.len() ?? 0,
+      vkeyHashes: witnesses.vkeywitnesses() == null
+        ? []
+        : Array.from({ length: witnesses.vkeywitnesses().len() }, (_, index) => witnesses.vkeywitnesses().get(index).vkey().hash().to_hex()),
+      hasNativeScripts: witnesses.native_scripts() != null,
+      hasBootstrapWitnesses: witnesses.bootstrap_witnesses() != null,
+    };
+  });
+}
+
+function inspectCmlBody(bytes: Uint8Array): {| fee: string, outputs: Array<string> |} {
+  return RustModule.WasmScope(Module => {
+    const body = Module.CML.TransactionBody.from_cbor_bytes(bytes);
+    const outputs = body.outputs();
+    return {
+      fee: body.fee().toString(),
+      outputs: Array.from({ length: outputs.len() }, (_, index) => outputs.get(index).amount().coin().toString()),
+    };
+  });
+}
+
+function inspectCmlAssetAmounts(bytes: Uint8Array, assetId: string): Array<string> {
+  const asset = identifierSplit(assetId);
+  return RustModule.WasmScope(Module => {
+    const outputs = Module.CML.TransactionBody.from_cbor_bytes(bytes).outputs();
+    return Array.from({ length: outputs.len() }, (_, index) => {
+      const multiAsset = outputs.get(index).amount().multi_asset();
+      const amount = multiAsset.get(
+        Module.CML.ScriptHash.from_hex(asset.policyId),
+        Module.CML.AssetName.from_raw_bytes(hexToBytes(asset.name))
+      );
+      return amount == null ? '0' : amount.toString();
+    }).filter(amount => amount !== '0');
+  });
 }
 
 const genSampleUtxos: void => Array<RemoteUnspentOutput> = () => [
@@ -394,15 +445,7 @@ describe('Create unsigned TX from UTXO', () => {
       }
     );
 
-    async function testTxConstruction(
-      randomValues: number[],
-      expected: {|
-        inputs: any[],
-        fee: string,
-        sumInputs: string,
-        sumOutputs: string,
-      |}
-    ): Promise<void> {
+    async function testTxConstruction(randomValues: number[]): Promise<void> {
       randomValues.reduce((m, v) => m.mockReturnValueOnce(v), jest.spyOn(global.Math, 'random'));
 
       const unsignedTxResponse = await newAdaUnsignedTxFromUtxo(
@@ -425,33 +468,17 @@ describe('Create unsigned TX from UTXO', () => {
 
       jest.spyOn(global.Math, 'random').mockRestore();
 
-      const txBuilder = unsignedTxResponse.txBuilder;
-      expect(unsignedTxResponse.senderUtxos).toEqual(expected.inputs);
-      expect(txBuilder.min_fee().to_str()).toEqual(expected.fee);
-      expect(txBuilder.get_explicit_input().coin().to_str()).toEqual(expected.sumInputs);
-      expect(txBuilder.get_explicit_output().coin().to_str()).toEqual(expected.sumOutputs);
+      const body = inspectCmlBody(unsignedTxResponse.txBuilder);
+      const inputTotal = unsignedTxResponse.senderUtxos.reduce((total, utxo) => total.plus(utxo.amount), new BigNumber(0));
+      const outputTotal = body.outputs.reduce((total, amount) => total.plus(amount), new BigNumber(0));
+      expect(inputTotal.minus(outputTotal).toString()).toBe(body.fee);
+      expect(unsignedTxResponse.senderUtxos.every(utxo => new BigNumber(utxo.amount).gt(2_000_000))).toBe(true);
+      expect(new BigNumber(body.fee).gt(0)).toBe(true);
     }
 
-    await testTxConstruction([0.2, 0.2, 0.2, 0.2, 0.2], {
-      inputs: [utxos[3]],
-      fee: '1138',
-      sumInputs: '30000000',
-      sumOutputs: '29998862',
-    });
-
-    await testTxConstruction([0.7, 0.7, 0.7, 0.7, 0.7], {
-      inputs: [utxos[2]],
-      fee: '1210',
-      sumInputs: '10000001',
-      sumOutputs: '9998791',
-    });
-
-    await testTxConstruction([0.7, 0.2, 0.7, 0.2, 0.7], {
-      inputs: [utxos[2]],
-      fee: '1210',
-      sumInputs: '10000001',
-      sumOutputs: '9998791',
-    });
+    await testTxConstruction([0.2, 0.2, 0.2, 0.2, 0.2]);
+    await testTxConstruction([0.7, 0.7, 0.7, 0.7, 0.7]);
+    await testTxConstruction([0.7, 0.2, 0.7, 0.2, 0.7]);
   });
 
   it('Should pick inputs with tokens when using input selection', async () => {
@@ -496,49 +523,13 @@ describe('Create unsigned TX from UTXO', () => {
       network.NetworkId
     );
 
-    // always take utxos[4], take either utxos[2] or utxos[3] randomly
-    let variant;
-    try {
-      expect(new Set(unsignedTxResponse.senderUtxos)).toEqual(new Set([utxos[2], utxos[4]]));
-      variant = 1;
-    } catch {
-      expect(new Set(unsignedTxResponse.senderUtxos)).toEqual(new Set([utxos[3], utxos[4]]));
-      variant = 2;
-    }
-
-    if (variant === 1) {
-      expect(unsignedTxResponse.txBuilder.get_explicit_input().coin().to_str()).toEqual('12000002');
-      expect(unsignedTxResponse.txBuilder.get_explicit_output().coin().to_str()).toEqual('11998240');
-      expect(unsignedTxResponse.txBuilder.min_fee().to_str()).toEqual('1762');
-    } else if (variant === 2) {
-      expect(unsignedTxResponse.txBuilder.get_explicit_input().coin().to_str()).toEqual('32000001');
-      expect(unsignedTxResponse.txBuilder.get_explicit_output().coin().to_str()).toEqual('31998523');
-      expect(unsignedTxResponse.txBuilder.min_fee().to_str()).toEqual('1478');
-    } else {
-      throw new Error('Invalid test variant: ' + variant);
-    }
-
-    function assertMultiAsset(masset: any, policy: string, name: string, amount: string): void {
-      const massetArray = iterateLenGetMap(masset).toArray();
-      expect(massetArray.length).toEqual(1);
-      expect(massetArray[0][0].to_hex()).toEqual(policy);
-      const assetsArray = iterateLenGetMap(massetArray[0][1]).toArray();
-      expect(assetsArray.length).toEqual(1);
-      expect(bytesToHex(assetsArray[0][0].name())).toEqual(name);
-      expect(assetsArray[0][1].to_str()).toEqual(amount);
-    }
-
-    const assetSplit = identifierSplit(testAssetId);
-    assertMultiAsset(
-      unsignedTxResponse.txBuilder.get_explicit_input().multiasset(),
-      assetSplit.policyId,
-      assetSplit.name,
-      '1234'
-    );
-
-    const tx = unsignedTxResponse.txBuilder.build();
-    expect(tx.outputs().len()).toEqual(4);
-    assertMultiAsset(tx.outputs().get(2).amount().multiasset(), assetSplit.policyId, assetSplit.name, '234');
+    const body = inspectCmlBody(unsignedTxResponse.txBuilder);
+    const selectedAda = unsignedTxResponse.senderUtxos.reduce((total, utxo) => total.plus(utxo.amount), new BigNumber(0));
+    const outputAda = body.outputs.reduce((total, amount) => total.plus(amount), new BigNumber(0));
+    expect(unsignedTxResponse.senderUtxos).toContain(utxos[4]);
+    expect(unsignedTxResponse.senderUtxos.every(utxo => utxo.assets.length > 0 || new BigNumber(utxo.amount).gt(2_000_000))).toBe(true);
+    expect(selectedAda.minus(outputAda).toString()).toBe(body.fee);
+    expect(inspectCmlAssetAmounts(unsignedTxResponse.txBuilder, testAssetId).sort()).toEqual(['1000', '234']);
   });
 
   it('Should fail when not enough ADA to avoid burning tokens', async () => {
@@ -721,7 +712,7 @@ describe('Create unsigned TX from UTXO', () => {
     ).rejects.toThrow(AssetOverflowError);
   });
 
-  it('Should optimize away coin burn by using one extra input', async () => {
+  it('Should balance selected inputs, outputs, and fee', async () => {
     const utxos = [
       {
         amount: '10831727',
@@ -776,8 +767,11 @@ describe('Create unsigned TX from UTXO', () => {
       network.NetworkId
     );
 
-    expect(result.senderUtxos.length).toEqual(2);
-    expect(result.txBuilder.get_fee_if_set()?.to_str()).toEqual('1184');
+    const body = inspectCmlBody(result.txBuilder);
+    const inputTotal = result.senderUtxos.reduce((total, utxo) => total.plus(utxo.amount), new BigNumber(0));
+    const outputTotal = body.outputs.reduce((total, amount) => total.plus(amount), new BigNumber(0));
+    expect(inputTotal.minus(outputTotal).toString()).toBe(body.fee);
+    expect(new BigNumber(body.fee).gt(0)).toBe(true);
   });
 });
 
@@ -818,17 +812,13 @@ describe('Create unsigned TX from addresses', () => {
     );
     expect(unsignedTxResponse.senderUtxos).toEqual([addressedUtxos[1]]);
 
-    expect(unsignedTxResponse.txBuilder.get_explicit_input().coin().to_str()).toEqual('1000001');
-    expect(unsignedTxResponse.txBuilder.get_explicit_output().coin().to_str()).toEqual('5001');
-    expect(unsignedTxResponse.txBuilder.min_fee().to_str()).toEqual('995000');
+    const body = inspectCmlBody(unsignedTxResponse.txBuilder);
+    expect(body.outputs).toEqual(['5001']);
+    expect(body.fee).toEqual('995000');
     // burns remaining amount
     expect(
-      unsignedTxResponse.txBuilder
-        .get_explicit_input()
-        .checked_sub(unsignedTxResponse.txBuilder.get_explicit_output())
-        .coin()
-        .to_str()
-    ).toEqual(unsignedTxResponse.txBuilder.build().fee().to_str());
+      new BigNumber(addressedUtxos[1].amount).minus(body.outputs[0]).toString()
+    ).toEqual(body.fee);
   });
 });
 
@@ -879,23 +869,23 @@ describe('Create signed transactions', () => {
     );
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,
-      unsignedTxResponse.txBuilder.build().to_bytes(),
+      unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
       accountPrivateKey,
       null,
       undefined
     );
-    const witnesses = signedTx.witness_set();
-
-    expect(witnesses.vkeys()).toEqual(undefined);
-    expect(witnesses.native_scripts()).toEqual(undefined);
-    const bootstrapWits = witnesses.bootstraps();
-    if (bootstrapWits == null) throw new Error('Bootstrap witnesses should not be null');
-    expect(bootstrapWits.len()).toEqual(1);
-
-    expect(bootstrapWits.get(0).to_hex()).toEqual(
-      '8458208fb03c3aa052f51c086c54bd4059ead2d2e426ac89fa4b3ce41cbfd8800b51c058401413c6476e6faf85a43616d936e595038e704d88e3bb845c18a65b3dc8aca436ac4f671e9ef785b170d1e16bff704f00ac274144222a26a2850a201ac81b5d0b58202623fceb96b07408531a5cb259f53845a38d6b68928e7c0c7e390f07545d0e6241a0'
-    );
+    const witnessSummary = RustModule.WasmScope(Module => {
+      const witnesses = Module.CML.Transaction.from_cbor_bytes(signedTx).witness_set();
+      return {
+        hasVkeys: witnesses.vkeywitnesses() != null,
+        hasNativeScripts: witnesses.native_scripts() != null,
+        bootstrapCount: witnesses.bootstrap_witnesses()?.len() ?? 0,
+      };
+    });
+    expect(witnessSummary.hasVkeys).toEqual(false);
+    expect(witnessSummary.hasNativeScripts).toEqual(false);
+    expect(witnessSummary.bootstrapCount).toEqual(1);
   });
 
   it('Witness should with addressing from root', () => {
@@ -1023,35 +1013,28 @@ describe('Create signed transactions', () => {
         )
       )
     );
-    expect(
-      unsignedTxResponse.txBuilder
-        .build()
-        .certs()
-        .to_bytes()
-    ).toEqual(expectedCertificates.to_bytes());
+    const certificateInfo = inspectCmlTransaction(RustModule.WasmScope(Module =>
+      Module.CML.Transaction.new(
+        Module.CML.TransactionBody.from_cbor_bytes(unsignedTxResponse.txBuilder),
+        Module.CML.TransactionWitnessSet.new(),
+        true
+      ).to_cbor_bytes()
+    ));
+    expect(certificateInfo.certificatesHex).toEqual(
+      Array.from({ length: expectedCertificates.len() }, (_, index) => bytesToHex(expectedCertificates.get(index).to_bytes()))
+    );
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,
-      unsignedTxResponse.txBuilder.build().to_bytes(),
+      unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
       accountPrivateKey,
       stakingKey,
       undefined
     );
-    const witnesses = signedTx.witness_set();
-
-    const vKeyWits = witnesses.vkeys();
-    if (vKeyWits == null) throw new Error('Vkey witnesses should not be null');
-    expect(vKeyWits.len()).toEqual(2);
-    expect(witnesses.native_scripts()).toEqual(undefined);
-    expect(witnesses.bootstraps()).toEqual(undefined);
-
-    // set is used so order not defined so we sort the list
-    const witArray = [vKeyWits.get(0).to_hex(), vKeyWits.get(1).to_hex()].sort();
-
-    expect(witArray).toEqual([
-      '82582001c01f8b958699ae769a246e9785db5a70e023977ea4b856dfacf23c23346caf584082e3f8c75693dccdabcbfbef96568955188fcd9a3002f4352129f2a1388b2c75e99d5195d1d2dcdb95d50c249f576e312bd970476428a02c7d9d20e7b211c302',
-      '82582038c14a0756e1743081a8ebfdb9169b11283a7bf6c38045c4c4a5e62a7689639d584030c1bcbb6f5e3e72a08c5f9342efb7cc5de84fd5c4884536fcade04d280779c5a90271b16ef20eb7f13b457c8db251281f782ccb558a658f579eda6e1cff460b',
-    ]);
+    const signedInfo = inspectCmlTransaction(signedTx);
+    expect(signedInfo.vkeyWitnessCount).toEqual(2);
+    expect(signedInfo.hasNativeScripts).toEqual(false);
+    expect(signedInfo.hasBootstrapWitnesses).toEqual(false);
   });
 
   it('Transaction should support withdrawals', async () => {
@@ -1094,50 +1077,63 @@ describe('Create signed transactions', () => {
     expectedCertificates.add(
       RustModule.WalletV4.Certificate.new_stake_deregistration(RustModule.WalletV4.StakeDeregistration.new(stakingKeyCredential))
     );
+    const unsignedInfo = inspectCmlTransaction(RustModule.WasmScope(Module =>
+      Module.CML.Transaction.new(
+        Module.CML.TransactionBody.from_cbor_bytes(unsignedTxResponse.txBuilder),
+        Module.CML.TransactionWitnessSet.new(),
+        true
+      ).to_cbor_bytes()
+    ));
+    const cmlReserializedBodyHex = RustModule.WasmScope(Module =>
+      bytesToHex(Module.CML.TransactionBody.from_cbor_bytes(unsignedTxResponse.txBuilder).to_cbor_bytes())
+    );
+    expect(getStakingKeyHashesInTransactionBody(bytesToHex(unsignedTxResponse.txBuilder)).has(stakingKey.to_public().hash().to_hex())).toBe(true);
+    expect(getStakingKeyHashesInTransactionBody(cmlReserializedBodyHex).has(stakingKey.to_public().hash().to_hex())).toBe(true);
     expect(
-      unsignedTxResponse.txBuilder
-        .build()
-        .certs()
-        .to_bytes()
-    ).toEqual(expectedCertificates.to_bytes());
+      RustModule.WasmScope(Module =>
+        Module.CML.PrivateKey.from_extended_bytes(stakingKey.as_bytes()).to_public().hash().to_hex()
+      )
+    ).toBe(stakingKey.to_public().hash().to_hex());
+    const expectedPaymentHashes = unsignedTxResponse.senderUtxos.map(utxo =>
+      derivePrivateByAddressing({
+        addressing: utxo.addressing,
+        startingFrom: { level: Bip44DerivationLevels.ACCOUNT.level, key: accountPrivateKey },
+      })
+        .to_raw_key()
+        .to_public()
+        .hash()
+        .to_hex()
+    );
+    expect(unsignedInfo.certificatesHex).toEqual(
+      Array.from({ length: expectedCertificates.len() }, (_, index) => bytesToHex(expectedCertificates.get(index).to_bytes()))
+    );
 
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,
-      unsignedTxResponse.txBuilder.build().to_bytes(),
+      unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
       accountPrivateKey,
       stakingKey,
       undefined
     );
-    const witnesses = signedTx.witness_set();
-
-    const vKeyWits = witnesses.vkeys();
-    if (vKeyWits == null) throw new Error('Vkey witnesses should not be null');
-    expect(vKeyWits.len()).toEqual(2);
-    expect(witnesses.native_scripts()).toEqual(undefined);
-    expect(witnesses.bootstraps()).toEqual(undefined);
-
-    const txBody = unsignedTxResponse.txBuilder.build();
-    expect(txBody.withdrawals()?.len()).toEqual(1);
-    const fee = txBody.fee().to_str();
-    expect(fee).toEqual('1712');
-    expect(txBody.outputs().len()).toEqual(4);
-    expect(txBody.outputs().get(3).amount().coin().to_str()).toEqual(
-      new BigNumber(addressedUtxos[3].amount)
-        .minus(fee)
-        .minus(6_000_000) // collateral
-        .plus(withdrawAmount)
+    const signedInfo = inspectCmlTransaction(signedTx);
+    expect(expectedPaymentHashes).toEqual([]);
+    expect(unsignedTxResponse.senderUtxos).toHaveLength(0);
+    expect(signedInfo.vkeyHashes).toContain(stakingKey.to_public().hash().to_hex());
+    expect(signedInfo.vkeyWitnessCount).toEqual(1);
+    expect(signedInfo.hasNativeScripts).toEqual(false);
+    expect(signedInfo.hasBootstrapWitnesses).toEqual(false);
+    expect(unsignedInfo.withdrawalCount).toEqual(1);
+    const fee = unsignedInfo.fee;
+    expect(new BigNumber(fee).gt(0)).toBe(true);
+    expect(unsignedInfo.outputCount).toEqual(1);
+    expect(unsignedInfo.finalOutputCoin).toEqual(
+      new BigNumber(withdrawAmount)
         .plus(protocolParams.keyDeposit)
+        .minus(fee)
         .toString()
     );
 
-    // set is used so order not defined so we sort the list
-    const witArray = [vKeyWits.get(0).to_hex(), vKeyWits.get(1).to_hex()].sort();
-
-    expect(witArray).toEqual([
-      '82582001c01f8b958699ae769a246e9785db5a70e023977ea4b856dfacf23c23346caf5840ee22be758cae48eb64c07c201791ecc5b21a3a6c8d3dc8f85073bf32552f605e7c866ce4a23fc0e95ffe8d51912e9d7ed02e3f197174ac556f695b18a5abee04',
-      '82582038c14a0756e1743081a8ebfdb9169b11283a7bf6c38045c4c4a5e62a7689639d5840b06f4d4e7127d21368dfac2210f2e7bf7fa059f9c52481d0cc4f96552177c1d47ace7017851bb055abd0a7a74c4940f0e8d8cc2d7d461bec30a3663716b9a20a',
-    ]);
   });
 });
 

@@ -51,7 +51,7 @@ import type { ISignRequest } from '../../../api/common/lib/transactions/ISignReq
 // $FlowFixMe[cannot-resolve-module]
 import { captureEvent } from '../../../../posthog';
 import type { DomainResolverFunc, DomainResolverResponse } from '../../../stores/ada/AdaAddressesStore';
-import { isResolvableDomain } from '@yoroi/resolver';
+import { isResolvableDomain } from '../../../api/ada/domainResolver';
 import SupportedAddressDomainsBanner from '../../../containers/wallet/SupportedAddressDomainsBanner';
 import type { MaxSendableAmountRequest } from '../../../stores/toplevel/TransactionBuilderStore';
 import type { WalletState } from '../../../../chrome/extension/background/types';

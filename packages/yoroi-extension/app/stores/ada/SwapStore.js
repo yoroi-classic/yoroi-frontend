@@ -108,7 +108,7 @@ export default class SwapStore extends Store<StoresMap> {
       firstExternalAddress.address,
       protocolParameters
     );
-    const unsignedTxHex = unsignedTx.unsignedTx.build_tx().to_hex();
+    const unsignedTxHex = unsignedTx.serializedUnsignedTxHex();
     const hash = transactionHexToHash(unsignedTxHex);
     const collateralUtxo: RemoteUnspentOutput = {
       utxo_id: `${hash}0`,

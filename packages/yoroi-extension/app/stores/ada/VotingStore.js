@@ -17,7 +17,7 @@ import { ROUTES } from '../../routes-config';
 import LocalizableError, { UnexpectedError } from '../../i18n/LocalizableError';
 import cryptoRandomString from 'crypto-random-string';
 import type { StoresMap } from '../index';
-import { generateRegistration } from '../../api/ada/lib/cardanoCrypto/catalyst';
+import { generateRegistration, privateKeyPublicKeyHex } from '../../api/ada/lib/cardanoCrypto/catalyst';
 import type { CatalystRoundInfoResponse } from '../../api/ada/lib/state-fetch/types';
 import { loadCatalystRoundInfo, saveCatalystRoundInfo } from '../../api/localStorage';
 import { CoreAddressTypes } from '../../api/ada/lib/storage/database/primitives/enums';
@@ -44,7 +44,7 @@ export interface ProgressInfo {
 export default class VotingStore extends Store<StoresMap> {
   @observable progressInfo: ProgressInfo;
   @observable encryptedKey: string | null = null;
-  @observable catalystPrivateKey: RustModule.WalletV4.PrivateKey | void;
+  @observable catalystPrivateKey: string | void;
   @observable pin: Array<number>;
   @observable error: ?LocalizableError;
   @observable catalystRoundInfo: ?CatalystRoundInfoResponse;
@@ -215,7 +215,7 @@ export default class VotingStore extends Store<StoresMap> {
     let votingRegTxPromise;
 
     if (publicDeriver.type !== 'mnemonic') {
-      const votingPublicKey = `0x${bytesToHex(catalystPrivateKey.to_public().as_bytes())}`;
+      const votingPublicKey = `0x${privateKeyPublicKeyHex(catalystPrivateKey, true)}`;
 
       const publicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(publicDeriver.publicKey);
 
@@ -271,8 +271,8 @@ export default class VotingStore extends Store<StoresMap> {
         throw new Error('expect mnemonic wallet to have private staking key');
       }
       const trxMeta = generateRegistration({
-        stakePrivateKey: RustModule.WalletV4.PrivateKey.from_hex(stakingKey),
-        catalystPrivateKey,
+        stakePrivateKeyHex: stakingKey,
+        catalystPrivateKeyHex: catalystPrivateKey,
         receiverAddress: firstAddress.address,
         slotNumber: currentAbsoluteSlot,
       });
@@ -319,7 +319,7 @@ export default class VotingStore extends Store<StoresMap> {
     runInAction(() => {
       this.encryptedKey = key;
       this.pin = pinArray;
-      this.catalystPrivateKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(extendedKeyBytes);
+      this.catalystPrivateKey = bytesToHex(extendedKeyBytes);
     });
   };
 

@@ -687,6 +687,13 @@ export default class AdaApi {
           password,
           request.signRequest.metadata
         );
+        if (signedTx instanceof Uint8Array) {
+          const cmlTx = Scope.CML.Transaction.from_cbor_bytes(signedTx);
+          return {
+            txHash: Scope.CML.hash_transaction(cmlTx.body()).to_hex(),
+            encodedTx: signedTx,
+          };
+        }
         return {
           txHash: Scope.WalletV4.FixedTransaction.from_hex(signedTx.to_hex())
             .transaction_hash()
@@ -871,6 +878,8 @@ export default class AdaApi {
       return new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTxResponse.senderUtxos,
         unsignedTx: unsignedTxResponse.txBuilder,
+        implicitInputValue: unsignedTxResponse.implicitInputValue,
+        depositAmount: unsignedTxResponse.depositAmount,
         changeAddr: unsignedTxResponse.changeAddr,
         metadata: trxMetadata,
         networkSettingSnapshot: {
@@ -1313,6 +1322,8 @@ export default class AdaApi {
       const signTxRequest = new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTx.senderUtxos,
         unsignedTx: unsignedTx.txBuilder,
+        implicitInputValue: unsignedTx.implicitInputValue,
+        depositAmount: unsignedTx.depositAmount,
         changeAddr: unsignedTx.changeAddr,
         metadata: undefined,
         networkSettingSnapshot: {
@@ -1425,6 +1436,8 @@ export default class AdaApi {
       const result = new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTxResponse.senderUtxos,
         unsignedTx: unsignedTxResponse.txBuilder,
+        implicitInputValue: unsignedTxResponse.implicitInputValue,
+        depositAmount: unsignedTxResponse.depositAmount,
         changeAddr: unsignedTxResponse.changeAddr,
         metadata: undefined,
         networkSettingSnapshot: {
@@ -1480,6 +1493,8 @@ export default class AdaApi {
       return new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTx.senderUtxos,
         unsignedTx: unsignedTx.txBuilder,
+        implicitInputValue: unsignedTx.implicitInputValue,
+        depositAmount: unsignedTx.depositAmount,
         changeAddr: unsignedTx.changeAddr,
         metadata: request.metadata,
         networkSettingSnapshot: {
@@ -1558,6 +1573,8 @@ export default class AdaApi {
       return new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTx.senderUtxos,
         unsignedTx: unsignedTx.txBuilder,
+        implicitInputValue: unsignedTx.implicitInputValue,
+        depositAmount: unsignedTx.depositAmount,
         changeAddr: unsignedTx.changeAddr,
         metadata: trxMetadata,
         networkSettingSnapshot: {

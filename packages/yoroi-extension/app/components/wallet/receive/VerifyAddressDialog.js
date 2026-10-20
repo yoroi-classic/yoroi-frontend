@@ -13,12 +13,13 @@ import { toDerivationPathString } from '../../../api/ada/lib/cardanoCrypto/keys/
 import { SelectedExplorer } from '../../../domain/SelectedExplorer';
 import { truncateAddress } from '../../../utils/formatters';
 import { CoreAddressTypes } from '../../../api/ada/lib/storage/database/primitives/enums';
-import { RustModule } from '../../../api/ada/lib/cardanoCrypto/rustLoader';
-import { stakeCredentialHashFromAddress } from '../../../api/ada/lib/cardanoCrypto/cmlAddress';
+import {
+  stakeCredentialHashFromAddress,
+  stakePointerFromAddressBech32,
+} from '../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import {
   isCardanoHaskellAddress,
   getCardanoSpendingKeyHash,
-  normalizeToAddress,
 } from '../../../api/ada/lib/storage/bridge/utils';
 import classnames from 'classnames';
 import QrCodeWrapper from '../../widgets/QrCodeWrapper';
@@ -179,12 +180,10 @@ export default class VerifyAddressDialog extends Component<Props> {
 
     const getSpendingKey = () => {
       if (isCardanoHaskellAddress(this.props.addressInfo.type)) {
-        const wasmAddr = normalizeToAddress(this.props.addressInfo.address);
-        if (wasmAddr == null) throw new Error('Should never happen');
-        const spendingKey = getCardanoSpendingKeyHash(wasmAddr);
+        const spendingKey = getCardanoSpendingKeyHash(this.props.addressInfo.address);
         if (spendingKey === null) return null; // legacy address ignored
         if (spendingKey === undefined) return null; // TODO: handle script outputs
-        return spendingKey.to_hex();
+        return spendingKey;
       }
     };
 
@@ -213,14 +212,7 @@ export default class VerifyAddressDialog extends Component<Props> {
       return null;
     }
 
-    const addrInfo = RustModule.WasmScope(Scope => {
-      const wasmAddr = Scope.WalletV4.PointerAddress.from_address(
-        RustModule.WalletV4.Address.from_bech32(this.props.addressInfo.address)
-      )?.stake_pointer();
-      if (wasmAddr == null) return null; // should never happen
-
-      return [wasmAddr.slot(), wasmAddr.tx_index(), wasmAddr.cert_index()];
-    });
+    const addrInfo = stakePointerFromAddressBech32(this.props.addressInfo.address);
 
     if (addrInfo == null) return null; // should never happen
 

@@ -173,8 +173,6 @@
     "@yoroi/exchange": "2.0.1",
     "@yoroi/explorers": "^1.0.2",
     "@yoroi/portfolio": "2.0.0",
-    "@yoroi/resolver": "6.0.2",
-    "@yoroi/staking": "^1.6.0",
     "@yoroi/swap": "7.2.0",
     "@yoroi/types": "6.1.0",
     "@yoroi/api": "6.0.0",
@@ -243,7 +241,8 @@
     "util": "0.12.5"
   },
   "overrides": {
-    "@babel/helpers": "7.16.0"
+    "@babel/helpers": "7.16.0",
+    "@fivebinaries/coin-selection": "github:yoroi-classic/coin-selection#860e908"
   },
   "engineStrict": true,
   "engines": {

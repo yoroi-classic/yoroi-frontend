@@ -1065,7 +1065,7 @@ export default class ConnectorStore extends Store<StoresMap> {
       throw new Error('unexpected nullish sign request');
     }
 
-    const rawTxHex = signRequest.unsignedTx.build_tx().to_hex();
+    const rawTxHex = signRequest.serializedUnsignedTxHex();
 
     if (publicDeriver.type === 'mnemonic') {
       await signAndBroadcastTransaction({

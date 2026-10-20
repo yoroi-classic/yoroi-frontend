@@ -87,18 +87,28 @@ function createCip36AuxiliaryData(registrationData: Object, signer: Uint8Array =
   });
 }
 
+export function privateKeyPublicKeyHex(privateKeyHex: string, extended: boolean = false): string {
+  return RustModule.WasmScope(Module => {
+    const bytes = Buffer.from(privateKeyHex, 'hex');
+    const privateKey = extended ? Module.CML.PrivateKey.from_extended_bytes(bytes) : Module.CML.PrivateKey.from_normal_bytes(bytes);
+    return bytesToHex(privateKey.to_public().to_raw_bytes());
+  });
+}
+
 export function generateRegistration(request: {|
-  stakePrivateKey: RustModule.WalletV4.PrivateKey,
-  catalystPrivateKey: RustModule.WalletV4.PrivateKey,
+  stakePrivateKeyHex: string,
+  catalystPrivateKeyHex: string,
   receiverAddress: string,
   slotNumber: number,
 |}): RustModule.WalletV4.AuxiliaryData {
   return generateRegistrationMetadata(
-    bytesToHex(request.catalystPrivateKey.to_public().as_bytes()),
-    bytesToHex(request.stakePrivateKey.to_public().as_bytes()),
+    privateKeyPublicKeyHex(request.catalystPrivateKeyHex, true),
+    privateKeyPublicKeyHex(request.stakePrivateKeyHex),
     request.receiverAddress,
     request.slotNumber,
-    hashedMetadata => request.stakePrivateKey.sign(hashedMetadata).to_hex()
+    hashedMetadata => RustModule.WasmScope(Module =>
+      Module.CML.PrivateKey.from_normal_bytes(Buffer.from(request.stakePrivateKeyHex, 'hex')).sign(hashedMetadata).to_hex()
+    )
   );
 }
 

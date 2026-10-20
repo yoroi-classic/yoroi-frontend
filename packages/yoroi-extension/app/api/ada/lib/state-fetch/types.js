@@ -1,6 +1,5 @@
 // @flow
 
-import typeof { MIRPot } from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import type { BackendNetworkInfo } from '../../../common/lib/state-fetch/types';
 import type { NetworkRow } from '../storage/database/primitives/tables';
 
@@ -224,7 +223,7 @@ export type RemoteGenesisKeyDelegationCert = {|
   +vrfKeyHash: string,
 |};
 export type RemoteMoveInstantaneousRewardsCert = {|
-  +pot: $Values<MIRPot>,
+  +pot: number,
   +rewards: {| [stake_credential: string]: string /* coin */ |},
 |};
 export type RegistrationCert = {|

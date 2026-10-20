@@ -267,7 +267,7 @@ test('Create Ledger transaction', async () => {
       );
     } else {
       txBuilder.add_key_input(
-        keyHash,
+        RustModule.WalletV4.Ed25519KeyHash.from_hex(keyHash),
         RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
         RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount))
       );

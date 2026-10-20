@@ -6,9 +6,11 @@ import {
   addressToDisplayString,
   addressToKind,
   byronAddrToHex,
+  getCardanoSpendingKeyHash,
   getAddressPayload,
   normalizeToAddress,
   normalizeToBase58,
+  toEnterprise,
 } from '../utils';
 import { CoreAddressTypes } from '../../database/primitives/enums';
 import { networks } from '../../database/prepackaged/networks';
@@ -57,6 +59,57 @@ test('addressToKind classifies Cardano address forms with bech32 and hex inputs'
   for (const [, address, parseAs, expectedKind] of addressCases) {
     expect(addressToKind(address, parseAs, networks.CardanoMainnet)).toBe(expectedKind);
   }
+});
+
+test('extracts key-controlled payment hashes from bech32 addresses using CML-compatible bytes', async () => {
+  await RustModule.load();
+  const addresses = [
+    'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z',
+    'addr1gf2p2r9xrjq86u2p8sgumrfwu2f4eykahu6zxg60ttc7gnm7ycgqjjeqd8',
+    'addr1vahzs6qr0cmmrh64p7jd2qtq2wlgggl5e0enr2my20f44ssv2wfee',
+    'stake1az0vrvznk3xya3c7l0fqp6qwkth5emmc37vyaevydah3r0cv6gnpm',
+  ];
+  const expected = RustModule.WasmScope(Module =>
+    addresses.map(address => {
+      const cslAddress = Module.WalletV4.Address.from_bech32(address);
+      const keyHash =
+        Module.WalletV4.BaseAddress.from_address(cslAddress)?.payment_cred().to_keyhash() ??
+        Module.WalletV4.PointerAddress.from_address(cslAddress)?.payment_cred().to_keyhash() ??
+        Module.WalletV4.EnterpriseAddress.from_address(cslAddress)?.payment_cred().to_keyhash() ??
+        Module.WalletV4.RewardAddress.from_address(cslAddress)?.payment_cred().to_keyhash();
+      return keyHash?.to_hex() ?? null;
+    })
+  );
+
+  expect(addresses.map(getCardanoSpendingKeyHash)).toEqual(expected);
+  expect(getCardanoSpendingKeyHash('Ae2tdPwUPEZC6WJfVQxTNN2tWw4skGrN6zRVukvxJmTFy1nYkVGQBuURU3L')).toBeNull();
+});
+
+test('derives enterprise address bytes from key-controlled address forms with CML', async () => {
+  await RustModule.load();
+  const addressHexes = [
+    '0254e887279408c196dc5859acbc62e749bf358078c622e8a5ef89173982d222817b5561bfdd1541aad78cd9ae7c361cb4dc003dd3acf06479',
+    '4254150ca61c807d71413c11cd8d2ee2935c92ddbf3423234f5af1e44f7e2610',
+    '676e2868037e37b1df550fa4d5016053be8423f4cbf331ab6453d35ac2',
+    'e89ec1b053b44c4ec71efbd200e80eb2ef4cef788f984ee5846f6f11bf',
+  ];
+  const expected = RustModule.WasmScope(Module =>
+    addressHexes.map(addressHex => {
+      const address = Module.WalletV4.Address.from_hex(addressHex);
+      const keyHash =
+        Module.WalletV4.BaseAddress.from_address(address)?.payment_cred().to_keyhash() ??
+        Module.WalletV4.PointerAddress.from_address(address)?.payment_cred().to_keyhash() ??
+        Module.WalletV4.EnterpriseAddress.from_address(address)?.payment_cred().to_keyhash() ??
+        Module.WalletV4.RewardAddress.from_address(address)?.payment_cred().to_keyhash();
+      if (keyHash == null) return undefined;
+      return Module.WalletV4.EnterpriseAddress.new(
+        address.network_id(),
+        Module.WalletV4.Credential.from_keyhash(keyHash)
+      ).to_address().to_hex();
+    })
+  );
+
+  expect(addressHexes.map(toEnterprise)).toEqual(expected);
 });
 
 test('uses CML for Byron and Shelley string address conversions', async () => {

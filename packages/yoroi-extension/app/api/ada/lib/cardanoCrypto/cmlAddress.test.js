@@ -16,6 +16,7 @@ import {
   stakeCredentialHashFromAddress,
   stakingCredentialCborHexFromRewardAddress,
   stakingKeyHashFromRewardAddress,
+  stakePointerFromAddressBech32,
 } from './cmlAddress';
 import {
   addressBech32ToHex as legacyAddressBech32ToHex,
@@ -70,6 +71,33 @@ test('derives canonical enterprise addresses from base and pointer addresses wit
 
   for (const testCase of cases) {
     expect(enterpriseAddressHexFromBaseOrPointerAddress(testCase.addressHex)).toEqual(testCase.expectedEnterpriseHex);
+  }
+});
+
+test('reads pointer-address coordinates from base-128 varints with CML', () => {
+  const vectors = RustModule.WasmScope(Module =>
+    [
+      { values: ['1', '2', '3'], expected: ['1', '2', '3'] },
+      { values: ['128', '16384', '4294967295'], expected: ['128', '16384', '4294967295'] },
+    ].map(({ values, expected }) => {
+      const bytes = [0x41, ...new Array(28).fill(0x11), ...values.flatMap(value => {
+        // eslint-disable-next-line no-undef
+        let remaining = BigInt(value);
+        const encoded = [Number(remaining & 0x7fn)];
+        remaining >>= 7n;
+        while (remaining > 0n) {
+          encoded.unshift(Number(remaining & 0x7fn) | 0x80);
+          remaining >>= 7n;
+        }
+        return encoded;
+      })];
+      const address = Module.CML.Address.from_raw_bytes(Uint8Array.from(bytes)).to_bech32();
+      return { address, expected };
+    })
+  );
+
+  for (const { address, expected } of vectors) {
+    expect(stakePointerFromAddressBech32(address)).toEqual(expected);
   }
 });
 

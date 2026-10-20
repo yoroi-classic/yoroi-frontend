@@ -4,7 +4,6 @@ import { dRepNormalize } from '../../../../api/ada/lib/cardanoCrypto/utils';
 import { stakingKeyHashFromRewardAddress } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { getPrivateStakingKey } from '../../../../api/thunk';
 import { DREP_ALWAYS_ABSTAIN, DREP_ALWAYS_NO_CONFIDENCE } from '../common/constants';
-import { useGovernanceManagerMaker } from '../common/hooks/useGovernanceManagerMaker';
 import { GovernanceActionType, GovernanceReducer, defaultGovernanceActions, defaultGovernanceState } from './state';
 
 type drepDelegation = { status: string | null; drep: string | null };
@@ -14,7 +13,6 @@ const initialGovernanceProvider = {
   ...defaultGovernanceState,
   ...defaultGovernanceActions,
   walletId: '',
-  governanceManager: null,
   checkUserPassword: (_password: string) => Response,
   txDelegationResult: null,
   txDelegationError: null,
@@ -76,7 +74,6 @@ export const GovernanceContextProvider = ({
     submitedTransactions,
     stakingAddress,
   } = currentWallet;
-  const governanceManager = useGovernanceManagerMaker(walletId, networkId);
 
   const checkUserPassword = async (password: string): Promise<any> => {
     try {
@@ -140,7 +137,6 @@ export const GovernanceContextProvider = ({
   const context: any = {
     ...state,
     ...actions,
-    governanceManager: governanceManager,
     stakePoolKeyHash: currentPool?.hash ?? '',
     walletId: currentWallet.walletId,
     stakingKeyHex,

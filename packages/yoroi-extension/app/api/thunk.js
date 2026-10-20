@@ -218,18 +218,13 @@ export async function signAndBroadcastTransaction(request: {|
   password: string,
   publicDeriverId: number,
 |}): Promise<{| txId: string |}> {
-  const tx = request.signRequest.unsignedTx.build_tx();
-  const txBody = tx.body();
-
   const serializableRequest: SignAndBroadcastTransactionRequestType = {
     senderUtxos: request.signRequest.senderUtxos,
-    unsignedTx: tx.to_hex(),
+    unsignedTx: request.signRequest.serializedUnsignedTxHex(),
     metadata: request.signRequest.metadata?.to_hex(),
     password: request.password,
     publicDeriverId: request.publicDeriverId,
   };
-  txBody.free();
-  tx.free();
   const result = await callBackground({
     type: SignAndBroadcastTransaction.typeTag,
     request: serializableRequest,

@@ -3,7 +3,6 @@
 import type { lf$schema$Builder } from 'lovefield';
 import { ConstraintAction, ConstraintTiming, Type } from 'lovefield';
 import type { CertificateRelationType, CoreAddressT, TxStatusCodesType } from './enums';
-import typeof { CertificateKind } from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import type { KeyKindType } from '../../../cardanoCrypto/keys/types';
 import type { CoinTypesT } from '../../../../../../config/numbersConfig';
 
@@ -319,7 +318,7 @@ export type CertificatePart = {|
 export type CertificateInsert = {|
   TransactionId: number,
   Ordinal: number, // transactions can contain multiple certificates in some blockchains
-  Kind: $Values<CertificateKind>,
+  Kind: number,
   // <TODO:PENDING_REMOVAL> Needs redesign
   Payload: string,
 |};
