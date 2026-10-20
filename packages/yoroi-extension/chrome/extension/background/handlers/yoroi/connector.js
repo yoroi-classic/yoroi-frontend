@@ -34,7 +34,6 @@ import {
   type SigningMessage,
 } from '../../../connector/types';
 import { RustModule } from '../../../../../app/api/ada/lib/cardanoCrypto/rustLoader';
-import { hexToBytes } from '../../../../../app/coreUtils';
 import { Logger } from '../../../../../app/utils/logging';
 import { walletSignData, encodeHardwareWalletSignResult } from '../../../../../app/api/ada';
 import {
@@ -154,16 +153,22 @@ type ConfirmedSignData = {|
 |};
 
 function signedTxWitnessResult(tx: string, witnessSetHex: string): string {
-  const fullTxHex: string = RustModule.WasmScope(Scope => {
-    // tx string is either a transaction hex or transaction body hex
-    try {
-      return Scope.WalletV4.FixedTransaction.from_hex(tx).to_hex();
-    } catch {
-      return Scope.WalletV4.FixedTransaction.new_from_body_bytes(hexToBytes(tx)).to_hex();
-    }
-  });
+  const fullTxHex = fullTransactionHex(tx);
   const signedTxHex = transactionHexAddSignaturesFromWitnessSetHex(fullTxHex, witnessSetHex);
   return transactionHexToWitnessSet(signedTxHex);
+}
+
+function fullTransactionHex(txHex: string): string {
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    // The connector input may be a complete transaction or only its body.
+    try {
+      return cml.Transaction.from_cbor_hex(txHex).to_cbor_hex();
+    } catch {
+      const body = cml.TransactionBody.from_cbor_hex(txHex);
+      return cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true).to_cbor_hex();
+    }
+  });
 }
 
 function cip103SignError(index: number): {|
@@ -228,13 +233,7 @@ export const UserSignConfirm: HandlerType<
           rpcResponse(request.tabId, request.uid, resp);
         } else if (returnTx) {
           const witnessSetHex = (resp.ok: string);
-          const fullTxHex = RustModule.WasmScope(Scope => {
-            try {
-              return Scope.WalletV4.FixedTransaction.from_hex(tx).to_hex();
-            } catch {
-              return Scope.WalletV4.FixedTransaction.new_from_body_bytes(hexToBytes(tx)).to_hex();
-            }
-          });
+          const fullTxHex = fullTransactionHex(tx);
           rpcResponse(request.tabId, request.uid, {
             ok: transactionHexAddSignaturesFromWitnessSetHex(fullTxHex, witnessSetHex),
           });
@@ -408,7 +407,6 @@ export const UserSignReject: HandlerType<
       delete connection.pendingSigns[String(request.uid)];
       await setConnectedSite(request.tabId, connection);
     } else {
-      // eslint-disable-next-line no-console
       console.error(`couldn't find tabId: ${request.tabId}`);
     }
   },
@@ -450,7 +448,6 @@ export const SignFail: HandlerType<
       delete connection.pendingSigns[String(request.uid)];
       await setConnectedSite(request.tabId, connection);
     } else {
-      // eslint-disable-next-line no-console
       console.error(`couldn't find tabId: ${request.tabId}`);
     }
   },

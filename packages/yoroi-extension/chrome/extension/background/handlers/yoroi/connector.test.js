@@ -95,9 +95,19 @@ test('returns a proof-generation error when hardware bulk signing omits witness 
 test('aligns hardware witness sets with their transaction indexes', async () => {
   RustModule.WasmScope = callback =>
     callback({
-      WalletV4: {
-        FixedTransaction: {
-          from_hex: tx => ({ to_hex: () => `full-${tx}` }),
+      CML: {
+        Transaction: {
+          from_cbor_hex: tx => {
+            if (tx.startsWith('tx-')) throw new Error('not a full transaction');
+            return { to_cbor_hex: () => `full-${tx}` };
+          },
+          new: body => ({ to_cbor_hex: () => `full-${body}` }),
+        },
+        TransactionBody: {
+          from_cbor_hex: tx => tx,
+        },
+        TransactionWitnessSet: {
+          new: () => ({}),
         },
       },
     });
