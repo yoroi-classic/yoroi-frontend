@@ -3,6 +3,7 @@ import { RustModule } from './rustLoader';
 import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 
 const derivePublicKeyHashHex = (accountPublicKey: any, path: Array<number>, startIndex: number): string => {
+  if (startIndex < 0) throw new Error('keyLevel < startLevel');
   let publicKey = accountPublicKey;
   for (let i = startIndex; i < path.length; i++) {
     const index = path[i];

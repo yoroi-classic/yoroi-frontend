@@ -9,6 +9,7 @@ import {
   baseAddressesFromKeyHashes,
   credentialCborHexFromKeyHash,
   deriveRewardAddressFromAddress,
+  deriveBip32PublicKeyHashHex,
   deriveBip32PublicKeyRawHex,
   enterpriseAddressHexFromBaseOrPointerAddress,
   enterpriseAndBaseAddressHexFromKeyHashes,
@@ -299,9 +300,14 @@ test('derives staking public-key bytes with CML matching CSL', () => {
   const path = [2, 0];
   const expected = RustModule.WasmScope(Module => {
     const account = Module.WalletV4.Bip32PublicKey.from_hex(accountPublicKeyHex);
-    return Buffer.from(account.derive(path[0]).derive(path[1]).to_raw_key().as_bytes()).toString('hex');
+    const publicKey = account.derive(path[0]).derive(path[1]).to_raw_key();
+    return {
+      bytes: Buffer.from(publicKey.as_bytes()).toString('hex'),
+      hash: publicKey.hash().to_hex(),
+    };
   });
-  expect(deriveBip32PublicKeyRawHex(accountPublicKeyHex, path)).toEqual(expected);
+  expect(deriveBip32PublicKeyRawHex(accountPublicKeyHex, path)).toEqual(expected.bytes);
+  expect(deriveBip32PublicKeyHashHex(accountPublicKeyHex, path)).toEqual(expected.hash);
 });
 
 test('reconstructs base addresses from payment and stake key hashes', () => {

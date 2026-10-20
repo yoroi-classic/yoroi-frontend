@@ -132,7 +132,11 @@ import {
 import type { TransactionExportRow } from '../export';
 
 import { RustModule } from './lib/cardanoCrypto/rustLoader';
-import { baseAddressHexFromKeyHashes, credentialCborHexFromKeyHash } from './lib/cardanoCrypto/cmlAddress';
+import {
+  baseAddressHexFromKeyHashes,
+  credentialCborHexFromKeyHash,
+  deriveBip32PublicKeyHashHex,
+} from './lib/cardanoCrypto/cmlAddress';
 import type {
   CreateWalletRequest,
   CreateWalletResponse,
@@ -155,7 +159,6 @@ import { generateRegistrationMetadata } from './lib/cardanoCrypto/catalyst';
 import { bytesToHex, fail, hexToBytes, hexToUtf, first, sorted } from '../../coreUtils';
 import type { PersistedSubmittedTransaction } from '../localStorage';
 import type WalletTransaction from '../../domain/WalletTransaction';
-import { derivePublicByAddressing } from './lib/cardanoCrypto/deriveByAddressing';
 import type { WalletState } from '../../../chrome/extension/background/types';
 import TimeUtils from './lib/storage/bridge/timeUtils';
 import type { IFetcher } from './lib/state-fetch/IFetcher.types';
@@ -1234,18 +1237,13 @@ export default class AdaApi {
         networkId: networkInfo.NetworkId,
       };
 
-      const publicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(wallet.publicKey);
-
-      const stakingKey = derivePublicByAddressing({
-        addressing: wallet.stakingAddressing.addressing,
-        startingFrom: {
-          level: wallet.publicDeriverLevel,
-          key: publicKey,
-        },
-      }).to_raw_key();
-
+      const stakingKeyHash = deriveBip32PublicKeyHashHex(
+        wallet.publicKey,
+        wallet.stakingAddressing.addressing.path,
+        wallet.publicDeriverLevel - wallet.stakingAddressing.addressing.startLevel + 1
+      );
       const delegationCerts = createCertificate(
-        stakingKey.hash().to_hex(),
+        stakingKeyHash,
         request.registrationStatus,
         request.poolRequest,
         request.drepCredential
@@ -1272,7 +1270,7 @@ export default class AdaApi {
       );
 
       const allUtxosForKey = filterAddressesByStakingKey<ElementOf<IGetAllUtxosResponse>>(
-        RustModule.WalletV4.Credential.from_keyhash(stakingKey.hash()),
+        credentialCborHexFromKeyHash(stakingKeyHash),
         allUtxo,
         false
       );
@@ -1298,7 +1296,7 @@ export default class AdaApi {
         new MultiToken([], defaultToken)
       );
 
-      const differenceAfterTx = getDifferenceAfterTx(unsignedTx, allUtxo, stakingKey, defaultToken);
+      const differenceAfterTx = getDifferenceAfterTx(unsignedTx, allUtxo, stakingKeyHash, defaultToken);
 
       const totalAmountToDelegate = utxoSum
         .joinAddCopy(differenceAfterTx) // subtract any part of the fee that comes from UTXO
@@ -2279,10 +2277,10 @@ export default class AdaApi {
 function getDifferenceAfterTx(
   utxoResponse: V4UnsignedTxAddressedUtxoResponse,
   allUtxos: IGetAllUtxosResponse,
-  stakingKey: RustModule.WalletV4.PublicKey,
+  stakingKeyHash: string,
   defaultToken: DefaultTokenEntry
 ): MultiToken {
-  const accountKeyString = credentialCborHexFromKeyHash(stakingKey.hash().to_hex());
+  const accountKeyString = credentialCborHexFromKeyHash(stakingKeyHash);
 
   const sumInForKey = new MultiToken([], defaultToken);
   {
@@ -2366,8 +2364,7 @@ export function pubKeyAndAddressingByChainAndIndex(
   wallet: { publicKey: string, publicDeriverLevel: number, ... },
   chainLevelDerivationIndex: number,
   addressLevelDerivationIndex: number
-): [RustModule.WalletV4.PublicKey, Addressing] {
-  const publicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(wallet.publicKey);
+): [string, Addressing] {
   const addressing = {
     addressing: {
       path: [
@@ -2380,20 +2377,18 @@ export function pubKeyAndAddressingByChainAndIndex(
       startLevel: Bip44DerivationLevels.PURPOSE.level,
     },
   };
-  const derivedPubKey = derivePublicByAddressing({
-    ...addressing,
-    startingFrom: {
-      level: wallet.publicDeriverLevel,
-      key: publicKey,
-    },
-  }).to_raw_key();
-  return [derivedPubKey, addressing];
+  const derivedPubKeyHash = deriveBip32PublicKeyHashHex(
+    wallet.publicKey,
+    addressing.addressing.path,
+    wallet.publicDeriverLevel - addressing.addressing.startLevel + 1
+  );
+  return [derivedPubKeyHash, addressing];
 }
 
 /**
  * // <TODO:WALLET_API>
  */
-export async function getDRepKeyAndAddressing(wallet: PublicDeriver<>): Promise<[RustModule.WalletV4.PublicKey, Addressing]> {
+export async function getDRepKeyAndAddressing(wallet: PublicDeriver<>): Promise<[string, Addressing]> {
   const withPubKey = asGetPublicKey(wallet);
   if (withPubKey == null) {
     throw new Error('Unable to get public key from the wallet');
@@ -2434,7 +2429,7 @@ export async function getAddressing(publicDeriver: PublicDeriver<>, address: str
   }
 
   const [dRepPubKey, dRepAddressing] = await getDRepKeyAndAddressing(publicDeriver);
-  if (dRepPubKey.hash().to_hex() === address) {
+  if (dRepPubKey === address) {
     return dRepAddressing;
   }
 
