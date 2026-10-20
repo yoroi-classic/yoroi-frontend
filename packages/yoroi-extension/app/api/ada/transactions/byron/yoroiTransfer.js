@@ -23,7 +23,7 @@ export async function buildYoroiTransferTx(payload: {|
     ...InexactSubset<Addressing>,
   |},
   keyLevel: number,
-  signingKey: RustModule.CML.Bip32PrivateKey,
+  signingKey: RustModule.CML.Bip32PrivateKey | Uint8Array,
   absSlotNumber: BigNumber,
   protocolParams: {|
     keyDeposit: string,
@@ -80,7 +80,7 @@ export async function buildYoroiTransferTx(payload: {|
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       payload.keyLevel,
-      payload.signingKey.to_raw_bytes(),
+      payload.signingKey instanceof Uint8Array ? payload.signingKey : payload.signingKey.to_raw_bytes(),
       null,
       undefined
     );

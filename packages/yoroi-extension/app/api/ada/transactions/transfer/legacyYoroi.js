@@ -16,7 +16,7 @@ export async function yoroiTransferTxFromAddresses(payload: {|
     ...InexactSubset<Addressing>,
   |},
   keyLevel: number,
-  signingKey: RustModule.CML.Bip32PrivateKey,
+  signingKey: RustModule.CML.Bip32PrivateKey | Uint8Array,
   getUTXOsForAddresses: AddressUtxoFunc,
   network: $ReadOnly<NetworkRow>,
   absSlotNumber: BigNumber,
