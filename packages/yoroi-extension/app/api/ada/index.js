@@ -78,7 +78,7 @@ import {
   signTransactionFromWallet as shelleySignTransactionFromWallet,
 } from './transactions/shelley/transactions';
 import { generateAdaMnemonic, generateWalletRootKey } from './lib/cardanoCrypto/cryptoWallet';
-import { buildCoseSign1FromSignature, cip8Sign, makeCip8Key, v4PublicToV2 } from './lib/cardanoCrypto/utils';
+import { buildCoseSign1FromSignature, cip8Sign, makeCip8Key } from './lib/cardanoCrypto/utils';
 import { isValidBip39Mnemonic } from './lib/cardanoCrypto/wallet';
 import type { CardanoSignTransaction } from 'trezor-connect-flow';
 import { toTrezorSignRequest } from './transactions/shelley/trezorTx';
@@ -1779,14 +1779,11 @@ export default class AdaApi {
         return Promise.resolve();
       };
 
-      const key = RustModule.WalletV2.Bip44AccountPublic.new(
-        v4PublicToV2(request.accountPubKey),
-        RustModule.WalletV2.DerivationScheme.v2()
-      );
+      const accountPublicKeyHex = bytesToHex(request.accountPubKey.as_bytes());
       const insertTree = await scanBip44Account({
         network: request.network,
-        generateInternalAddresses: v2genAddressBatchFunc(key.bip44_chain(false), config.ByronNetworkId),
-        generateExternalAddresses: v2genAddressBatchFunc(key.bip44_chain(true), config.ByronNetworkId),
+        generateInternalAddresses: v2genAddressBatchFunc(accountPublicKeyHex, 0, config.ByronNetworkId),
+        generateExternalAddresses: v2genAddressBatchFunc(accountPublicKeyHex, 1, config.ByronNetworkId),
         lastUsedInternal: -1,
         lastUsedExternal: -1,
         checkAddressesInUse,
