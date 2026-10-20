@@ -24,7 +24,7 @@ import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { CoinTypes, HARD_DERIVATION_START, STAKING_KEY_INDEX, WalletTypePurpose } from '../../../../config/numbersConfig';
 import { defaultAssets, getCardanoHaskellBaseConfig, networks } from '../../lib/storage/database/prepackaged/networks';
 import { MultiToken } from '../../../common/lib/MultiToken';
-import { identifierSplit } from '../utils';
+import { getTransactionFeeFromCbor, getTransactionTotalOutputFromCbor, identifierSplit, multiTokenFromRemote } from '../utils';
 import { getStakingKeyHashesInTransactionBody } from '../../lib/cardanoCrypto/utils';
 import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 import { bytesToHex, hexToBytes } from '../../../../coreUtils';
@@ -54,6 +54,9 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
       withdrawalCount: body.withdrawals()?.len() ?? 0,
       fee: body.fee().toString(),
       outputCount: body.outputs().len(),
+      outputCoinTotal: Array.from({ length: body.outputs().len() }, (_, index) =>
+        new BigNumber(body.outputs().get(index).amount().coin().toString())
+      ).reduce((total, amount) => total.plus(amount), new BigNumber(0)).toString(),
       finalOutputCoin: body.outputs().get(body.outputs().len() - 1).amount().coin().toString(),
       vkeyWitnessCount: witnesses.vkeywitnesses()?.len() ?? 0,
       vkeyHashes: witnesses.vkeywitnesses() == null
@@ -893,6 +896,12 @@ describe('Create signed transactions', () => {
     expect(witnessSummary.hasVkeys).toEqual(false);
     expect(witnessSummary.hasNativeScripts).toEqual(false);
     expect(witnessSummary.bootstrapCount).toEqual(1);
+    const cmlSummary = inspectCmlTransaction(signedTx);
+    expect(getTransactionFeeFromCbor(bytesToHex(signedTx)).toString()).toBe(cmlSummary.fee);
+    expect(
+      getTransactionTotalOutputFromCbor(bytesToHex(signedTx), { defaultIdentifier, defaultNetworkId: network.NetworkId })
+        .getDefaultEntry().amount.toString()
+    ).toBe(cmlSummary.outputCoinTotal);
   });
 
   it('Witness should with addressing from root', () => {
@@ -1039,6 +1048,11 @@ describe('Create signed transactions', () => {
       undefined
     );
     const signedInfo = inspectCmlTransaction(signedTx);
+    expect(getTransactionFeeFromCbor(bytesToHex(signedTx)).toString()).toBe(signedInfo.fee);
+    expect(
+      getTransactionTotalOutputFromCbor(bytesToHex(signedTx), { defaultIdentifier, defaultNetworkId: network.NetworkId })
+        .getDefaultEntry().amount.toString()
+    ).toBe(signedInfo.outputCoinTotal);
     expect(signedInfo.vkeyWitnessCount).toEqual(2);
     expect(signedInfo.hasNativeScripts).toEqual(false);
     expect(signedInfo.hasBootstrapWitnesses).toEqual(false);
@@ -1124,6 +1138,11 @@ describe('Create signed transactions', () => {
       undefined
     );
     const signedInfo = inspectCmlTransaction(signedTx);
+    expect(getTransactionFeeFromCbor(bytesToHex(signedTx)).toString()).toBe(signedInfo.fee);
+    expect(
+      getTransactionTotalOutputFromCbor(bytesToHex(signedTx), { defaultIdentifier, defaultNetworkId: network.NetworkId })
+        .getDefaultEntry().amount.toString()
+    ).toBe(signedInfo.outputCoinTotal);
     expect(expectedPaymentHashes).toEqual([]);
     expect(unsignedTxResponse.senderUtxos).toHaveLength(0);
     expect(signedInfo.vkeyHashes).toContain(stakingKey.to_public().hash().to_hex());
@@ -1201,6 +1220,19 @@ describe('Create sendAll unsigned TX from UTXO', () => {
     expect(Array.from(extracted.bodyBytes)).toEqual(Array.from(response.txBuilder));
     expect(extracted.inputRefs).toEqual([{ txHash: utxo.tx_hash, index: utxo.tx_index }]);
     expect(bytesToHex(extracted.metadataBytes)).toEqual(auxiliaryDataHex);
+    const transactionFee = getTransactionFeeFromCbor(fullTxHex);
+    expect(transactionFee.toString()).toBe(inspectCmlTransaction(hexToBytes(fullTxHex)).fee);
+    const parsedTotalOutput = getTransactionTotalOutputFromCbor(fullTxHex, {
+      defaultNetworkId: network.NetworkId,
+      defaultIdentifier,
+    });
+    const inputTokens = multiTokenFromRemote(utxo, network.NetworkId);
+    expect(parsedTotalOutput.getDefaultEntry().amount.toString()).toBe(
+      inputTokens.getDefaultEntry().amount.minus(transactionFee).toString()
+    );
+    for (const inputToken of inputTokens.nonDefaultEntries()) {
+      expect(parsedTotalOutput.get(inputToken.identifier).amount.toString()).toBe(inputToken.amount.toString());
+    }
 
     const signRequest = new HaskellShelleyTxSignRequest({
       senderUtxos: [],

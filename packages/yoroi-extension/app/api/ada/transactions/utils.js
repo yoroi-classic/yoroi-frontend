@@ -410,7 +410,7 @@ export function assetToRustMultiasset(remoteAssets: $ReadOnlyArray<$ReadOnly<Rem
 export function getTransactionFeeFromCbor(txHex: string): BigNumber {
   try {
     return RustModule.WasmScope(Module => {
-      const feeStr = Module.WalletV4.FixedTransaction.from_hex(txHex).body().fee().to_str();
+      const feeStr = Module.CML.Transaction.from_cbor_hex(txHex).body().fee().toString();
       return new BigNumber(feeStr);
     });
   } catch (e) {
@@ -425,10 +425,37 @@ export function getTransactionFeeFromCbor(txHex: string): BigNumber {
 export function getTransactionTotalOutputFromCbor(txHex: string, defaults: DefaultTokenEntry): MultiToken {
   try {
     return RustModule.WasmScope(Module => {
-      const outputs = Module.WalletV4.FixedTransaction.from_hex(txHex).body().outputs();
+      const outputs = Module.CML.Transaction.from_cbor_hex(txHex).body().outputs();
       const sum = new MultiToken([], defaults);
-      for (const output of iterateLenGet(outputs)) {
-        sum.joinAddMutable(multiTokenFromCardanoValue(output.amount(), defaults));
+      for (let index = 0; index < outputs.len(); index++) {
+        const value = outputs.get(index).amount();
+        const outputTokens = new MultiToken([], defaults);
+        outputTokens.add({
+          amount: new BigNumber(value.coin().toString()),
+          identifier: defaults.defaultIdentifier,
+          networkId: defaults.defaultNetworkId,
+        });
+        const multiAsset = value.multi_asset();
+        if (multiAsset != null) {
+          const policies = multiAsset.keys();
+          for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
+            const policy = policies.get(policyIndex);
+            const assets = multiAsset.get_assets(policy);
+            if (assets == null) continue;
+            const names = assets.keys();
+            for (let assetIndex = 0; assetIndex < names.len(); assetIndex++) {
+              const name = names.get(assetIndex);
+              const amount = assets.get(name);
+              if (amount == null) continue;
+              outputTokens.add({
+                amount: new BigNumber(amount.toString()),
+                identifier: `${policy.to_hex()}.${name.to_hex()}`,
+                networkId: defaults.defaultNetworkId,
+              });
+            }
+          }
+        }
+        sum.joinAddMutable(outputTokens);
       }
       return sum;
     });
