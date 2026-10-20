@@ -1,10 +1,8 @@
 // @flow
 import '../test-config.forTests';
-import { mnemonicToEntropy } from 'bip39';
 import { RustModule } from './rustLoader';
 import { generateLedgerWalletRootKey, generateWalletRootKey } from './cryptoWallet';
 import { ChainDerivations, CoinTypes, WalletTypePurpose, HARD_DERIVATION_START } from '../../../../config/numbersConfig';
-import { v4PublicToV2 } from './utils';
 import { getCardanoHaskellBaseConfig, networks } from '../storage/database/prepackaged/networks';
 
 beforeAll(async () => {
@@ -13,24 +11,21 @@ beforeAll(async () => {
 
 const getAddressForLedgerMnemonic = (mnemonic: string): string => {
   const baseConfig = getCardanoHaskellBaseConfig(networks.CardanoMainnet).reduce((acc, next) => Object.assign(acc, next), {});
-  const settings = RustModule.WalletV2.BlockchainSettings.from_json({
-    protocol_magic: baseConfig.ByronNetworkId,
+  const rootKeyBytes = generateLedgerWalletRootKey(mnemonic).to_raw_bytes();
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const firstExternalAddressKey = cml.Bip32PrivateKey.from_raw_bytes(rootKeyBytes)
+      .derive(WalletTypePurpose.BIP44)
+      .derive(CoinTypes.CARDANO)
+      .derive(0 + HARD_DERIVATION_START)
+      .derive(ChainDerivations.EXTERNAL)
+      .derive(0)
+      .to_public();
+    return cml.AddressContent.icarus_from_key(
+      firstExternalAddressKey,
+      cml.ProtocolMagic.new(Number(baseConfig.ByronNetworkId))
+    ).to_address().to_base58();
   });
-
-  const rootKey = generateLedgerWalletRootKey(mnemonic);
-  const firstExternalAddressKey = rootKey
-    .derive(WalletTypePurpose.BIP44)
-    .derive(CoinTypes.CARDANO)
-    .derive(0 + HARD_DERIVATION_START)
-    .derive(ChainDerivations.EXTERNAL)
-    .derive(0)
-    .to_public();
-
-  const cslPublicKey = RustModule.WalletV4.Bip32PublicKey.from_bytes(firstExternalAddressKey.to_raw_bytes());
-  const v2Key = v4PublicToV2(cslPublicKey);
-  const firstExternalAddressHash = v2Key.bootstrap_era_address(settings).to_base58();
-
-  return firstExternalAddressHash;
 };
 
 test('Generate Ledger wallet', async () => {
@@ -60,23 +55,20 @@ test('Generate Ledger wallet', async () => {
   expect(address5).toEqual('Ae2tdPwUPEZHiTeWAxzLFm5qYAGqLLwZ35huQJ7Dg5fJ4SN97d1QwhsuDrG');
 });
 
-test('Generate standard wallet root key with CSL-compatible entropy and derivation bytes', () => {
+test('Generate standard wallet root key with frozen derivation vectors', () => {
   const mnemonic = 'business sight another write gadget near where hollow insane dynamic grain hurt slim clip require';
   const cmlRoot = generateWalletRootKey(mnemonic);
-  const cslRoot = RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(
-    Buffer.from(mnemonicToEntropy(mnemonic), 'hex'),
-    Buffer.from('')
-  );
   const path = [WalletTypePurpose.CIP1852, CoinTypes.CARDANO, HARD_DERIVATION_START, ChainDerivations.EXTERNAL, 0];
-
-  expect(Buffer.from(cmlRoot.to_raw_bytes())).toEqual(Buffer.from(cslRoot.as_bytes()));
-
+  const expected = {
+    root: '104e6fe092dff467502839395b9415672f35af08ae094a9b9bb7823caa5e835845b60600c66c654bf1a27b5d202a76b2169d0dfbf67b1cb9db89459892d319be16c6824f38cbc9377d14de83f8619fa5a7368ae74cffa939e42d91b877e2c1be',
+    child: 'd8dae696cbb0d1d566c5ff1f2c5a6f7ed1a3beb55851c43c63ad39d9b65e835838a0bf4eb8ab52239cd0719ef39d465da73505f0e3d1b0d5fd0ac4c11bfa13eca25eb4be55487dbdadce0b6173637fcf179cb14ca3b7b6ecfe4728635343eeeb',
+    publicChild: 'da0be68c6524c01e6b98f2d02b037d1ae2d8e42c6d6d09bbdf3c728a0df010d0a25eb4be55487dbdadce0b6173637fcf179cb14ca3b7b6ecfe4728635343eeeb',
+  };
   let cmlChild = cmlRoot;
-  let cslChild = cslRoot;
   for (const index of path) {
     cmlChild = cmlChild.derive(index);
-    cslChild = cslChild.derive(index);
   }
-  expect(Buffer.from(cmlChild.to_raw_bytes())).toEqual(Buffer.from(cslChild.as_bytes()));
-  expect(Buffer.from(cmlChild.to_public().to_raw_bytes())).toEqual(Buffer.from(cslChild.to_public().as_bytes()));
+  expect(Buffer.from(cmlRoot.to_raw_bytes()).toString('hex')).toEqual(expected.root);
+  expect(Buffer.from(cmlChild.to_raw_bytes()).toString('hex')).toEqual(expected.child);
+  expect(Buffer.from(cmlChild.to_public().to_raw_bytes()).toString('hex')).toEqual(expected.publicChild);
 });
