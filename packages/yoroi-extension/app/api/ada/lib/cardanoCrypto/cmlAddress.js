@@ -1,6 +1,6 @@
 // @flow
 import { RustModule } from './rustLoader';
-import { hexToBytes } from '../../../../coreUtils';
+import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 
 const derivePublicKeyHashHex = (accountPublicKey: any, path: Array<number>, startIndex: number): string => {
   let publicKey = accountPublicKey;
@@ -16,6 +16,17 @@ export const deriveBip32PublicKeyHashHex = (accountPublicKeyHex: string, path: A
   RustModule.WasmScope(Module => {
     const accountPublicKey = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
     return derivePublicKeyHashHex(accountPublicKey, path, startIndex);
+  });
+
+export const deriveBip32PublicKeyRawHex = (accountPublicKeyHex: string, path: Array<number>, startIndex: number = 0): string =>
+  RustModule.WasmScope(Module => {
+    let publicKey = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
+    for (let i = startIndex; i < path.length; i++) {
+      const index = path[i];
+      if (index == null) throw new Error('Invalid public key derivation path');
+      publicKey = publicKey.derive(index);
+    }
+    return bytesToHex(publicKey.to_raw_key().to_raw_bytes());
   });
 
 export const deriveBip32PublicKeyHashesHex = (accountPublicKeyHex: string, paths: Array<Array<number>>): Array<string> =>
