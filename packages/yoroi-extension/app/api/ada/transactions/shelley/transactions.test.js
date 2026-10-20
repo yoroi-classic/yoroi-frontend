@@ -1051,7 +1051,7 @@ describe('Create signed transactions', () => {
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
       accountPrivateKey,
-      stakingKey,
+      stakingKey.as_bytes(),
       undefined
     );
     const signedInfo = inspectCmlTransaction(signedTx);
@@ -1141,7 +1141,7 @@ describe('Create signed transactions', () => {
       unsignedTxResponse.txBuilder,
       Bip44DerivationLevels.ACCOUNT.level,
       accountPrivateKey,
-      stakingKey,
+      stakingKey.as_bytes(),
       undefined
     );
     const signedInfo = inspectCmlTransaction(signedTx);

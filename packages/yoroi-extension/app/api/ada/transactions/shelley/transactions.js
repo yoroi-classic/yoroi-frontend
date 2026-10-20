@@ -1125,7 +1125,7 @@ export function signTransaction(
     | Uint8Array,
   keyLevel: number,
   signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
-  stakingKey: ?RustModule.WalletV4.PrivateKey,
+  stakingKey: ?Uint8Array,
   metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
 ): RustModule.WalletV4.Transaction | Uint8Array {
@@ -1215,9 +1215,10 @@ export function signTransaction(
     if (stakingKey == null) {
       console.warn('Transaction in signing contains staking credentials but no staking key is provided. Cannot fully sign.');
     } else {
-      const ownStakingKeyHash = stakingKey.to_public().hash().to_hex();
+      const legacyStakingKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(stakingKey);
+      const ownStakingKeyHash = legacyStakingKey.to_public().hash().to_hex();
       if (stakingKeyHashesInTx.has(ownStakingKeyHash)) {
-        vkeyWits.add(RustModule.WalletV4.make_vkey_witness(txHash, stakingKey));
+        vkeyWits.add(RustModule.WalletV4.make_vkey_witness(txHash, legacyStakingKey));
       }
       if (stakingKeyHashesInTx.size > 1) {
         const foreignStakingKeyHashes = [...stakingKeyHashesInTx].filter(x => x !== ownStakingKeyHash);
@@ -1250,7 +1251,7 @@ function signCmlTransaction(
   bodyBytes: Uint8Array,
   keyLevel: number,
   signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
-  stakingKey: ?RustModule.WalletV4.PrivateKey,
+  stakingKey: ?Uint8Array,
   metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}>
 ): Uint8Array {
@@ -1299,7 +1300,7 @@ function signCmlTransaction(
 
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
     if (stakingHashes.size > 0 && stakingKey != null) {
-      const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey.as_bytes());
+      const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey);
       const stakingKeyHash = cmlStakingKey.to_public().hash().to_hex();
       if (stakingHashes.has(stakingKeyHash)) {
         witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, cmlStakingKey));
