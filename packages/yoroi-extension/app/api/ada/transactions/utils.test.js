@@ -1,7 +1,14 @@
 // @flow
 import '../lib/test-config.forTests';
 import BigNumber from 'bignumber.js';
-import { convertAdaTransactionsToExportRows, sumInputsOutputs, getFromUserPerspective, cardanoUtxoHexFromRemoteFormat } from './utils';
+import {
+  convertAdaTransactionsToExportRows,
+  sumInputsOutputs,
+  getFromUserPerspective,
+  cardanoUtxoHexFromRemoteFormat,
+  cardanoMinAdaRequiredFromAssets,
+  cardanoValueFromMultiToken,
+} from './utils';
 import { RustModule } from '../lib/cardanoCrypto/rustLoader';
 import { formatBigNumberToFloatString } from '../../../utils/formatters';
 import type { TransactionExportRow } from '../../export';
@@ -13,6 +20,7 @@ import type { CardanoByronTxIO } from '../lib/storage/database/transactionModels
 import type { DbBlock, DbTokenInfo, TokenListRow } from '../lib/storage/database/primitives/tables';
 import type { UserAnnotation } from './types';
 import { defaultAssets, networks } from '../lib/storage/database/prepackaged/networks';
+import { MultiToken } from '../../common/lib/MultiToken';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -43,6 +51,30 @@ test('serializes remote swap UTxOs with CML byte-for-byte like CSL', () => {
     return CSL.TransactionUnspentOutput.new(input, output).to_hex();
   });
   expect(cardanoUtxoHexFromRemoteFormat(utxo)).toEqual(expected);
+});
+
+test('calculates min-ADA for token outputs with CML parity', () => {
+  const tokens = MultiToken.from({
+    defaults: { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId },
+    values: [
+      { identifier: '.', networkId: networks.CardanoMainnet.NetworkId, amount: '2000000' },
+      { identifier: `${'44'.repeat(28)}.aabb`, networkId: networks.CardanoMainnet.NetworkId, amount: '3' },
+    ],
+  });
+  const coinsPerByte = new BigNumber('4310');
+  const legacyMinimum = RustModule.WasmScope(Module => {
+    const output = Module.WalletV4.TransactionOutput.new(
+      Module.WalletV4.Address.from_bech32(
+        'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
+      ),
+      cardanoValueFromMultiToken(tokens, Module)
+    );
+    return Module.WalletV4.min_ada_for_output(
+      output,
+      Module.WalletV4.DataCost.new_coins_per_byte(Module.WalletV4.BigNum.from_str(coinsPerByte.toString()))
+    ).to_str();
+  });
+  expect(cardanoMinAdaRequiredFromAssets(tokens, coinsPerByte).toString()).toEqual(legacyMinimum);
 });
 
 const cardanoToken = {

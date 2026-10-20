@@ -364,24 +364,21 @@ export function cardanoUtxoHexFromRemoteFormat(u: RemoteUnspentOutput | CardanoA
   });
 }
 
-function cardanoMinAdaRequiredFromOutput(
-  output: RustModule.WalletV4.TransactionOutput,
-  coinsPerByte: BigNumber,
-  Module: typeof RustModule
-): BigNumber {
-  const wasmCoinsPerByte = Module.WalletV4.BigNum.from_str(coinsPerByte.toString());
-  const dataCost = Module.WalletV4.DataCost.new_coins_per_byte(wasmCoinsPerByte);
-  const minAdaRequired = Module.WalletV4.min_ada_for_output(output, dataCost).to_str();
-  return new BigNumber(minAdaRequired);
-}
-
 export function cardanoMinAdaRequiredFromAssets(tokens: MultiToken, coinsPerByte: BigNumber): BigNumber {
   return RustModule.WasmScope(Module => {
-    const output = Module.WalletV4.TransactionOutput.new(
-      Module.WalletV4.Address.from_bech32(RANDOM_BASE_ADDRESS),
-      cardanoValueFromMultiToken(tokens, Module)
-    );
-    return cardanoMinAdaRequiredFromOutput(output, coinsPerByte, Module);
+    const CML = Module.CML;
+    const multiAsset = CML.MultiAsset.new();
+    for (const token of tokens.nonDefaultEntries()) {
+      const { policyId, name } = identifierSplit(token.identifier);
+      // eslint-disable-next-line no-undef
+      multiAsset.set(CML.ScriptHash.from_hex(policyId), CML.AssetName.from_hex(name), BigInt(token.amount.toString()));
+    }
+    // eslint-disable-next-line no-undef
+    const coin = BigInt(tokens.getDefaultEntry().amount.toString());
+    const value = multiAsset.policy_count() > 0 ? CML.Value.new(coin, multiAsset) : CML.Value.from_coin(coin);
+    const output = CML.TransactionOutput.new(CML.Address.from_bech32(RANDOM_BASE_ADDRESS), value);
+    // eslint-disable-next-line no-undef
+    return new BigNumber(CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString());
   });
 }
 
