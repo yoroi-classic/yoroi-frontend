@@ -35,7 +35,7 @@ import ExplorableHashContainer from '../../../containers/widgets/ExplorableHashC
 import { SelectedExplorer } from '../../../domain/SelectedExplorer';
 import { calculateAndFormatValue } from '../../../utils/unit-of-account';
 import { TxStatusCodes } from '../../../api/ada/lib/storage/database/primitives/enums';
-import { RustModule } from '../../../api/ada/lib/cardanoCrypto/rustLoader';
+import { StoredCertificateKind } from '../../../api/ada/lib/storage/database/primitives/storedCertificateKinds';
 import { splitAmount, truncateAddressShort, truncateToken } from '../../../utils/formatters';
 import CopyableAddress from '../../widgets/CopyableAddress';
 import { genAddressLookup } from '../../../stores/stateless/addressStores';
@@ -846,47 +846,45 @@ export default class TransactionRevamp extends Component<Props, State> {
   shelleyCertificateToText: ($ReadOnly<CertificateRow>) => string = certificate => {
     const intl = this.context;
     const kind = certificate.Kind;
-    return RustModule.WasmScope(Scope => {
-      switch (kind) {
-        case Scope.WalletV4.CertificateKind.StakeRegistration:
-          return intl.formatMessage(shelleyCertificateKinds.StakeRegistration);
-        case Scope.WalletV4.CertificateKind.StakeDeregistration:
-          return intl.formatMessage(shelleyCertificateKinds.StakeDeregistration);
-        case Scope.WalletV4.CertificateKind.StakeDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.StakeDelegation);
-        case Scope.WalletV4.CertificateKind.PoolRegistration:
-          return intl.formatMessage(shelleyCertificateKinds.PoolRegistration);
-        case Scope.WalletV4.CertificateKind.PoolRetirement:
-          return intl.formatMessage(shelleyCertificateKinds.PoolRetirement);
-        case Scope.WalletV4.CertificateKind.GenesisKeyDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.GenesisKeyDelegation);
-        case Scope.WalletV4.CertificateKind.MoveInstantaneousRewardsCert:
-          return intl.formatMessage(shelleyCertificateKinds.MoveInstantaneousRewardsCert);
-        case Scope.WalletV4.CertificateKind.VoteDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.VoteDelegation);
-        case Scope.WalletV4.CertificateKind.StakeAndVoteDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.StakeAndVoteDelegation);
-        case Scope.WalletV4.CertificateKind.StakeRegistrationAndDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.StakeRegistrationAndDelegation);
-        case Scope.WalletV4.CertificateKind.VoteRegistrationAndDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.VoteRegistrationAndDelegation);
-        case Scope.WalletV4.CertificateKind.StakeVoteRegistrationAndDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.StakeVoteRegistrationAndDelegation);
-        case Scope.WalletV4.CertificateKind.CommitteeHotAuth:
-          return intl.formatMessage(shelleyCertificateKinds.CommitteeHotAuth);
-        case Scope.WalletV4.CertificateKind.CommitteeColdResign:
-          return intl.formatMessage(shelleyCertificateKinds.CommitteeColdResign);
-        case Scope.WalletV4.CertificateKind.DRepRegistration:
-          return intl.formatMessage(shelleyCertificateKinds.DrepRegistration);
-        case Scope.WalletV4.CertificateKind.DRepDeregistration:
-          return intl.formatMessage(shelleyCertificateKinds.DrepDeregistration);
-        case Scope.WalletV4.CertificateKind.DRepUpdate:
-          return intl.formatMessage(shelleyCertificateKinds.DrepUpdate);
-        default: {
-          throw new Error(`${nameof(this.shelleyCertificateToText)} unexpected kind ${kind}`);
-        }
+    switch (kind) {
+      case StoredCertificateKind.StakeRegistration:
+        return intl.formatMessage(shelleyCertificateKinds.StakeRegistration);
+      case StoredCertificateKind.StakeDeregistration:
+        return intl.formatMessage(shelleyCertificateKinds.StakeDeregistration);
+      case StoredCertificateKind.StakeDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.StakeDelegation);
+      case StoredCertificateKind.PoolRegistration:
+        return intl.formatMessage(shelleyCertificateKinds.PoolRegistration);
+      case StoredCertificateKind.PoolRetirement:
+        return intl.formatMessage(shelleyCertificateKinds.PoolRetirement);
+      case StoredCertificateKind.GenesisKeyDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.GenesisKeyDelegation);
+      case StoredCertificateKind.MoveInstantaneousRewardsCert:
+        return intl.formatMessage(shelleyCertificateKinds.MoveInstantaneousRewardsCert);
+      case StoredCertificateKind.VoteDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.VoteDelegation);
+      case StoredCertificateKind.StakeAndVoteDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.StakeAndVoteDelegation);
+      case StoredCertificateKind.StakeRegistrationAndDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.StakeRegistrationAndDelegation);
+      case StoredCertificateKind.VoteRegistrationAndDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.VoteRegistrationAndDelegation);
+      case StoredCertificateKind.StakeVoteRegistrationAndDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.StakeVoteRegistrationAndDelegation);
+      case StoredCertificateKind.CommitteeHotAuth:
+        return intl.formatMessage(shelleyCertificateKinds.CommitteeHotAuth);
+      case StoredCertificateKind.CommitteeColdResign:
+        return intl.formatMessage(shelleyCertificateKinds.CommitteeColdResign);
+      case StoredCertificateKind.DRepRegistration:
+        return intl.formatMessage(shelleyCertificateKinds.DrepRegistration);
+      case StoredCertificateKind.DRepDeregistration:
+        return intl.formatMessage(shelleyCertificateKinds.DrepDeregistration);
+      case StoredCertificateKind.DRepUpdate:
+        return intl.formatMessage(shelleyCertificateKinds.DrepUpdate);
+      default: {
+        throw new Error(`${nameof(this.shelleyCertificateToText)} unexpected kind ${kind}`);
       }
-    });
+    }
   };
 
   getWithdrawals: (WalletTransaction, string) => ?Node = (data, txIdFullInfoBasePart) => {

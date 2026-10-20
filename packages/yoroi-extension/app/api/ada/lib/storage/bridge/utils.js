@@ -2,6 +2,7 @@
 
 import type { CoreAddressT } from '../database/primitives/enums';
 import { CoreAddressTypes } from '../database/primitives/enums';
+import { StoredCertificateKind } from '../database/primitives/storedCertificateKinds';
 import { RustModule } from '../../cardanoCrypto/rustLoader';
 import { stakingCredentialCborHexFromRewardAddress } from '../../cardanoCrypto/cmlAddress';
 import type { NetworkRow } from '../database/primitives/tables';
@@ -362,9 +363,9 @@ export function unwrapStakingKey(stakingAddress: string): string {
 
 export function isCertificateKindDrepDelegation(kind: number): boolean {
   return (
-    kind === RustModule.WalletV4.CertificateKind.VoteDelegation ||
-    kind === RustModule.WalletV4.CertificateKind.StakeAndVoteDelegation ||
-    kind === RustModule.WalletV4.CertificateKind.VoteRegistrationAndDelegation ||
-    kind === RustModule.WalletV4.CertificateKind.StakeVoteRegistrationAndDelegation
+    kind === StoredCertificateKind.VoteDelegation ||
+    kind === StoredCertificateKind.StakeAndVoteDelegation ||
+    kind === StoredCertificateKind.VoteRegistrationAndDelegation ||
+    kind === StoredCertificateKind.StakeVoteRegistrationAndDelegation
   );
 }

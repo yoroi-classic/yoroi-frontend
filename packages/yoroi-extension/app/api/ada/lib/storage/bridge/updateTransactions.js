@@ -21,6 +21,7 @@ import type {
   CardanoAssetMintMetadata,
 } from '../database/primitives/tables';
 import { TransactionType } from '../database/primitives/tables';
+import { StoredCertificateKind } from '../database/primitives/storedCertificateKinds';
 import type { TxStatusCodesType, CertificateRelationType, CoreAddressT } from '../database/primitives/enums';
 import {
   GetAddress,
@@ -283,7 +284,7 @@ export async function rawGetTransactions(
         if (tx.txType === TransactionType.CardanoShelley) {
           const implicitOutputSum = publicDeriver.getParent().getDefaultMultiToken();
           for (const cert of tx.certificates) {
-            if (cert.certificate.Kind !== RustModule.WalletV4.CertificateKind.MoveInstantaneousRewardsCert) {
+            if (cert.certificate.Kind !== StoredCertificateKind.MoveInstantaneousRewardsCert) {
               continue;
             }
 
@@ -2350,7 +2351,7 @@ async function certificateToDb(
           result.push((txId: number) => ({
             certificate: {
               Ordinal: cert.certIndex,
-              Kind: RustModule.WalletV4.CertificateKind.StakeRegistration,
+              Kind: StoredCertificateKind.StakeRegistration,
               Payload: certificateHex,
               TransactionId: txId,
             },
@@ -2382,7 +2383,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.StakeDeregistration,
+            Kind: StoredCertificateKind.StakeDeregistration,
             Payload: certificateHex,
             TransactionId: txId,
           },
@@ -2437,7 +2438,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.StakeDelegation,
+            Kind: StoredCertificateKind.StakeDelegation,
             Payload: certificateHex,
             TransactionId: txId,
           },
@@ -2542,7 +2543,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.PoolRegistration,
+            Kind: StoredCertificateKind.PoolRegistration,
             Payload: certificateHex,
             TransactionId: txId,
           },
@@ -2580,7 +2581,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.PoolRetirement,
+            Kind: StoredCertificateKind.PoolRetirement,
             Payload: certificateHex,
             TransactionId: txId,
           },
@@ -2606,7 +2607,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.GenesisKeyDelegation,
+            Kind: StoredCertificateKind.GenesisKeyDelegation,
             Payload: certificateHex,
             TransactionId: txId,
           },
@@ -2651,7 +2652,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.MoveInstantaneousRewardsCert,
+            Kind: StoredCertificateKind.MoveInstantaneousRewardsCert,
             Payload: certificateHex,
             TransactionId: txId,
           },
@@ -2667,7 +2668,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.VoteDelegation,
+            Kind: StoredCertificateKind.VoteDelegation,
             Payload: '',
             TransactionId: txId,
           },
@@ -2679,7 +2680,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.StakeAndVoteDelegation,
+            Kind: StoredCertificateKind.StakeAndVoteDelegation,
             Payload: '',
             TransactionId: txId,
           },
@@ -2691,7 +2692,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.StakeRegistrationAndDelegation,
+            Kind: StoredCertificateKind.StakeRegistrationAndDelegation,
             Payload: '',
             TransactionId: txId,
           },
@@ -2703,7 +2704,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.VoteRegistrationAndDelegation,
+            Kind: StoredCertificateKind.VoteRegistrationAndDelegation,
             Payload: '',
             TransactionId: txId,
           },
@@ -2715,7 +2716,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.StakeVoteRegistrationAndDelegation,
+            Kind: StoredCertificateKind.StakeVoteRegistrationAndDelegation,
             Payload: '',
             TransactionId: txId,
           },
@@ -2727,7 +2728,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.CommitteeHotAuth,
+            Kind: StoredCertificateKind.CommitteeHotAuth,
             Payload: '',
             TransactionId: txId,
           },
@@ -2739,7 +2740,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.CommitteeColdResign,
+            Kind: StoredCertificateKind.CommitteeColdResign,
             Payload: '',
             TransactionId: txId,
           },
@@ -2751,7 +2752,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.DRepRegistration,
+            Kind: StoredCertificateKind.DRepRegistration,
             Payload: '',
             TransactionId: txId,
           },
@@ -2763,7 +2764,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.DRepDeregistration,
+            Kind: StoredCertificateKind.DRepDeregistration,
             Payload: '',
             TransactionId: txId,
           },
@@ -2775,7 +2776,7 @@ async function certificateToDb(
         result.push((txId: number) => ({
           certificate: {
             Ordinal: cert.certIndex,
-            Kind: RustModule.WalletV4.CertificateKind.DRepUpdate,
+            Kind: StoredCertificateKind.DRepUpdate,
             Payload: '',
             TransactionId: txId,
           },
