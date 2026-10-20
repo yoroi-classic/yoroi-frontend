@@ -111,6 +111,14 @@ export const stakingKeyHashFromRewardAddress = (stakingAddressHex: string): stri
     );
   });
 
+export const paymentKeyHashBech32FromEnterpriseAddress = (addressHex: string, prefix: string): string | null =>
+  RustModule.WasmScope(Module => {
+    const address = Module.CML.Address.from_hex(addressHex);
+    const enterpriseAddress = Module.CML.EnterpriseAddress.from_address(address);
+    if (enterpriseAddress == null) return null;
+    return enterpriseAddress.payment().as_pub_key()?.to_bech32(prefix) ?? null;
+  });
+
 export const addressHasStakeCredential = (address: string, credentialCborHex: string): boolean =>
   RustModule.WasmScope(Module => {
     const cmlAddress = parseAddress(Module, address);

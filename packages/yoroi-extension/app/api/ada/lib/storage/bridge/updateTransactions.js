@@ -96,6 +96,13 @@ import { ShelleyCertificateTypes, RemoteTransactionTypes } from '../../state-fet
 import { addressToKind } from './utils';
 import { RustModule } from '../../cardanoCrypto/rustLoader';
 import { Bech32Prefix } from '../../../../../config/stringConfig';
+import { paymentKeyHashBech32FromEnterpriseAddress } from '../../cardanoCrypto/cmlAddress';
+import {
+  genesisKeyDelegationCertificateHex,
+  mirCertificatePayloadHex,
+  mirRewardForRewardAddress,
+  poolRegistrationPayloads,
+} from '../../cardanoCrypto/cmlCertificates';
 import type { DefaultTokenEntry } from '../../../../common/lib/MultiToken';
 import { UtxoStorageApi } from '../models/utils';
 import { bytesToHex, createFilterUniqueBy, hexToBytes, listValues } from '../../../../../coreUtils';
@@ -288,34 +295,22 @@ export async function rawGetTransactions(
               continue;
             }
 
-            RustModule.WasmScope(Module => {
-              const mir = Module.WalletV4.MoveInstantaneousRewardsCert.from_hex(cert.certificate.Payload)
-                .move_instantaneous_reward()
-                .as_to_stake_creds();
-
-              for (const relatedAddr of cert.relatedAddresses) {
-                // recall: length of this list is usually just 1
-                for (const addr of addresses.accountingAddresses) {
-                  if (relatedAddr.AddressId === addr.AddressId) {
-                    // this address got some rewards inside the cert
-                    const rewardAddr = Module.WalletV4.RewardAddress.from_address(Module.WalletV4.Address.from_hex(addr.Hash));
-                    if (rewardAddr == null) continue; // should never happen
-                    const rewardAmount = mir?.get(rewardAddr.payment_cred());
-                    // happens if the MIR is to another pot
-                    if (rewardAmount == null) continue;
-                    const isPositive = rewardAmount.is_positive();
-                    const rewardAmountBigInt = isPositive ? rewardAmount.as_positive() : rewardAmount.as_negative();
-                    if (rewardAmountBigInt == null) continue;
-                    const rewardAmountStr = (isPositive ? '' : '-') + rewardAmountBigInt.to_str();
-                    implicitOutputSum.add({
-                      identifier: defaultToken.defaultIdentifier,
-                      networkId: defaultToken.defaultNetworkId,
-                      amount: new BigNumber(rewardAmountStr),
-                    });
-                  }
+            for (const relatedAddr of cert.relatedAddresses) {
+              // recall: length of this list is usually just 1
+              for (const addr of addresses.accountingAddresses) {
+                if (relatedAddr.AddressId === addr.AddressId) {
+                  // this address got some rewards inside the cert
+                  const rewardAmount = mirRewardForRewardAddress(cert.certificate.Payload, addr.Hash);
+                  // null means the reward was to the other pot or this address is not a reward address.
+                  if (rewardAmount == null) continue;
+                  implicitOutputSum.add({
+                    identifier: defaultToken.defaultIdentifier,
+                    networkId: defaultToken.defaultNetworkId,
+                    amount: new BigNumber(rewardAmount),
+                  });
                 }
               }
-            });
+            }
           }
           return implicitOutputSum;
         }
@@ -2312,8 +2307,8 @@ async function certificateToDb(
     // and in most cases, people generate these addresses through the CLI anyway
     {
       const rewardAddressHex = RustModule.WasmScope(Module => {
-        const stakeCredential = Module.WalletV4.Credential.from_bytes(hexToBytes(stakeCredentialHex));
-        return bytesToHex(Module.WalletV4.RewardAddress.new(request.network, stakeCredential).to_address().to_bytes());
+        const stakeCredential = Module.CML.Credential.from_cbor_hex(stakeCredentialHex);
+        return Module.CML.RewardAddress.new(request.network, stakeCredential).to_address().to_hex();
       });
       const ownAddress = await findOwnAddress(rewardAddressHex);
       if (ownAddress != null) {
@@ -2322,8 +2317,8 @@ async function certificateToDb(
     }
     {
       const enterpriseAddressHex = RustModule.WasmScope(Module => {
-        const stakeCredential = Module.WalletV4.Credential.from_bytes(hexToBytes(stakeCredentialHex));
-        return Module.WalletV4.EnterpriseAddress.new(request.network, stakeCredential).to_address().to_hex();
+        const stakeCredential = Module.CML.Credential.from_cbor_hex(stakeCredentialHex);
+        return Module.CML.EnterpriseAddress.new(request.network, stakeCredential).to_address().to_hex();
       });
       const ownAddress = await findOwnAddress(enterpriseAddressHex);
       if (ownAddress != null) return ownAddress;
@@ -2338,13 +2333,13 @@ async function certificateToDb(
       case ShelleyCertificateTypes.StakeRegistration: {
         try {
           const [addressHex, certificateHex] = RustModule.WasmScope(Module => {
-            const stakeCredentials = Module.WalletV4.RewardAddress.from_address(
-              Module.WalletV4.Address.from_bytes(hexToBytes(cert.rewardAddress))
-            )?.payment_cred();
+            const stakeCredentials = Module.CML.RewardAddress.from_address(
+              Module.CML.Address.from_raw_bytes(hexToBytes(cert.rewardAddress))
+            )?.payment();
             if (stakeCredentials == null) throw new Error(`${nameof(certificateToDb)} not a valid reward account`);
             return [
-              bytesToHex(Module.WalletV4.RewardAddress.new(request.network, stakeCredentials).to_address().to_bytes()),
-              bytesToHex(Module.WalletV4.StakeRegistration.new(stakeCredentials).to_bytes()),
+              Module.CML.RewardAddress.new(request.network, stakeCredentials).to_address().to_hex(),
+              Module.CML.Certificate.new_stake_registration(stakeCredentials).to_cbor_hex(),
             ];
           });
           const addressId = await addressToId(addressHex);
@@ -2370,13 +2365,14 @@ async function certificateToDb(
       }
       case ShelleyCertificateTypes.StakeDeregistration: {
         const [addressHex, certificateHex] = RustModule.WasmScope(Module => {
-          const stakeCredentials = Module.WalletV4.RewardAddress.from_address(
-            Module.WalletV4.Address.from_bytes(hexToBytes(cert.rewardAddress))
-          )?.payment_cred();
+          const stakeCredentials = Module.CML.RewardAddress.from_address(
+            Module.CML.Address.from_raw_bytes(hexToBytes(cert.rewardAddress))
+          )?.payment();
           if (stakeCredentials == null) throw new Error(`${nameof(certificateToDb)} not a valid reward account`);
           return [
-            bytesToHex(Module.WalletV4.RewardAddress.new(request.network, stakeCredentials).to_address().to_bytes()),
-            bytesToHex(Module.WalletV4.StakeRegistration.new(stakeCredentials).to_bytes()),
+            Module.CML.RewardAddress.new(request.network, stakeCredentials).to_address().to_hex(),
+            // Keep the historical serialized payload: old rows used StakeRegistration here.
+            Module.CML.Certificate.new_stake_registration(stakeCredentials).to_cbor_hex(),
           ];
         });
         const addressId = await addressToId(addressHex);
@@ -2403,16 +2399,16 @@ async function certificateToDb(
           Relation: CertificateRelationType,
         |}> = [];
         const [addressHex, certificateHex, stakeCredentialHex] = RustModule.WasmScope(Module => {
-          const rewardAddress = Module.WalletV4.RewardAddress.from_address(
-            Module.WalletV4.Address.from_bytes(hexToBytes(cert.rewardAddress))
+          const rewardAddress = Module.CML.RewardAddress.from_address(
+            Module.CML.Address.from_raw_bytes(hexToBytes(cert.rewardAddress))
           );
           if (rewardAddress == null) throw new Error(`${nameof(certificateToDb)} not a valid reward account`);
-          const stakeCredentials = rewardAddress.payment_cred();
-          const poolKeyHash = Module.WalletV4.Ed25519KeyHash.from_bytes(hexToBytes(cert.poolKeyHash));
+          const stakeCredentials = rewardAddress.payment();
+          const poolKeyHash = Module.CML.Ed25519KeyHash.from_raw_bytes(hexToBytes(cert.poolKeyHash));
           return [
-            bytesToHex(rewardAddress.to_address().to_bytes()),
-            bytesToHex(Module.WalletV4.StakeDelegation.new(stakeCredentials, poolKeyHash).to_bytes()),
-            bytesToHex(Module.WalletV4.Credential.from_keyhash(poolKeyHash).to_bytes()),
+            rewardAddress.to_address().to_hex(),
+            Module.CML.Certificate.new_stake_delegation(stakeCredentials, poolKeyHash).to_cbor_hex(),
+            Module.CML.Credential.new_pub_key(poolKeyHash).to_cbor_hex(),
           ];
         });
         {
@@ -2455,59 +2451,10 @@ async function certificateToDb(
           AddressId: number,
           Relation: CertificateRelationType,
         |}> = [];
-        const ownerStakeCredentialHexes = [];
-        const [operatorStakeCredentialHex, certificateHex] = RustModule.WasmScope(Module => {
-          const rewardAddress = Module.WalletV4.RewardAddress.from_address(
-            Module.WalletV4.Address.from_bytes(hexToBytes(cert.poolParams.rewardAccount))
-          );
-          if (rewardAddress == null) throw new Error(`${nameof(certificateToDb)} registration address not a reward address`);
-
-          const operatorKey = Module.WalletV4.Ed25519KeyHash.from_bytes(hexToBytes(cert.poolParams.operator));
-
-          // pool owners
-          const owners = Module.WalletV4.Ed25519KeyHashes.new();
-          for (let j = 0; j < cert.poolParams.poolOwners.length; j++) {
-            const owner = cert.poolParams.poolOwners[j];
-            const ownerKey = Module.WalletV4.Ed25519KeyHash.from_hex(owner);
-            owners.add(ownerKey);
-            const ownerStakeCredentialHex = bytesToHex(Module.WalletV4.Credential.from_keyhash(ownerKey).to_bytes());
-            ownerStakeCredentialHexes.push(ownerStakeCredentialHex);
-          }
-
-          let poolMetadata = undefined;
-          if (cert.poolParams.poolMetadata != null) {
-            const metadata = cert.poolParams.poolMetadata;
-            poolMetadata = Module.WalletV4.PoolMetadata.new(
-              Module.WalletV4.URL.new(metadata.url),
-              Module.WalletV4.PoolMetadataHash.from_hex(metadata.metadataHash)
-            );
-          }
-
-          const certificate = Module.WalletV4.PoolRegistration.new(
-            Module.WalletV4.PoolParams.new(
-              operatorKey,
-              Module.WalletV4.VRFKeyHash.from_hex(cert.poolParams.vrfKeyHash),
-              Module.WalletV4.BigNum.from_str(cert.poolParams.pledge),
-              Module.WalletV4.BigNum.from_str(cert.poolParams.cost),
-              Module.WalletV4.UnitInterval.new(
-                // TODO: dummy data since db-sync doesn't support this yet
-                Module.WalletV4.BigNum.from_str('1'),
-                Module.WalletV4.BigNum.from_str('1')
-                // Module.WalletV4.BigNum.from_str(cert.poolParams.margin.numerator),
-                // Module.WalletV4.BigNum.from_str(cert.poolParams.margin.denominator),
-              ),
-              rewardAddress,
-              owners,
-              Module.WalletV4.Relays.new(),
-              poolMetadata
-            )
-          );
-
-          return [
-            bytesToHex(Module.WalletV4.Credential.from_keyhash(operatorKey).to_bytes()),
-            bytesToHex(certificate.to_bytes()),
-          ];
-        });
+        const poolPayloads = poolRegistrationPayloads(cert.poolParams);
+        const ownerStakeCredentialHexes = poolPayloads.ownerCredentialHexes;
+        const operatorStakeCredentialHex = poolPayloads.operatorCredentialHex;
+        const certificateHex = poolPayloads.certificateHex;
 
         {
           // owners
@@ -2561,10 +2508,12 @@ async function certificateToDb(
           Relation: CertificateRelationType,
         |}> = [];
         const [stakeCredentialHex, certificateHex] = RustModule.WasmScope(Module => {
-          const poolKeyHash = Module.WalletV4.Ed25519KeyHash.from_bytes(hexToBytes(cert.poolKeyHash));
+          const poolKeyHash = Module.CML.Ed25519KeyHash.from_raw_bytes(hexToBytes(cert.poolKeyHash));
+          // eslint-disable-next-line no-undef
+          const epoch = BigInt(cert.epoch);
           return [
-            bytesToHex(Module.WalletV4.Credential.from_keyhash(poolKeyHash).to_bytes()),
-            bytesToHex(Module.WalletV4.PoolRetirement.new(poolKeyHash, cert.epoch).to_bytes()),
+            Module.CML.Credential.new_pub_key(poolKeyHash).to_cbor_hex(),
+            Module.CML.Certificate.new_pool_retirement(poolKeyHash, epoch).to_cbor_hex(),
           ];
         });
 
@@ -2594,15 +2543,7 @@ async function certificateToDb(
         break;
       }
       case ShelleyCertificateTypes.GenesisKeyDelegation: {
-        const certificateHex = RustModule.WasmScope(Module =>
-          bytesToHex(
-            Module.WalletV4.GenesisKeyDelegation.new(
-              Module.WalletV4.GenesisHash.from_bytes(hexToBytes(cert.genesishash)),
-              Module.WalletV4.GenesisDelegateHash.from_bytes(hexToBytes(cert.genesisDelegateHash)),
-              Module.WalletV4.VRFKeyHash.from_bytes(hexToBytes(cert.vrfKeyHash))
-            ).to_bytes()
-          )
-        );
+        const certificateHex = genesisKeyDelegationCertificateHex(cert.genesishash, cert.genesisDelegateHash, cert.vrfKeyHash);
 
         result.push((txId: number) => ({
           certificate: {
@@ -2620,22 +2561,7 @@ async function certificateToDb(
           AddressId: number,
           Relation: CertificateRelationType,
         |}> = [];
-        const certificateHex = RustModule.WasmScope(Module => {
-          const certPot = Module.WalletV4.MIRToStakeCredentials.new();
-          for (const addressHex of Object.keys(cert.rewards)) {
-            const rewardAddress = Module.WalletV4.RewardAddress.from_address(
-              Module.WalletV4.Address.from_bytes(hexToBytes(addressHex))
-            );
-            if (rewardAddress == null) throw new Error(`${nameof(certificateToDb)} not a valid reward account`);
-            const stakeCredentials = rewardAddress.payment_cred();
-            if (stakeCredentials == null) throw new Error(`${nameof(certificateToDb)} not a valid reward account`);
-            certPot.insert(stakeCredentials, Module.WalletV4.Int.new(Module.WalletV4.BigNum.from_str(cert.rewards[addressHex])));
-          }
-          const certificate = Module.WalletV4.MoveInstantaneousRewardsCert.new(
-            Module.WalletV4.MoveInstantaneousReward.new_to_stake_creds(cert.pot, certPot)
-          );
-          return bytesToHex(certificate.to_bytes());
-        });
+        const certificateHex = mirCertificatePayloadHex(cert.pot, cert.rewards);
 
         {
           for (const addressHex of Object.keys(cert.rewards)) {
@@ -2872,15 +2798,9 @@ export function toRequestAddresses(addresses: {|
     ...addresses.utxoAddresses
       .filter(address => address.Type === CoreAddressTypes.CARDANO_ENTERPRISE)
       .reduce((list, next) => {
-        return RustModule.WasmScope(Module => {
-          const wasmAddr = Module.WalletV4.Address.from_hex(next.Hash);
-          const enterpriseWasm = Module.WalletV4.EnterpriseAddress.from_address(wasmAddr);
-          if (enterpriseWasm == null) return list;
-          const keyHash = enterpriseWasm.payment_cred().to_keyhash();
-          if (keyHash == null) return list;
-          list.push(keyHash.to_bech32(Bech32Prefix.PAYMENT_KEY_HASH));
-          return list;
-        });
+        const keyHash = paymentKeyHashBech32FromEnterpriseAddress(next.Hash, Bech32Prefix.PAYMENT_KEY_HASH);
+        if (keyHash != null) list.push(keyHash);
+        return list;
       }, []),
     // note: sending account addresses is required
     // since for example, the staking key registration certificate doesn't need a witness

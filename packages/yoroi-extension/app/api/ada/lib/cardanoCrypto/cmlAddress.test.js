@@ -13,6 +13,7 @@ import {
   enterpriseAddressHexFromBaseOrPointerAddress,
   enterpriseAndBaseAddressHexFromKeyHashes,
   normalizeAddressToHex,
+  paymentKeyHashBech32FromEnterpriseAddress,
   poolKeyHashHexToBech32,
   rewardAddressFromKeyHash,
   stakeCredentialHashFromAddress,
@@ -30,6 +31,12 @@ import {
   pubKeyHashToRewardAddress,
 } from './utils';
 import { hexToBase32 } from '../storage/bridge/utils';
+import {
+  genesisKeyDelegationCertificateHex,
+  mirCertificatePayloadHex,
+  mirRewardForRewardAddress,
+  poolRegistrationPayloads,
+} from './cmlCertificates';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -40,6 +47,126 @@ test('converts Shelley addresses between bech32 and hex with CML', () => {
   const addressHex = addressBech32ToHex(address);
 
   expect(addressHexToBech32(addressHex)).toEqual(address);
+});
+
+test('extracts enterprise payment key hashes for wallet transaction requests', () => {
+  const vectors = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    return ['key', 'script'].map(kind => {
+      const payment = kind === 'key'
+        ? CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)))
+        : CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
+      const address = CSL.EnterpriseAddress.new(1, payment).to_address().to_hex();
+      const keyHash = payment.to_keyhash();
+      return { address, expected: keyHash?.to_bech32('addr_vkh') ?? null };
+    });
+  });
+
+  for (const { address, expected } of vectors) {
+    expect(paymentKeyHashBech32FromEnterpriseAddress(address, 'addr_vkh')).toEqual(expected);
+  }
+  expect(() => paymentKeyHashBech32FromEnterpriseAddress('not-an-address', 'addr_vkh')).toThrow();
+});
+
+test('creates DB certificate payload bytes matching the historical CSL encodings', () => {
+  const vectors = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const CML = Module.CML;
+    const credential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const poolHash = '22'.repeat(28);
+    const stake = CSL.StakeRegistration.new(credential).to_hex();
+    const delegation = CSL.StakeDelegation.new(credential, CSL.Ed25519KeyHash.from_hex(poolHash)).to_hex();
+    const retirement = CSL.PoolRetirement.new(CSL.Ed25519KeyHash.from_hex(poolHash), 42).to_hex();
+    const cmlCredential = CML.Credential.from_cbor_hex(credential.to_hex());
+    const cmlPoolHash = CML.Ed25519KeyHash.from_hex(poolHash);
+    // eslint-disable-next-line no-undef
+    const cmlEpoch = BigInt(42);
+    return {
+      stake,
+      cmlStake: CML.Certificate.new_stake_registration(cmlCredential).to_cbor_hex(),
+      delegation,
+      cmlDelegation: CML.Certificate.new_stake_delegation(cmlCredential, cmlPoolHash).to_cbor_hex(),
+      retirement,
+      cmlRetirement: CML.Certificate.new_pool_retirement(cmlPoolHash, cmlEpoch).to_cbor_hex(),
+    };
+  });
+  expect(vectors.cmlStake).toEqual(vectors.stake);
+  expect(vectors.cmlDelegation).toEqual(vectors.delegation);
+  expect(vectors.cmlRetirement).toEqual(vectors.retirement);
+});
+
+test('creates pool registration and genesis delegation payloads with historical CSL bytes', () => {
+  const expected = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const rewardCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const rewardAccount = CSL.RewardAddress.new(1, rewardCredential);
+    const operator = CSL.Ed25519KeyHash.from_hex('22'.repeat(28));
+    const owners = CSL.Ed25519KeyHashes.new();
+    owners.add(CSL.Ed25519KeyHash.from_hex('33'.repeat(28)));
+    const metadata = CSL.PoolMetadata.new(CSL.URL.new('https://pool.example'), CSL.PoolMetadataHash.from_hex('44'.repeat(32)));
+    const pool = CSL.PoolParams.new(
+      operator,
+      CSL.VRFKeyHash.from_hex('55'.repeat(32)),
+      CSL.BigNum.from_str('123456'),
+      CSL.BigNum.from_str('789'),
+      CSL.UnitInterval.new(CSL.BigNum.from_str('1'), CSL.BigNum.from_str('1')),
+      rewardAccount,
+      owners,
+      CSL.Relays.new(),
+      metadata
+    );
+    const poolRegistration = CSL.PoolRegistration.new(pool).to_hex();
+    const genesis = CSL.GenesisKeyDelegation.new(
+      CSL.GenesisHash.from_hex('66'.repeat(28)),
+      CSL.GenesisDelegateHash.from_hex('77'.repeat(28)),
+      CSL.VRFKeyHash.from_hex('88'.repeat(32))
+    ).to_hex();
+    return { poolRegistration, genesis };
+  });
+
+  const rewardAddressHex = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    return CSL.RewardAddress.new(1, CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28))))
+      .to_address()
+      .to_hex();
+  });
+  const pool = poolRegistrationPayloads({
+    operator: '22'.repeat(28),
+    vrfKeyHash: '55'.repeat(32),
+    pledge: '123456',
+    cost: '789',
+    rewardAccount: rewardAddressHex,
+    poolOwners: ['33'.repeat(28)],
+    poolMetadata: { url: 'https://pool.example', metadataHash: '44'.repeat(32) },
+  });
+  expect(pool.certificateHex).toEqual(expected.poolRegistration);
+  expect(genesisKeyDelegationCertificateHex('66'.repeat(28), '77'.repeat(28), '88'.repeat(32))).toEqual(expected.genesis);
+});
+
+test('creates and reads MIR payloads with exact historical bytes and signed reward values', () => {
+  const fixture = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const firstCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const secondCredential = CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
+    const amounts = CSL.MIRToStakeCredentials.new();
+    amounts.insert(firstCredential, CSL.Int.new(CSL.BigNum.from_str('9007199254740993')));
+    amounts.insert(secondCredential, CSL.Int.new_negative(CSL.BigNum.from_str('42')));
+    const certificateHex = CSL.MoveInstantaneousRewardsCert.new(
+      CSL.MoveInstantaneousReward.new_to_stake_creds(CSL.MIRPot.Reserves, amounts)
+    ).to_hex();
+    return {
+      certificateHex,
+      firstAddress: CSL.RewardAddress.new(1, firstCredential).to_address().to_hex(),
+      secondAddress: CSL.RewardAddress.new(1, secondCredential).to_address().to_hex(),
+    };
+  });
+  const rewards = {
+    [fixture.firstAddress]: '9007199254740993',
+    [fixture.secondAddress]: '-42',
+  };
+  expect(mirCertificatePayloadHex(0, rewards)).toEqual(fixture.certificateHex);
+  expect(mirRewardForRewardAddress(fixture.certificateHex, fixture.firstAddress)).toEqual('9007199254740993');
+  expect(mirRewardForRewardAddress(fixture.certificateHex, fixture.secondAddress)).toEqual('-42');
 });
 
 test('normalizes Shelley and Byron hardware address inputs to their serialized address bytes', () => {
