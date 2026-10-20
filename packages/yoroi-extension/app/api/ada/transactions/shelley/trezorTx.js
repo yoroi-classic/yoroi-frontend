@@ -25,6 +25,7 @@ import type { TrezorTCatalystRegistrationTxSignData } from './HaskellShelleyTxSi
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { bytesToHex, iterateLenGet, iterateLenGetMap, forceNonNull, hexToBytes } from '../../../../coreUtils';
 import { transactionHexToHash } from '../../lib/cardanoCrypto/utils';
+import { stakePointerFromRawBytes } from '../../lib/cardanoCrypto/cmlAddress';
 
 // ==================== TREZOR ==================== //
 
@@ -128,67 +129,48 @@ function toTrezorTokenBundle(assets: ?RustModule.WalletV4.MultiAsset): {|
   return { tokenBundle };
 }
 
-export function toTrezorAddressParameters(address: RustModule.WalletV4.Address, path: Array<number>): CardanoAddressParameters {
-  {
-    const byronAddr = RustModule.WalletV4.ByronAddress.from_address(address);
-    if (byronAddr) {
-      return {
-        addressType: CardanoAddressType.BYRON,
-        path: toDerivationPathString(path),
-      };
+export function toTrezorAddressParameters(addressHex: string, path: Array<number>): CardanoAddressParameters {
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const address = cml.Address.from_hex(addressHex);
+    const pathString = toDerivationPathString(path);
+    if (cml.ByronAddress.from_address(address) != null) {
+      return { addressType: CardanoAddressType.BYRON, path: pathString };
     }
-  }
-  {
-    const baseAddr = RustModule.WalletV4.BaseAddress.from_address(address);
-    if (baseAddr) {
-      const stakeCred = baseAddr.stake_cred();
-      const hash = stakeCred.to_keyhash() ?? stakeCred.to_scripthash();
-      if (hash == null) {
-        throw new Error(`${nameof(toTrezorAddressParameters)} unknown hash type`);
-      }
+    const baseAddr = cml.BaseAddress.from_address(address);
+    if (baseAddr != null) {
+      const stakeCred = baseAddr.stake();
+      const hash = stakeCred.as_pub_key()?.to_hex() ?? stakeCred.as_script()?.to_hex();
+      if (hash == null) throw new Error(`${nameof(toTrezorAddressParameters)} unknown hash type`);
       return {
         addressType: CardanoAddressType.BASE,
-        path: toDerivationPathString(path),
+        path: pathString,
         // can't always know staking key path since address may not belong to the wallet
         // (mangled address)
-        stakingKeyHash: hash.to_hex(),
+        stakingKeyHash: hash,
       };
     }
-  }
-  {
-    const ptrAddr = RustModule.WalletV4.PointerAddress.from_address(address);
-    if (ptrAddr) {
-      const pointer = ptrAddr.stake_pointer();
+    const ptrAddr = cml.PointerAddress.from_address(address);
+    if (ptrAddr != null) {
+      const [blockIndex, txIndex, certificateIndex] = stakePointerFromRawBytes(address.to_raw_bytes());
       return {
         addressType: CardanoAddressType.POINTER,
-        path: toDerivationPathString(path),
+        path: pathString,
         certificatePointer: {
-          blockIndex: pointer.slot(),
-          txIndex: pointer.tx_index(),
-          certificateIndex: pointer.cert_index(),
+          blockIndex: Number(blockIndex),
+          txIndex: Number(txIndex),
+          certificateIndex: Number(certificateIndex),
         },
       };
     }
-  }
-  {
-    const enterpriseAddr = RustModule.WalletV4.EnterpriseAddress.from_address(address);
-    if (enterpriseAddr) {
-      return {
-        addressType: CardanoAddressType.ENTERPRISE,
-        path: toDerivationPathString(path),
-      };
+    if (cml.EnterpriseAddress.from_address(address) != null) {
+      return { addressType: CardanoAddressType.ENTERPRISE, path: pathString };
     }
-  }
-  {
-    const rewardAddr = RustModule.WalletV4.RewardAddress.from_address(address);
-    if (rewardAddr) {
-      return {
-        addressType: CardanoAddressType.REWARD,
-        path: toDerivationPathString(path),
-      };
+    if (cml.RewardAddress.from_address(address) != null) {
+      return { addressType: CardanoAddressType.REWARD, path: pathString };
     }
-  }
-  throw new Error(`${nameof(toTrezorAddressParameters)} unknown address type`);
+    throw new Error(`${nameof(toTrezorAddressParameters)} unknown address type`);
+  });
 }
 
 type AddressMap = (addressHex: string) => ?Array<number>;
@@ -466,7 +448,6 @@ export function toTrezorSignRequest(
   let formattedCollateral = null;
   const collateral = txBody.collateral();
   if (collateral) {
-    // eslint-disable-next-line no-unused-vars
     formattedCollateral = formatInputs(collateral);
   }
 

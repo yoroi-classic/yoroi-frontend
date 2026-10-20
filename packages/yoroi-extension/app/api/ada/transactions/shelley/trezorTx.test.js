@@ -42,7 +42,7 @@ test('Generate address parameters', async () => {
     const addr = 'Ae2tdPwUPEZLmqiKtMQ4kKL38emRfkyPqBsHqL64pf8uRz6uzsQCd7GAu9R';
     const wasmAddr = normalizeToAddress(addr);
     if (wasmAddr == null) throw new Error(`Unknown address`);
-    expect(toTrezorAddressParameters(wasmAddr, path)).toEqual({
+    expect(toTrezorAddressParameters(wasmAddr.to_hex(), path)).toEqual({
       addressType: CardanoAddressType.BYRON,
       path: "m/44'/1815'/0'/1/1",
     });
@@ -53,7 +53,7 @@ test('Generate address parameters', async () => {
     const addr = 'addr1q8v42wjda8r6mpfj40d36znlgfdcqp7jtj03ah8skh6u8wnrqua2vw243tmjfjt0h5wsru6appuz8c0pfd75ur7myyeqsx9990';
     const wasmAddr = normalizeToAddress(addr);
     if (wasmAddr == null) throw new Error(`Unknown address`);
-    expect(toTrezorAddressParameters(wasmAddr, path)).toEqual({
+    expect(toTrezorAddressParameters(wasmAddr.to_hex(), path)).toEqual({
       addressType: CardanoAddressType.BASE,
       path: "m/44'/1815'/0'/1/1",
       stakingKeyHash: '63073aa639558af724c96fbd1d01f35d087823e1e14b7d4e0fdb2132',
@@ -65,7 +65,7 @@ test('Generate address parameters', async () => {
     const addr = 'addr1vxq0nckg3ekgzuqg7w5p9mvgnd9ym28qh5grlph8xd2z92su77c6m';
     const wasmAddr = normalizeToAddress(addr);
     if (wasmAddr == null) throw new Error(`Unknown address`);
-    expect(toTrezorAddressParameters(wasmAddr, path)).toEqual({
+    expect(toTrezorAddressParameters(wasmAddr.to_hex(), path)).toEqual({
       addressType: CardanoAddressType.ENTERPRISE,
       path: "m/44'/1815'/0'/1/1",
     });
@@ -76,7 +76,7 @@ test('Generate address parameters', async () => {
     const addr = 'addr1gxq0nckg3ekgzuqg7w5p9mvgnd9ym28qh5grlph8xd2z92spqgpsl97q83';
     const wasmAddr = normalizeToAddress(addr);
     if (wasmAddr == null) throw new Error(`Unknown address`);
-    expect(toTrezorAddressParameters(wasmAddr, path)).toEqual({
+    expect(toTrezorAddressParameters(wasmAddr.to_hex(), path)).toEqual({
       addressType: CardanoAddressType.POINTER,
       path: "m/44'/1815'/0'/1/1",
       certificatePointer: {
@@ -93,11 +93,25 @@ test('Generate address parameters', async () => {
     const stakingKeyPath = [2147483692, 2147485463, 2147483648, 2, 0];
     const wasmAddr = normalizeToAddress(addr);
     if (wasmAddr == null) throw new Error(`Unknown address`);
-    expect(toTrezorAddressParameters(wasmAddr, stakingKeyPath)).toEqual({
+    expect(toTrezorAddressParameters(wasmAddr.to_hex(), stakingKeyPath)).toEqual({
       addressType: CardanoAddressType.REWARD,
       path: "m/44'/1815'/0'/2/0",
     });
   }
+});
+
+test('address parameters preserve script stake credentials with CML', () => {
+  const addressHex = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const payment = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const stake = CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
+    return CSL.BaseAddress.new(0, payment, stake).to_address().to_hex();
+  });
+  expect(toTrezorAddressParameters(addressHex, [1, 2])).toEqual({
+    addressType: CardanoAddressType.BASE,
+    path: 'm/1/2',
+    stakingKeyHash: '22'.repeat(28),
+  });
 });
 
 test('Assemble Trezor witnesses and metadata with CML', () => {

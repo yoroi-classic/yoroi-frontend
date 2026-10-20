@@ -36,8 +36,9 @@ import type { LedgerNanoCatalystRegistrationTxSignData } from './HaskellShelleyT
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { WalletTypePurpose, HARD_DERIVATION_START } from '../../../../config/numbersConfig';
 import { derivePublicByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
-import { bytesToHex, fail, forceNonNull, hexToBytes, iterateLenGet, iterateLenGetMap, maybe } from '../../../../coreUtils';
+import { bytesToHex, forceNonNull, hexToBytes, iterateLenGet, iterateLenGetMap, maybe } from '../../../../coreUtils';
 import { transactionHexToHash } from '../../lib/cardanoCrypto/utils';
+import { stakePointerFromRawBytes } from '../../lib/cardanoCrypto/cmlAddress';
 
 // ==================== LEDGER ==================== //
 function toLedgerTokenBundle(assets: ?RustModule.WalletV4.MultiAsset): Array<AssetGroup> | null {
@@ -371,92 +372,53 @@ function formatLedgerCertificates(
 
 export function toLedgerAddressParameters(request: {|
   networkId: number,
-  address: RustModule.WalletV4.Address,
+  addressHex: string,
   path: Array<number>,
   addressingMap: string => void | $PropertyType<Addressing, 'addressing'>,
 |}): DeviceOwnedAddress {
-  {
-    const byronAddr = RustModule.WalletV4.ByronAddress.from_address(request.address);
-    if (byronAddr) {
-      return {
-        type: AddressType.BYRON,
-        params: {
-          spendingPath: request.path,
-        },
-      };
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const address = cml.Address.from_hex(request.addressHex);
+    if (cml.ByronAddress.from_address(address) != null) {
+      return { type: AddressType.BYRON, params: { spendingPath: request.path } };
     }
-  }
-  {
-    const baseAddr = RustModule.WalletV4.BaseAddress.from_address(request.address);
-    if (baseAddr) {
-      const rewardAddr = RustModule.WalletV4.RewardAddress.new(request.networkId, baseAddr.stake_cred());
-      const addressPayload = rewardAddr.to_address().to_hex();
+    const baseAddr = cml.BaseAddress.from_address(address);
+    if (baseAddr != null) {
+      const addressPayload = cml.RewardAddress.new(request.networkId, baseAddr.stake()).to_address().to_hex();
       const addressing = request.addressingMap(addressPayload);
-
       if (addressing == null) {
-        const stakeCred = baseAddr.stake_cred();
-        const wasmHash = stakeCred.to_keyhash() ?? stakeCred.to_scripthash();
-        const hashInAddress = wasmHash?.to_hex() ?? fail(`${nameof(toLedgerAddressParameters)} unknown hash type`);
-
+        const stakeCred = baseAddr.stake();
+        const hashInAddress = stakeCred.as_pub_key()?.to_hex() ?? stakeCred.as_script()?.to_hex();
+        if (hashInAddress == null) throw new Error(`${nameof(toLedgerAddressParameters)} unknown hash type`);
         return {
-          // can't always know staking key path since address may not belong to the wallet
-          // (mangled address)
           type: AddressType.BASE_PAYMENT_KEY_STAKE_KEY,
-          params: {
-            spendingPath: request.path,
-            stakingKeyHashHex: hashInAddress,
-          },
+          params: { spendingPath: request.path, stakingKeyHashHex: hashInAddress },
         };
       }
-      return {
-        type: AddressType.BASE_PAYMENT_KEY_STAKE_KEY,
-        params: {
-          spendingPath: request.path,
-          stakingPath: addressing.path,
-        },
-      };
+      return { type: AddressType.BASE_PAYMENT_KEY_STAKE_KEY, params: { spendingPath: request.path, stakingPath: addressing.path } };
     }
-  }
-  {
-    const ptrAddr = RustModule.WalletV4.PointerAddress.from_address(request.address);
-    if (ptrAddr) {
-      const pointer = ptrAddr.stake_pointer();
+    if (cml.PointerAddress.from_address(address) != null) {
+      const [blockIndex, txIndex, certificateIndex] = stakePointerFromRawBytes(address.to_raw_bytes());
       return {
         type: AddressType.POINTER_KEY,
         params: {
           spendingPath: request.path,
           stakingBlockchainPointer: {
-            blockIndex: pointer.slot(),
-            txIndex: pointer.tx_index(),
-            certificateIndex: pointer.cert_index(),
+            blockIndex: Number(blockIndex),
+            txIndex: Number(txIndex),
+            certificateIndex: Number(certificateIndex),
           },
         },
       };
     }
-  }
-  {
-    const enterpriseAddr = RustModule.WalletV4.EnterpriseAddress.from_address(request.address);
-    if (enterpriseAddr) {
-      return {
-        type: AddressType.ENTERPRISE_KEY,
-        params: {
-          spendingPath: request.path,
-        },
-      };
+    if (cml.EnterpriseAddress.from_address(address) != null) {
+      return { type: AddressType.ENTERPRISE_KEY, params: { spendingPath: request.path } };
     }
-  }
-  {
-    const rewardAddr = RustModule.WalletV4.RewardAddress.from_address(request.address);
-    if (rewardAddr) {
-      return {
-        type: AddressType.REWARD_KEY,
-        params: {
-          stakingPath: request.path, // reward addresses use spending path
-        },
-      };
+    if (cml.RewardAddress.from_address(address) != null) {
+      return { type: AddressType.REWARD_KEY, params: { stakingPath: request.path } };
     }
-  }
-  throw new Error(`${nameof(toLedgerAddressParameters)} unknown address type`);
+    throw new Error(`${nameof(toLedgerAddressParameters)} unknown address type`);
+  });
 }
 
 type AddressMap = (addressHex: string) => ?Array<number>;

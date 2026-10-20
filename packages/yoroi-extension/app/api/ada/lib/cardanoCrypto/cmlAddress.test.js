@@ -11,6 +11,7 @@ import {
   deriveRewardAddressFromAddress,
   enterpriseAddressHexFromBaseOrPointerAddress,
   enterpriseAndBaseAddressHexFromKeyHashes,
+  normalizeAddressToHex,
   poolKeyHashHexToBech32,
   rewardAddressFromKeyHash,
   stakeCredentialHashFromAddress,
@@ -38,6 +39,24 @@ test('converts Shelley addresses between bech32 and hex with CML', () => {
   const addressHex = addressBech32ToHex(address);
 
   expect(addressHexToBech32(addressHex)).toEqual(address);
+});
+
+test('normalizes Shelley and Byron hardware address inputs to their serialized address bytes', () => {
+  const cases = [
+    {
+      address: 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z',
+      expectedHex: '0254e887279408c196dc5859acbc62e749bf358078c622e8a5ef89173982d222817b5561bfdd1541aad78cd9ae7c361cb4dc003dd3acf06479',
+    },
+    {
+      address: 'Ae2tdPwUPEZC6WJfVQxTNN2tWw4skGrN6zRVukvxJmTFy1nYkVGQBuURU3L',
+      expectedHex: '82d818582183581c99394e1ca570f79e250651062545898c022145444079d9019b612a51a0001a2ebac743',
+    },
+  ];
+  for (const { address, expectedHex } of cases) {
+    expect(normalizeAddressToHex(address)).toEqual(expectedHex);
+    expect(normalizeAddressToHex(expectedHex)).toEqual(expectedHex);
+  }
+  expect(() => normalizeAddressToHex('not-an-address')).toThrow();
 });
 
 test('derives canonical enterprise addresses from base and pointer addresses with CML', () => {
@@ -98,6 +117,27 @@ test('reads pointer-address coordinates from base-128 varints with CML', () => {
 
   for (const { address, expected } of vectors) {
     expect(stakePointerFromAddressBech32(address)).toEqual(expected);
+  }
+});
+
+test('decodes CSL pointer address coordinates for both payment credential types', () => {
+  const vectors = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    return ['key', 'script'].map(kind => {
+      const payment =
+        kind === 'key'
+          ? CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)))
+          : CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
+      const pointer = CSL.Pointer.new(CSL.BigNum.from_str('128'), CSL.BigNum.from_str('16384'), CSL.BigNum.from_str('4294967295'));
+      const address = CSL.PointerAddress.new(0, payment, pointer).to_address();
+      return {
+        addressBech32: address.to_bech32(),
+        expected: [String(pointer.slot()), String(pointer.tx_index()), String(pointer.cert_index())],
+      };
+    });
+  });
+  for (const { addressBech32, expected } of vectors) {
+    expect(stakePointerFromAddressBech32(addressBech32)).toEqual(expected);
   }
 });
 

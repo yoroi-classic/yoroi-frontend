@@ -57,7 +57,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        address: wasmAddr,
+        addressHex: wasmAddr.to_hex(),
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -79,7 +79,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        address: wasmAddr,
+        addressHex: wasmAddr.to_hex(),
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -103,7 +103,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        address: wasmAddr,
+        addressHex: wasmAddr.to_hex(),
         path,
         networkId: Number.parseInt(ChainNetworkId, 10),
         addressingMap: address => {
@@ -134,7 +134,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        address: wasmAddr,
+        addressHex: wasmAddr.to_hex(),
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -156,7 +156,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        address: wasmAddr,
+        addressHex: wasmAddr.to_hex(),
         networkId: Number.parseInt(ChainNetworkId, 10),
         path,
         addressingMap: () => undefined,
@@ -184,7 +184,7 @@ test('Generate address parameters', async () => {
     if (wasmAddr == null) throw new Error(`Unknown address`);
     expect(
       toLedgerAddressParameters({
-        address: wasmAddr,
+        addressHex: wasmAddr.to_hex(),
         networkId: Number.parseInt(ChainNetworkId, 10),
         path: stakingKeyPath,
         addressingMap: () => undefined,
@@ -198,6 +198,26 @@ test('Generate address parameters', async () => {
       }: DeviceOwnedAddress)
     );
   }
+});
+
+test('Ledger address parameters preserve script stake credentials with CML', () => {
+  const addressHex = RustModule.WasmScope(Module => {
+    const CSL = Module.WalletV4;
+    const payment = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const stake = CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
+    return CSL.BaseAddress.new(0, payment, stake).to_address().to_hex();
+  });
+  expect(
+    toLedgerAddressParameters({
+      addressHex,
+      networkId: 0,
+      path: [1, 2],
+      addressingMap: () => undefined,
+    })
+  ).toEqual({
+    type: AddressType.BASE_PAYMENT_KEY_STAKE_KEY,
+    params: { spendingPath: [1, 2], stakingKeyHashHex: '22'.repeat(28) },
+  });
 });
 
 test('Create Ledger transaction', async () => {
