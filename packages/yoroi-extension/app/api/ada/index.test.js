@@ -2,7 +2,7 @@
 import './lib/test-config.forTests';
 import { schema } from 'lovefield';
 import type { lf$Database } from 'lovefield';
-import AdaApi from './index';
+import AdaApi, { walletSignData } from './index';
 import { RustModule } from './lib/cardanoCrypto/rustLoader';
 import { generateWalletRootKey } from './lib/cardanoCrypto/cryptoWallet';
 import { HARD_DERIVATION_START, WalletTypePurpose, CoinTypes } from '../../config/numbersConfig';
@@ -12,7 +12,9 @@ import { silenceLogsForTesting } from '../../utils/logging';
 
 import { loadLovefieldDB } from './lib/storage/database/index';
 import { legacyWalletChecksum } from '@yoroi-classic/cip4-js';
-import { asGetPublicKey } from './lib/storage/models/PublicDeriver/traits';
+import { asGetAllUtxos, asGetPublicKey } from './lib/storage/models/PublicDeriver/traits';
+import { cip8DataToSign } from './lib/cardanoCrypto/utils';
+import { hexToBytes } from '../../coreUtils';
 import { networks } from './lib/storage/database/prepackaged/networks';
 import BigNumber from 'bignumber.js';
 import type { FilterUsedRequest, FilterUsedResponse } from './lib/state-fetch/types';
@@ -54,6 +56,19 @@ describe('app/api/ada/index', () => {
       const plate = legacyWalletChecksum(pubKey.Hash);
       expect(plate.TextPart).toEqual('SKLE-8430');
     }
+    const withUtxos = asGetAllUtxos(pubDeriver);
+    if (withUtxos == null) throw new Error('Restored wallet is missing UTxO addresses');
+    const [firstAddressPath] = await withUtxos.getAllUtxoAddresses();
+    const firstAddressHex = firstAddressPath.addrs[0].Hash;
+    const signedData = await walletSignData(pubDeriver, '123', firstAddressHex, 'a1b2');
+    const valid = RustModule.WasmScope(Module => {
+      const cose = Module.MessageSigning.COSESign1.from_bytes(hexToBytes(signedData.signature));
+      return Module.CML.PublicKey.from_bytes(hexToBytes(signedData.pubKey)).verify(
+        cip8DataToSign(Buffer.from(hexToBytes(firstAddressHex)), Buffer.from(hexToBytes('a1b2'))),
+        Module.CML.Ed25519Signature.from_raw_bytes(cose.signature())
+      );
+    });
+    expect(valid).toBe(true);
   });
 
   test('Restore wallet for transfer', async () => {

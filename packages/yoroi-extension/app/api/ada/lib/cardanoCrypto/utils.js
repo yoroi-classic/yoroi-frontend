@@ -166,16 +166,6 @@ export function pubKeyHashToRewardAddress(hex: string, network: number): string 
   return rewardAddressFromKeyHash(network, hex);
 }
 
-export const cip8Sign = async (
-  address: Buffer,
-  signKey: RustModule.WalletV4.PrivateKey,
-  payload: Buffer
-): Promise<RustModule.MessageSigning.COSESign1> => {
-  const toSign = cip8DataToSign(address, payload);
-  const signedSigStruct = signKey.sign(toSign).to_bytes();
-  return buildCoseSign1FromSignature(address, Buffer.from(signedSigStruct), payload);
-};
-
 export const cip8DataToSign = (address: Buffer, payload: Buffer): Buffer => {
   const protectedHeader = RustModule.MessageSigning.HeaderMap.new();
   protectedHeader.set_algorithm_id(

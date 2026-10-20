@@ -78,7 +78,7 @@ import {
   signTransactionFromWallet as shelleySignTransactionFromWallet,
 } from './transactions/shelley/transactions';
 import { generateAdaMnemonic, generateWalletRootKey } from './lib/cardanoCrypto/cryptoWallet';
-import { buildCoseSign1FromSignature, cip8Sign, makeCip8Key } from './lib/cardanoCrypto/utils';
+import { buildCoseSign1FromSignature, cip8DataToSign, makeCip8Key } from './lib/cardanoCrypto/utils';
 import { isValidBip39Mnemonic } from './lib/cardanoCrypto/wallet';
 import type { CardanoSignTransaction } from 'trezor-connect-flow';
 import { toTrezorSignRequest } from './transactions/shelley/trezorTx';
@@ -155,7 +155,7 @@ import { generateRegistrationMetadata } from './lib/cardanoCrypto/catalyst';
 import { bytesToHex, fail, hexToBytes, hexToUtf, first, sorted } from '../../coreUtils';
 import type { PersistedSubmittedTransaction } from '../localStorage';
 import type WalletTransaction from '../../domain/WalletTransaction';
-import { derivePrivateByAddressing, derivePublicByAddressing } from './lib/cardanoCrypto/deriveByAddressing';
+import { derivePublicByAddressing } from './lib/cardanoCrypto/deriveByAddressing';
 import type { WalletState } from '../../../chrome/extension/background/types';
 import TimeUtils from './lib/storage/bridge/timeUtils';
 import type { IFetcher } from './lib/state-fetch/IFetcher.types';
@@ -2358,7 +2358,6 @@ function getDifferenceAfterTx(
   return sumOutForKey.joinSubtractCopy(sumInForKey);
 }
 
-export { cip8Sign } from './lib/cardanoCrypto/utils';
 
 /**
  * // <TODO:WALLET_API>
@@ -2469,22 +2468,39 @@ export async function walletSignData(
     throw new Error('key derivation path does not exist');
   }
 
-  const signingKey = derivePrivateByAddressing({
-    addressing: addressing.addressing,
-    startingFrom: {
-      key: RustModule.WalletV4.Bip32PrivateKey.from_hex(normalizedKey.prvKeyHex),
-      level: publicDeriver.getParent().getPublicDeriverLevel(),
-    },
-  }).to_raw_key();
+  const addressBytes = Buffer.from(hexToBytes(address));
+  const payloadBytes = Buffer.from(hexToBytes(payload));
+  const dataToSign = cip8DataToSign(addressBytes, payloadBytes);
+  const { signatureBytes, publicKeyBytes, publicKeyHex } = RustModule.WasmScope(Module => {
+    let bip32Key = Module.CML.Bip32PrivateKey.from_raw_bytes(hexToBytes(normalizedKey.prvKeyHex));
+    const startLevel = publicDeriver.getParent().getPublicDeriverLevel();
+    if (startLevel + 1 < addressing.addressing.startLevel) {
+      throw new Error('keyLevel < startLevel');
+    }
+    for (let index = startLevel - addressing.addressing.startLevel + 1; index < addressing.addressing.path.length; index++) {
+      const childIndex = addressing.addressing.path[index];
+      if (childIndex == null) throw new Error('Invalid key derivation path');
+      bip32Key = bip32Key.derive(childIndex);
+    }
+    const rawKey = bip32Key.to_raw_key();
+    return {
+      signatureBytes: rawKey.sign(dataToSign).to_raw_bytes(),
+      publicKeyBytes: rawKey.to_public().to_raw_bytes(),
+      publicKeyHex: bytesToHex(rawKey.to_public().to_raw_bytes()),
+    };
+  });
+  const coseSign1 = await buildCoseSign1FromSignature(
+    addressBytes,
+    Buffer.from(signatureBytes),
+    payloadBytes
+  );
 
-  const coseSign1 = await cip8Sign(hexToBytes(address), signingKey, hexToBytes(payload));
-
-  const key = makeCip8Key(signingKey.to_public().as_bytes());
+  const key = makeCip8Key(publicKeyBytes);
 
   return {
     signature: bytesToHex(coseSign1.to_bytes()),
     key: bytesToHex(key.to_bytes()),
-    pubKey: signingKey.to_public().to_hex(),
+    pubKey: publicKeyHex,
   };
 }
 
