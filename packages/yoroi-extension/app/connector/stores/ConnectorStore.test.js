@@ -107,6 +107,11 @@ test('counts an owned chained output as an input in the transaction summary', as
 
 test('includes an owned chained input when creating the transaction summary', async () => {
   const priorOutput = { address: 'owned-address', value: value(99, 1) };
+  const registrationCertificate = {
+    kind: () => 5,
+    as_stake_registration: () => undefined,
+    as_reg_cert: () => ({ deposit: () => '2000000' }),
+  };
   const txBody = {
     inputs: () =>
       lenGet([
@@ -122,8 +127,8 @@ test('includes an owned chained input when creating the transaction summary', as
           amount: () => ({}),
         },
       ]),
-    fee: () => ({ to_str: () => '1' }),
-    certs: () => null,
+    fee: () => ({ toString: () => '1' }),
+    certs: () => lenGet([registrationCertificate]),
     voting_procedures: () => null,
     voting_proposals: () => null,
     current_treasury_value: () => null,
@@ -134,9 +139,7 @@ test('includes an owned chained input when creating the transaction summary', as
   const transaction = {
     body: () => txBody,
   };
-  RustModule.WalletV4 = {
-    FixedTransaction: { from_hex: () => transaction },
-  };
+  RustModule.WasmScope = callback => callback({ CML: { Transaction: { from_cbor_hex: () => transaction } } });
 
   await store.createAdaTransaction({ tx: 'transaction', partialSign: false }, 0, batchOutputs);
 
@@ -146,6 +149,7 @@ test('includes an owned chained input when creating the transaction summary', as
   expect(store.adaTransaction.total.get('policy.asset').toString()).toBe('-1');
   expect(store.adaTransaction.amount.get('').toString()).toBe('-98');
   expect(store.adaTransaction.amount.get('policy.asset').toString()).toBe('-1');
+  expect(store.adaTransaction.cip95Info).toEqual([{ type: 'StakeRegistrationCert', coin: '2000000' }]);
 });
 
 test('labels a chained output to a foreign address as foreign', () => {

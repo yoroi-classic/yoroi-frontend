@@ -105,7 +105,7 @@ import {
 } from '../../cardanoCrypto/cmlCertificates';
 import type { DefaultTokenEntry } from '../../../../common/lib/MultiToken';
 import { UtxoStorageApi } from '../models/utils';
-import { bytesToHex, createFilterUniqueBy, hexToBytes, listValues } from '../../../../../coreUtils';
+import { createFilterUniqueBy, hexToBytes, listValues } from '../../../../../coreUtils';
 import type { RelativeSlot } from './timeUtils';
 import { getLocalItem, setLocalItem } from '../../../../localStorage/primitives';
 
@@ -1987,8 +1987,8 @@ export async function genCardanoAssetMap(
 
       const parts = identifierToCardanoAsset(tokenId);
 
-      const assetName = bytesToHex(parts.name.name());
-      const policyId = parts.policyId.to_hex();
+      const assetName = parts.name;
+      const policyId = parts.policyId;
 
       const tokenMetadata = metadata[tokenId];
       const tokenSupplyStr = supply[tokenId];

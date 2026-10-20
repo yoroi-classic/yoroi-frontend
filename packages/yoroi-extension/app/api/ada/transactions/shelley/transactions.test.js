@@ -1175,7 +1175,7 @@ describe('Create signed transactions', () => {
 });
 
 describe('Create sendAll unsigned TX from UTXO', () => {
-  it('matches the legacy minimum-input fee cutoff for Shelley and Byron addresses', () => {
+  it('matches the CML minimum-input fee cutoff for Shelley and Byron addresses', () => {
     const protocolParams = getSendAllProtocolParams();
     const cmlFilter = genFilterSmallUtxo({
       protocolParams: {
@@ -1183,28 +1183,36 @@ describe('Create sendAll unsigned TX from UTXO', () => {
         linearFeeConstant: protocolParams.linearFeeConstant,
       },
     });
-    const cslBuilder = RustModule.WalletV4TxBuilder({
-      linearFee: RustModule.WalletV4.LinearFee.new(
-        RustModule.WalletV4.BigNum.from_str(protocolParams.linearFeeCoefficient),
-        RustModule.WalletV4.BigNum.from_str(protocolParams.linearFeeConstant)
-      ),
-      coinsPerUtxoByte: RustModule.WalletV4.BigNum.zero(),
-      poolDeposit: RustModule.WalletV4.BigNum.zero(),
-      keyDeposit: RustModule.WalletV4.BigNum.zero(),
-    });
-
     for (const source of [genSampleUtxos()[1], genSampleUtxos()[3], genSampleUtxos()[4]]) {
       const utxo = {
         ...source,
         amount: '0',
       };
-      const fee = cslBuilder
-        .fee_for_input(
-          RustModule.WalletV4.Address.from_hex(utxo.receiver),
-          RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
-          cardanoValueFromRemoteFormat(utxo)
-        )
-        .to_str();
+      const fee = RustModule.WasmScope(Module => {
+        const cml = Module.CML;
+        const config = cml.TransactionBuilderConfigBuilder.new()
+          .fee_algo(cml.LinearFee.new(
+            // eslint-disable-next-line no-undef
+            BigInt(protocolParams.linearFeeCoefficient),
+            // eslint-disable-next-line no-undef
+            BigInt(protocolParams.linearFeeConstant),
+            0n
+          ))
+          .coins_per_utxo_byte(0n)
+          .pool_deposit(0n)
+          .key_deposit(0n)
+          .max_value_size(5000)
+          .max_tx_size(16384)
+          .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+          .collateral_percentage(150)
+          .max_collateral_inputs(3)
+          .build();
+        const builder = cml.TransactionBuilder.new(config);
+        // eslint-disable-next-line no-undef
+        const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index));
+        const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), cardanoValueFromRemoteFormat(utxo));
+        return builder.fee_for_input(cml.SingleInputBuilder.new(input, output).payment_key()).toString();
+      });
       expect(cmlFilter({ ...utxo, amount: fee })).toBe(true);
       expect(cmlFilter({ ...utxo, amount: new BigNumber(fee).minus(1).toString() })).toBe(false);
     }

@@ -64,19 +64,18 @@ test('calculates min-ADA for token outputs with CML parity', () => {
     ],
   });
   const coinsPerByte = new BigNumber('4310');
-  const legacyMinimum = RustModule.WasmScope(Module => {
-    const output = Module.WalletV4.TransactionOutput.new(
-      Module.WalletV4.Address.from_bech32(
+  const cmlMinimum = RustModule.WasmScope(Module => {
+    const CML = Module.CML;
+    const output = CML.TransactionOutput.new(
+      CML.Address.from_bech32(
         'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
       ),
       cardanoValueFromMultiToken(tokens, Module)
     );
-    return Module.WalletV4.min_ada_for_output(
-      output,
-      Module.WalletV4.DataCost.new_coins_per_byte(Module.WalletV4.BigNum.from_str(coinsPerByte.toString()))
-    ).to_str();
+    // eslint-disable-next-line no-undef
+    return CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString();
   });
-  expect(cardanoMinAdaRequiredFromAssets(tokens, coinsPerByte).toString()).toEqual(legacyMinimum);
+  expect(cardanoMinAdaRequiredFromAssets(tokens, coinsPerByte).toString()).toEqual(cmlMinimum);
 });
 
 test('parses CML transaction output values into wallet token entries', () => {

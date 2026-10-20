@@ -3,7 +3,7 @@ import { groupBy, keyBy, mapValues } from 'lodash';
 import BigNumber from 'bignumber.js';
 import type { CardanoAddressedUtxo, UserAnnotation } from './types';
 import { transactionTypes } from './types';
-import type { RemoteAsset, RemoteUnspentOutput } from '../lib/state-fetch/types';
+import type { RemoteUnspentOutput } from '../lib/state-fetch/types';
 import type { UtxoTransactionInputRow, UtxoTransactionOutputRow } from '../lib/storage/database/transactionModels/utxo/tables';
 import type { DbBlock, DbTokenInfo, DbTransaction, TokenRow } from '../lib/storage/database/primitives/tables';
 import type {
@@ -17,24 +17,21 @@ import type { DefaultTokenEntry } from '../../common/lib/MultiToken';
 import { MultiToken } from '../../common/lib/MultiToken';
 import { RustModule } from '../lib/cardanoCrypto/rustLoader';
 import { PRIMARY_ASSET_CONSTANTS } from '../lib/storage/database/primitives/enums';
-import { bytesToHex, hexToBytes, iterateLenGet, iterateLenGetMap } from '../../../coreUtils';
+import { bytesToHex } from '../../../coreUtils';
 
 const RANDOM_BASE_ADDRESS =
   'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0';
 
-export function cardanoAssetToIdentifier(policyId: RustModule.WalletV4.ScriptHash, name: RustModule.WalletV4.AssetName): string {
+export function cardanoAssetToIdentifier(policyId: { to_hex: () => string }, name: { name: () => Uint8Array }): string {
   // note: possible for name to be empty causing a trailing hyphen
   return `${policyId.to_hex()}.${bytesToHex(name.name())}`;
 }
-export function identifierToCardanoAsset(identifier: string): {|
-  policyId: RustModule.WalletV4.ScriptHash,
-  name: RustModule.WalletV4.AssetName,
-|} {
+export function identifierToCardanoAsset(identifier: string): {| policyId: string, name: string |} {
   // recall: 'a.'.split() gives ['a', ''] as desired
   const parts = identifier.split('.');
   return {
-    policyId: RustModule.WalletV4.ScriptHash.from_hex(parts[0]),
-    name: RustModule.WalletV4.AssetName.new(hexToBytes(parts[1])),
+    policyId: parts[0],
+    name: parts[1],
   };
 }
 export function identifierSplit(identifier: string): {| policyId: string, name: string |} {
@@ -46,58 +43,56 @@ export function identifierSplit(identifier: string): {| policyId: string, name: 
   };
 }
 
-export function parseTokenList(assets: void | RustModule.WalletV4.MultiAsset): Array<{|
+export function parseTokenList(assets: void | RustModule.CML.MultiAsset): Array<{|
   assetId: string,
   policyId: string,
   name: string,
   amount: string,
 |}> {
-  return iterateLenGetMap(assets)
-    .flatMap(([policyId, assetsForPolicy]) => {
-      return iterateLenGetMap(assetsForPolicy)
-        .nonNullValue()
-        .map(([assetName, amount]) => ({
-          amount: amount.to_str(),
-          assetId: cardanoAssetToIdentifier(policyId, assetName),
-          policyId: policyId.to_hex(),
-          name: bytesToHex(assetName.name()),
-        }));
-    })
-    .toArray();
+  if (assets == null) return [];
+  const result = [];
+  const policies = assets.keys();
+  for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
+    const policyId = policies.get(policyIndex);
+    if (policyId == null) continue;
+    const assetsForPolicy = assets.get_assets(policyId);
+    if (assetsForPolicy == null) continue;
+    const names = assetsForPolicy.keys();
+    for (let nameIndex = 0; nameIndex < names.len(); nameIndex++) {
+      const assetName = names.get(nameIndex);
+      if (assetName == null) continue;
+      const amount = assetsForPolicy.get(assetName);
+      if (amount == null) continue;
+      result.push({ amount: amount.toString(), assetId: cardanoAssetToIdentifier(policyId, assetName), policyId: policyId.to_hex(), name: bytesToHex(assetName.name()) });
+    }
+  }
+  return result;
 }
 
 export function cardanoValueFromMultiToken(
   tokens: MultiToken,
   Module: typeof RustModule = RustModule
-): RustModule.WalletV4.Value {
-  const value = Module.WalletV4.Value.new(Module.WalletV4.BigNum.from_str(tokens.getDefaultEntry().amount.toString()));
-  // recall: primary asset counts towards size
-  if (tokens.size() === 1) return value;
-
-  const assets = Module.WalletV4.MultiAsset.new();
+): RustModule.CML.Value {
+  const CML = Module.CML;
+  const assets = CML.MultiAsset.new();
   for (const entry of tokens.nonDefaultEntries()) {
     const { policyId, name } = identifierToCardanoAsset(entry.identifier);
-
-    const policyContent = assets.get(policyId) ?? Module.WalletV4.Assets.new();
-
-    policyContent.insert(name, Module.WalletV4.BigNum.from_str(entry.amount.toString()));
-    // recall: we always have to insert since WASM returns copies of objects
-    assets.insert(policyId, policyContent);
+    // eslint-disable-next-line no-undef
+    assets.set(CML.ScriptHash.from_hex(policyId), CML.AssetName.from_hex(name), BigInt(entry.amount.toString()));
   }
-  if (assets.len() > 0) {
-    value.set_multiasset(assets);
-  }
-  return value;
+  // eslint-disable-next-line no-undef
+  const coin = BigInt(tokens.getDefaultEntry().amount.toString());
+  return assets.policy_count() > 0 ? CML.Value.new(coin, assets) : CML.Value.from_coin(coin);
 }
-export function multiTokenFromCardanoValue(value: RustModule.WalletV4.Value, defaults: DefaultTokenEntry): MultiToken {
+export function multiTokenFromCardanoValue(value: RustModule.CML.Value, defaults: DefaultTokenEntry): MultiToken {
   const multiToken = new MultiToken([], defaults);
   multiToken.add({
-    amount: new BigNumber(value.coin().to_str()),
+    amount: new BigNumber(value.coin().toString()),
     identifier: defaults.defaultIdentifier,
     networkId: defaults.defaultNetworkId,
   });
 
-  for (const token of parseTokenList(value.multiasset())) {
+  for (const token of parseTokenList(value.multi_asset())) {
     multiToken.add({
       amount: new BigNumber(token.amount),
       identifier: token.assetId,
@@ -151,24 +146,17 @@ export function parseCMLTransactionOutput(outputCborHex: string, defaults: Defau
     return parsed;
   });
 }
-export function cardanoValueFromRemoteFormat(utxo: RemoteUnspentOutput): RustModule.WalletV4.Value {
-  const value = RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount));
-  if (utxo.assets.length === 0) return value;
-
-  const assets = RustModule.WalletV4.MultiAsset.new();
+export function cardanoValueFromRemoteFormat(utxo: RemoteUnspentOutput): RustModule.CML.Value {
+  const CML = RustModule.CML;
+  const assets = CML.MultiAsset.new();
   for (const entry of utxo.assets) {
     const { policyId, name } = identifierToCardanoAsset(entry.assetId);
-
-    const policyContent = assets.get(policyId) ?? RustModule.WalletV4.Assets.new();
-
-    policyContent.insert(name, RustModule.WalletV4.BigNum.from_str(entry.amount.toString()));
-    // recall: we always have to insert since WASM returns copies of objects
-    assets.insert(policyId, policyContent);
+    // eslint-disable-next-line no-undef
+    assets.set(CML.ScriptHash.from_hex(policyId), CML.AssetName.from_hex(name), BigInt(entry.amount.toString()));
   }
-  if (assets.len() > 0) {
-    value.set_multiasset(assets);
-  }
-  return value;
+  // eslint-disable-next-line no-undef
+  const coin = BigInt(utxo.amount);
+  return assets.policy_count() > 0 ? CML.Value.new(coin, assets) : CML.Value.from_coin(coin);
 }
 export function createMultiToken(
   amount: number | string | BigNumber,
@@ -373,8 +361,8 @@ export function asAddressedUtxo(utxos: IGetAllUtxosResponse): Array<CardanoAddre
       return {
         amount: token.amount,
         assetId: token.tokenId,
-        policyId: pieces.policyId.to_hex(),
-        name: bytesToHex(pieces.name.name()),
+        policyId: pieces.policyId,
+        name: pieces.name,
       };
     });
     return {
@@ -425,25 +413,6 @@ export function cardanoMinAdaRequiredFromAssets(tokens: MultiToken, coinsPerByte
     // eslint-disable-next-line no-undef
     return new BigNumber(CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString());
   });
-}
-
-export function assetToRustMultiasset(remoteAssets: $ReadOnlyArray<$ReadOnly<RemoteAsset>>): RustModule.WalletV4.MultiAsset {
-  const groupedAssets = remoteAssets.reduce((res, a) => {
-    (res[a.policyId] = res[a.policyId] || []).push(a);
-    return res;
-  }, {});
-  const W4 = RustModule.WalletV4;
-  const multiasset = W4.MultiAsset.new();
-  for (const policyHex of Object.keys(groupedAssets)) {
-    const assetGroup = groupedAssets[policyHex];
-    const policyId = W4.ScriptHash.from_hex(policyHex);
-    const assets = RustModule.WalletV4.Assets.new();
-    for (const asset of assetGroup) {
-      assets.insert(W4.AssetName.new(hexToBytes(asset.name)), W4.BigNum.from_str(asset.amount));
-    }
-    multiasset.insert(policyId, assets);
-  }
-  return multiasset;
 }
 
 /**
@@ -505,95 +474,4 @@ export function getTransactionTotalOutputFromCbor(txHex: string, defaults: Defau
     console.error('Failed to decode transaction total output from cbor', e);
     throw e;
   }
-}
-
-/**
- * @param witnessSetHex1 - a serialised witness set as a HEX string
- * @param witnessSetHex2 - a serialised witness set as a HEX string
- * @return the resulting new witness set as a HEX string
- */
-export function mergeWitnessSets(witnessSetHex1: string, witnessSetHex2: string): string {
-  return RustModule.WasmScope(Scope => {
-    const wset1 = Scope.WalletV4.TransactionWitnessSet.from_hex(witnessSetHex1);
-    const wset2 = Scope.WalletV4.TransactionWitnessSet.from_hex(witnessSetHex2);
-    const wsetResult = Scope.WalletV4.TransactionWitnessSet.new();
-    let vkeys = wset1.vkeys();
-    const newVkeys = wset2.vkeys();
-    if (vkeys && newVkeys) {
-      for (const newVkey of iterateLenGet(newVkeys)) {
-        vkeys.add(newVkey);
-      }
-    } else if (newVkeys) {
-      vkeys = newVkeys;
-    }
-    if (vkeys) {
-      wsetResult.set_vkeys(vkeys);
-    }
-
-    let nativeScripts = wset1.native_scripts();
-    const newNativeScripts = wset2.native_scripts();
-    if (nativeScripts && newNativeScripts) {
-      for (const newNativeScript of iterateLenGet(newNativeScripts)) {
-        nativeScripts.add(newNativeScript);
-      }
-    } else if (newNativeScripts) {
-      nativeScripts = newNativeScripts;
-    }
-    if (nativeScripts) {
-      wsetResult.set_native_scripts(nativeScripts);
-    }
-
-    let bootstraps = wset1.bootstraps();
-    const newBootstraps = wset2.bootstraps();
-    if (bootstraps && newBootstraps) {
-      for (const newBootstrap of iterateLenGet(newBootstraps)) {
-        bootstraps.add(newBootstrap);
-      }
-    } else if (newBootstraps) {
-      bootstraps = newBootstraps;
-    }
-    if (bootstraps) {
-      wsetResult.set_bootstraps(bootstraps);
-    }
-
-    let plutusScripts = wset1.plutus_scripts();
-    const newPlutusScripts = wset2.plutus_scripts();
-    if (plutusScripts && newPlutusScripts) {
-      for (const newPlutusScript of iterateLenGet(newPlutusScripts)) {
-        plutusScripts.add(newPlutusScript);
-      }
-    } else if (newPlutusScripts) {
-      plutusScripts = newPlutusScripts;
-    }
-    if (plutusScripts) {
-      wsetResult.set_plutus_scripts(plutusScripts);
-    }
-
-    let plutusData = wset1.plutus_data();
-    const newPlutusData = wset2.plutus_data();
-    if (plutusData && newPlutusData) {
-      for (const newPlutusDatum of iterateLenGet(newPlutusData)) {
-        plutusData.add(newPlutusDatum);
-      }
-    } else if (newPlutusData) {
-      plutusData = newPlutusData;
-    }
-    if (plutusData) {
-      wsetResult.set_plutus_data(plutusData);
-    }
-
-    let redeemers = wset1.redeemers();
-    const newRedeemers = wset2.redeemers();
-    if (redeemers && newRedeemers) {
-      for (const newRedeemer of iterateLenGet(newRedeemers)) {
-        redeemers.add(newRedeemer);
-      }
-    } else if (newRedeemers) {
-      redeemers = newRedeemers;
-    }
-    if (redeemers) {
-      wsetResult.set_redeemers(redeemers);
-    }
-    return wsetResult.to_hex();
-  });
 }
