@@ -1,26 +1,38 @@
 // @flow
 
-import { mnemonicToEntropy } from 'bip39';
+import { mnemonicToEntropy, entropyToMnemonic } from 'bip39';
+// $FlowFixMe[cannot-resolve-module]
+import { pbkdf2Sync } from 'pbkdf2';
 
 import { Logger, stringifyError } from '../../../../utils/logging';
 
-import { RustModule } from './rustLoader';
 import { isValidBip39Mnemonic } from './wallet';
 import config from '../../../../config';
-import { hexToBytes } from '../../../../coreUtils';
+import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 
 // <TODO:PENDING_REMOVAL> paper
 /** Check validity of paper mnemonic (including checksum) */
 export const isValidEnglishAdaPaperMnemonic = (phrase: string, numberOfWords: number): boolean => {
   // Any password will return some valid unscrambled mnemonic
   // so we just pass a fake password to pass downstream validation
-  const fakePassword = numberOfWords === config.wallets.YOROI_PAPER_RECOVERY_PHRASE_WORD_COUNT ? 'xxx' : undefined;
+const fakePassword = numberOfWords === config.wallets.YOROI_PAPER_RECOVERY_PHRASE_WORD_COUNT ? 'xxx' : undefined;
   const [unscrambled, unscrambledLen] = unscramblePaperAdaMnemonic(phrase, numberOfWords, fakePassword);
   if (unscrambled != null && unscrambledLen) {
     return isValidBip39Mnemonic(unscrambled, unscrambledLen);
   }
   return false;
 };
+
+export function unscramblePaperWalletEntropy(scrambledEntropy: Uint8Array, password: string): Uint8Array {
+  const ivSize = 8;
+  if (scrambledEntropy.length <= ivSize) throw new Error('Invalid Yoroi paper wallet entropy length');
+  const iv = scrambledEntropy.subarray(0, ivSize);
+  const payload = scrambledEntropy.subarray(ivSize);
+  const mask = pbkdf2Sync(password, iv, 10000, payload.length, 'sha512');
+  const plaintext = new Uint8Array(payload.length);
+  for (let i = 0; i < payload.length; i++) plaintext[i] = payload[i] ^ mask[i];
+  return plaintext;
+}
 
 // <TODO:PENDING_REMOVAL> paper
 /** Check validity of paper mnemonic (including checksum) */
@@ -33,11 +45,8 @@ export const unscramblePaperAdaMnemonic = (phrase: string, numberOfWords: number
       }
       try {
         const entropy = mnemonicToEntropy(phrase);
-        const mnemonics = RustModule.WasmScope(Scope => {
-          const newEntropy = Scope.WalletV2.paper_wallet_unscramble(hexToBytes(entropy), password || '');
-
-          return newEntropy.to_english_mnemonics();
-        });
+        const plaintext = unscramblePaperWalletEntropy(hexToBytes(entropy), password || '');
+        const mnemonics = entropyToMnemonic(bytesToHex(plaintext));
 
         return [mnemonics, config.wallets.WALLET_RECOVERY_PHRASE_WORD_COUNT];
       } catch (e) {

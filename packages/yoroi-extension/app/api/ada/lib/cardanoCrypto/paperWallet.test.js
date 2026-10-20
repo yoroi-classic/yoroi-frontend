@@ -3,13 +3,13 @@
 import '../test-config.forTests';
 import { schema } from 'lovefield';
 import { generateWalletRootKey } from './cryptoWallet';
-import { isValidEnglishAdaPaperMnemonic, unscramblePaperAdaMnemonic } from './paperWallet';
+import { isValidEnglishAdaPaperMnemonic, unscramblePaperAdaMnemonic, unscramblePaperWalletEntropy } from './paperWallet';
 import { RustModule } from './rustLoader';
 import { silenceLogsForTesting } from '../../../../utils/logging';
 import { loadLovefieldDB } from '../storage/database/index';
 import config from '../../../../config';
 import { networks } from '../storage/database/prepackaged/networks';
-import { bytesToHex } from '../../../../coreUtils';
+import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -28,6 +28,25 @@ const VALID_YOROI_PAPER = {
 };
 const INVALID_YOROI_PAPER_1 =
   'air comic label visual scale twist sell build ankle copy expect rocket crystal allow tissue eager jaguar crouch million cushion cushion';
+
+test('unscrambles entropy with the legacy Rust paper-wallet vectors', () => {
+  const vectors = [
+    { scrambled: '0000000000000000fac2292866c4223c5a7dafbade980e09', password: '', expected: '7f'.repeat(16) },
+    {
+      scrambled: '0001020304050607c1226f0f7ff50fa40318ab236320b59e',
+      password: 'Cardano Ada',
+      expected: '5a940d50ab0d4e2ebf3b2c6eb399e827',
+    },
+    {
+      scrambled: '2a2a2a2a2a2a2a2ac7711874ecc4b3930088482b3b6c8b85',
+      password: 'This is a very long passphrase. This is a very long passphrase. This is a very long passphrase. This is a very long passphrase.',
+      expected: 'ff'.repeat(16),
+    },
+  ];
+  for (const vector of vectors) {
+    expect(bytesToHex(unscramblePaperWalletEntropy(hexToBytes(vector.scrambled), vector.password))).toBe(vector.expected);
+  }
+});
 
 test('Is valid Yoroi paper mnemonic', () => {
   // Note: expect these to print error to console
