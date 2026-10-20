@@ -406,7 +406,7 @@ export type CreateWithdrawalTxRequest = {|
   absSlotNumber: BigNumber,
   getAccountState: AccountStateFunc,
   withdrawals: Array<{|
-    ...{| privateKey: RustModule.WalletV4.PrivateKey |} | {| ...Addressing |},
+    ...Addressing,
     rewardAddress: string, // address you're withdrawing from (hex)
     /**
      * you need to withdraw all ADA before deregistering
