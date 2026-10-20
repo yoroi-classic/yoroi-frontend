@@ -8,6 +8,7 @@ import type { RemoteUnspentOutput } from '../../lib/state-fetch/types';
 import {
   maxSendableADA,
   newAdaUnsignedTx,
+  newAdaUnsignedTxForConnector,
   newAdaUnsignedTxFromUtxo,
   sendAllUnsignedTxFromUtxo,
   signTransaction,
@@ -28,6 +29,7 @@ import { getStakingKeyHashesInTransactionBody } from '../../lib/cardanoCrypto/ut
 import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 import { createCertificate } from '../../lib/storage/bridge/delegationUtils';
+import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
 
 const network = networks.CardanoMainnet;
 const defaultIdentifier = defaultAssets.filter(asset => asset.NetworkId === network.NetworkId)[0].Identifier;
@@ -61,13 +63,17 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
   });
 }
 
-function inspectCmlBody(bytes: Uint8Array): {| fee: string, outputs: Array<string> |} {
+function inspectCmlBody(bytes: Uint8Array): {| auxiliaryDataHash: ?string, fee: string, inputCount: number, outputTotal: string, outputs: Array<string> |} {
   return RustModule.WasmScope(Module => {
     const body = Module.CML.TransactionBody.from_cbor_bytes(bytes);
     const outputs = body.outputs();
+    const outputCoins = Array.from({ length: outputs.len() }, (_, index) => outputs.get(index).amount().coin());
     return {
       fee: body.fee().toString(),
-      outputs: Array.from({ length: outputs.len() }, (_, index) => outputs.get(index).amount().coin().toString()),
+      auxiliaryDataHash: body.auxiliary_data_hash()?.to_hex(),
+      inputCount: body.inputs().len(),
+      outputTotal: outputCoins.reduce((sum, coin) => sum + coin, 0n).toString(),
+      outputs: outputCoins.map(coin => coin.toString()),
     };
   });
 }
@@ -1142,10 +1148,10 @@ describe('Create sendAll unsigned TX from UTXO', () => {
     it('Create a transaction involving all input with no change', () => {
       const sampleUtxos = genSampleUtxos();
       const utxos: Array<RemoteUnspentOutput> = [sampleUtxos[1], sampleUtxos[2]];
+      const changeAddress = genSampleAdaAddresses()[0];
+      const metadata = createMetadata([{ label: '0', data: { value: 1 } }]);
       const sendAllResponse = sendAllUnsignedTxFromUtxo(
-        {
-          address: byronAddrToHex('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4'),
-        },
+        changeAddress,
         utxos,
         new BigNumber(0),
         {
@@ -1158,26 +1164,21 @@ describe('Create sendAll unsigned TX from UTXO', () => {
           keyDeposit: RustModule.WalletV4.BigNum.from_str('500'),
           networkId: network.NetworkId,
         },
-        undefined,
+        metadata,
         network.NetworkId
       );
 
-      const expectedFee = new BigNumber('1356');
       const expectedInput = new BigNumber('11000002');
       expect(sendAllResponse.senderUtxos).toEqual([utxos[0], utxos[1]]);
-      expect(sendAllResponse.txBuilder.get_explicit_input().coin().to_str()).toEqual(expectedInput.toString());
-      expect(sendAllResponse.txBuilder.get_explicit_output().coin().to_str()).toEqual(
-        expectedInput.minus(expectedFee).toString()
-      );
-      expect(sendAllResponse.txBuilder.min_fee().to_str()).toEqual(expectedFee.toString());
-      // make sure we don't accidentally burn a lot of coins
-      expect(
-        sendAllResponse.txBuilder
-          .get_explicit_input()
-          .checked_sub(sendAllResponse.txBuilder.get_explicit_output())
-          .coin()
-          .to_str()
-      ).toEqual(expectedFee.toString());
+      const body = inspectCmlBody(sendAllResponse.txBuilder);
+      expect(body.inputCount).toBe(2);
+      expect(expectedInput.minus(body.outputTotal).toString()).toBe(body.fee);
+      expect(new BigNumber(body.fee).gt(0)).toBe(true);
+      const auxiliaryData = RustModule.WalletV4.AuxiliaryData.from_bytes(metadata.to_bytes());
+      expect(body.auxiliaryDataHash).toBe(RustModule.WalletV4.hash_auxiliary_data(auxiliaryData).to_hex());
+      expect(sendAllResponse.changeAddr).toHaveLength(1);
+      expect(sendAllResponse.changeAddr[0].address).toBe(changeAddress.address);
+      expect(sendAllResponse.changeAddr[0].values.getDefaultEntry().amount.toString()).toBe(body.outputs[0]);
     });
   });
 
@@ -1229,6 +1230,404 @@ describe('Create sendAll unsigned TX from UTXO', () => {
         network.NetworkId
       )
     ).toThrow(NotEnoughMoneyToSendError);
+  });
+});
+
+describe('CML connector transaction construction', () => {
+  const makeOutput = (address: string, amount: string, assetAmount?: string, assetId: string = testAssetId): any => {
+    const values = [{ identifier: defaultIdentifier, networkId: network.NetworkId, amount: new BigNumber(amount) }];
+    if (assetAmount != null) values.push({ identifier: assetId, networkId: network.NetworkId, amount: new BigNumber(assetAmount) });
+    return {
+      address,
+      amount: new MultiToken(values, { defaultIdentifier, defaultNetworkId: network.NetworkId }),
+    };
+  };
+
+  it('builds a required native-script spend with mint, metadata, signer hashes, and serializable body bytes', async () => {
+    const utxo = genAddressedUtxos()[3];
+    const change = genSampleAdaAddresses()[3];
+    const scriptBytes = RustModule.WasmScope(Module => {
+      const script = Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('11'.repeat(28)));
+      return { script: script.to_cbor_hex(), hash: script.hash().to_hex() };
+    });
+    const response = await newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '2000000', '1', `${scriptBytes.hash}.74657374`)],
+      [{ policyScript: scriptBytes.script, assetName: '74657374', amount: '1' }],
+      { metadata: { '721': '{"version":"1.0","sample":"yes"}' }, nativeScripts: [scriptBytes.script] },
+      change,
+      [[utxo, { nativeScript: scriptBytes.script }]],
+      [],
+      new BigNumber(5000000),
+      4999990,
+      5007200,
+      [scriptBytes.hash, change.address],
+      {
+        linearFeeCoefficient: '44',
+        linearFeeConstant: '155381',
+        coinsPerUtxoByte: '4310',
+        poolDeposit: '500000000',
+        keyDeposit: '2000000',
+        networkId: network.NetworkId,
+      },
+      network.NetworkId
+    );
+
+    expect(response.txBuilder).toBeInstanceOf(Uint8Array);
+    expect(response.senderUtxos).toHaveLength(1);
+    const bodySummary = RustModule.WasmScope(Module => {
+      const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
+      const mint = body.mint();
+      const outputs = body.outputs();
+      const signers = body.required_signers();
+      const metadata = body.auxiliary_data_hash();
+      return {
+        ttl: body.ttl()?.toString(),
+        validityStart: body.validity_interval_start()?.toString(),
+        fee: body.fee().toString(),
+        outputCount: outputs.len(),
+        minted: mint?.get(
+          Module.CML.ScriptHash.from_hex(scriptBytes.hash),
+          Module.CML.AssetName.from_hex('74657374')
+        )?.toString(),
+        signerCount: signers?.len() ?? 0,
+        hasAuxiliaryDataHash: metadata != null,
+      };
+    });
+    expect(bodySummary).toEqual({
+      ttl: '5007200',
+      validityStart: '4999990',
+      fee: expect.any(String),
+      outputCount: 2,
+      minted: '1',
+      signerCount: 2,
+      hasAuxiliaryDataHash: true,
+    });
+  });
+
+  it('keeps the fee above the serialized minimum for two Byron/bootstrap inputs', async () => {
+    const [first, second] = [genAddressedUtxos()[0], genAddressedUtxos()[2]];
+    const change = genSampleAdaAddresses()[3];
+    const protocolParams = {
+      linearFeeCoefficient: '44',
+      linearFeeConstant: '155381',
+      coinsPerUtxoByte: '4310',
+      poolDeposit: '500000000',
+      keyDeposit: '2000000',
+      networkId: network.NetworkId,
+    };
+    const response = await newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '5000000')],
+      [],
+      { metadata: {}, nativeScripts: [] },
+      change,
+      [[first, undefined], [second, undefined]],
+      [],
+      new BigNumber(5000000),
+      null,
+      null,
+      [],
+      protocolParams,
+      network.NetworkId
+    );
+
+    const feeCheck = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const witnesses = cml.TransactionWitnessSetBuilder.new();
+      [first, second].forEach((utxo, index) => {
+        const byron = cml.ByronAddress.from_address(cml.Address.from_hex(utxo.receiver));
+        const publicKey = new Uint8Array(32);
+        publicKey[0] = index + 1;
+        const signature = new Uint8Array(64);
+        signature[0] = index + 1;
+        witnesses.add_bootstrap(cml.BootstrapWitness.new(
+          cml.PublicKey.from_bytes(publicKey),
+          cml.Ed25519Signature.from_raw_bytes(signature),
+          new Uint8Array(32),
+          byron.content().addr_attributes()
+        ));
+      });
+      const tx = cml.Transaction.new(
+        cml.TransactionBody.from_cbor_bytes(response.txBuilder),
+        witnesses.build(),
+        true
+      );
+      return {
+        fee: tx.body().fee(),
+        minimum: cml.min_fee(
+          tx,
+          cml.LinearFee.new(44n, 155381n, 0n),
+          cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)),
+          0n
+        ),
+        witnessCount: tx.witness_set().bootstrap_witnesses()?.len() ?? 0,
+      };
+    });
+    expect(feeCheck.witnessCount).toEqual(2);
+    expect(feeCheck.fee).toBeGreaterThanOrEqual(feeCheck.minimum);
+  });
+
+  it('accounts for a supplied Plutus redeemer and its execution units', async () => {
+    const change = genSampleAdaAddresses()[3];
+    const fixture = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const plutusV1 = cml.PlutusV1Script.from_hex('4e4d01000033222220051200120011');
+      const script = cml.PlutusScript.from_v1(plutusV1);
+      const datum = cml.PlutusData.from_cbor_hex('01');
+      const redeemer = cml.LegacyRedeemer.new(
+        cml.RedeemerTag.Spend,
+        0n,
+        datum,
+        cml.ExUnits.new(14000000n, 10000000000n)
+      );
+      const address = cml.EnterpriseAddress.new(
+        network.NetworkId,
+        cml.Credential.new_script(script.hash())
+      ).to_address();
+      return {
+        script: plutusV1.to_cbor_hex(),
+        datum: datum.to_cbor_hex(),
+        redeemer: redeemer.to_cbor_hex(),
+        address: address.to_hex(),
+      };
+    });
+    const input = { ...genAddressedUtxos()[3], receiver: fixture.address };
+    const response = await newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '5000000')],
+      [],
+      { metadata: {}, nativeScripts: [] },
+      change,
+      [[input, { plutusScript: fixture.script, datum: fixture.datum, redeemer: fixture.redeemer }]],
+      [],
+      new BigNumber(5000000),
+      4999990,
+      5007200,
+      [],
+      {
+        linearFeeCoefficient: '44',
+        linearFeeConstant: '155381',
+        coinsPerUtxoByte: '4310',
+        poolDeposit: '500000000',
+        keyDeposit: '2000000',
+        networkId: network.NetworkId,
+      },
+      network.NetworkId
+    );
+
+    const minimumFee = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const body = cml.TransactionBody.from_cbor_bytes(response.txBuilder);
+      const witnesses = cml.TransactionWitnessSetBuilder.new();
+      witnesses.add_script(cml.Script.new_plutus_v1(cml.PlutusV1Script.from_cbor_hex(fixture.script)));
+      witnesses.add_plutus_datum(cml.PlutusData.from_cbor_hex(fixture.datum));
+      witnesses.add_redeemer(cml.LegacyRedeemer.from_cbor_hex(fixture.redeemer));
+      const tx = cml.Transaction.new(body, witnesses.build(), true);
+      return cml.min_fee(
+        tx,
+        cml.LinearFee.new(44n, 155381n, 0n),
+        cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)),
+        0n
+      );
+    });
+    const bodyFee = RustModule.WasmScope(Module => Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder).fee());
+    expect(bodyFee).toBeGreaterThanOrEqual(minimumFee);
+  });
+
+  it('accounts for execution units on multiple Plutus inputs with distinct redeemer indices', async () => {
+    const change = genSampleAdaAddresses()[3];
+    const fixture = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const plutusV1 = cml.PlutusV1Script.from_hex('4e4d01000033222220051200120011');
+      const script = cml.PlutusScript.from_v1(plutusV1);
+      const datum = cml.PlutusData.from_cbor_hex('01');
+      const address = cml.EnterpriseAddress.new(network.NetworkId, cml.Credential.new_script(script.hash())).to_address();
+      return {
+        script: plutusV1.to_cbor_hex(),
+        datum: datum.to_cbor_hex(),
+        address: address.to_hex(),
+        redeemers: [
+          cml.LegacyRedeemer.new(cml.RedeemerTag.Spend, 0n, datum, cml.ExUnits.new(14000000n, 10000000000n)).to_cbor_hex(),
+          cml.LegacyRedeemer.new(cml.RedeemerTag.Spend, 1n, datum, cml.ExUnits.new(28000000n, 20000000000n)).to_cbor_hex(),
+        ],
+      };
+    });
+    const inputs = [
+      { ...genAddressedUtxos()[3], tx_hash: '01'.repeat(32), tx_index: 0, receiver: fixture.address },
+      { ...genAddressedUtxos()[3], tx_hash: '02'.repeat(32), tx_index: 0, receiver: fixture.address },
+    ];
+    const response = await newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '7000000')],
+      [],
+      { metadata: {}, nativeScripts: [] },
+      change,
+      inputs.map((input, index) => [input, {
+        plutusScript: fixture.script,
+        datum: fixture.datum,
+        redeemer: fixture.redeemers[index],
+      }]),
+      [],
+      new BigNumber(5000000),
+      null,
+      null,
+      [],
+      {
+        linearFeeCoefficient: '44',
+        linearFeeConstant: '155381',
+        coinsPerUtxoByte: '4310',
+        poolDeposit: '500000000',
+        keyDeposit: '2000000',
+        networkId: network.NetworkId,
+      },
+      network.NetworkId
+    );
+
+    const minimumFee = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const body = cml.TransactionBody.from_cbor_bytes(response.txBuilder);
+      const witnesses = cml.TransactionWitnessSetBuilder.new();
+      witnesses.add_script(cml.Script.new_plutus_v1(cml.PlutusV1Script.from_cbor_hex(fixture.script)));
+      witnesses.add_plutus_datum(cml.PlutusData.from_cbor_hex(fixture.datum));
+      fixture.redeemers.forEach(redeemer => witnesses.add_redeemer(cml.LegacyRedeemer.from_cbor_hex(redeemer)));
+      const tx = cml.Transaction.new(body, witnesses.build(), true);
+      return {
+        inputCount: body.inputs().len(),
+        fee: body.fee(),
+        txSize: tx.to_cbor_bytes().length,
+        minimum: cml.min_fee(
+          tx,
+          cml.LinearFee.new(44n, 155381n, 0n),
+          cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)),
+          0n
+        ),
+      };
+    });
+    expect(minimumFee.inputCount).toBe(2);
+    expect(minimumFee.fee).toBeGreaterThanOrEqual(minimumFee.minimum);
+    expect(minimumFee.fee).toBeLessThanOrEqual(minimumFee.minimum + 10000n);
+  });
+
+  it('covers serialized fees for a mixed native-script and Plutus spend', async () => {
+    const change = genSampleAdaAddresses()[3];
+    const fixtures = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const nativeScript = cml.NativeScript.new_script_pubkey(cml.Ed25519KeyHash.from_hex('33'.repeat(28)));
+      const plutusScript = cml.PlutusV1Script.from_hex('4e4d01000033222220051200120011');
+      const plutus = cml.PlutusScript.from_v1(plutusScript);
+      const datum = cml.PlutusData.from_cbor_hex('01');
+      const redeemer = cml.LegacyRedeemer.new(cml.RedeemerTag.Spend, 0n, datum, cml.ExUnits.new(14000000n, 10000000000n));
+      return {
+        nativeScript: nativeScript.to_cbor_hex(),
+        plutusScript: plutusScript.to_cbor_hex(),
+        datum: datum.to_cbor_hex(),
+        redeemer: redeemer.to_cbor_hex(),
+        plutusAddress: cml.EnterpriseAddress.new(network.NetworkId, cml.Credential.new_script(plutus.hash())).to_address().to_hex(),
+      };
+    });
+    const [plutusInput, nativeInput] = [
+      { ...genAddressedUtxos()[3], tx_hash: '03'.repeat(32), receiver: fixtures.plutusAddress },
+      { ...genAddressedUtxos()[3], tx_hash: '04'.repeat(32) },
+    ];
+    const response = await newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '7000000')],
+      [],
+      { metadata: {}, nativeScripts: [] },
+      change,
+      [
+        [plutusInput, { plutusScript: fixtures.plutusScript, datum: fixtures.datum, redeemer: fixtures.redeemer }],
+        [nativeInput, { nativeScript: fixtures.nativeScript }],
+      ],
+      [],
+      new BigNumber(5000000),
+      null,
+      null,
+      [],
+      {
+        linearFeeCoefficient: '44',
+        linearFeeConstant: '155381',
+        coinsPerUtxoByte: '4310',
+        poolDeposit: '500000000',
+        keyDeposit: '2000000',
+        networkId: network.NetworkId,
+      },
+      network.NetworkId
+    );
+
+    const feeCheck = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const body = cml.TransactionBody.from_cbor_bytes(response.txBuilder);
+      const witnesses = cml.TransactionWitnessSetBuilder.new();
+      witnesses.add_script(cml.Script.new_native(cml.NativeScript.from_cbor_hex(fixtures.nativeScript)));
+      witnesses.add_script(cml.Script.new_plutus_v1(cml.PlutusV1Script.from_cbor_hex(fixtures.plutusScript)));
+      witnesses.add_plutus_datum(cml.PlutusData.from_cbor_hex(fixtures.datum));
+      witnesses.add_redeemer(cml.LegacyRedeemer.from_cbor_hex(fixtures.redeemer));
+      const tx = cml.Transaction.new(body, witnesses.build(), true);
+      return {
+        inputCount: body.inputs().len(),
+        fee: body.fee(),
+        minimum: cml.min_fee(
+          tx,
+          cml.LinearFee.new(44n, 155381n, 0n),
+          cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)),
+          0n
+        ),
+      };
+    });
+    expect(feeCheck.inputCount).toBe(2);
+    expect(feeCheck.fee).toBeGreaterThanOrEqual(feeCheck.minimum);
+    expect(feeCheck.fee).toBeLessThanOrEqual(feeCheck.minimum + 10000n);
+  });
+
+  it('preserves the insufficient-funds error for a connector input that cannot cover outputs', async () => {
+    const change = genSampleAdaAddresses()[3];
+    await expect(newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '50000000')],
+      [],
+      { metadata: {}, nativeScripts: [] },
+      change,
+      [[genAddressedUtxos()[3], undefined]],
+      [],
+      new BigNumber(5000000),
+      null,
+      null,
+      [],
+      getProtocolParams(),
+      network.NetworkId
+    )).rejects.toThrow(NotEnoughMoneyToSendError);
+  });
+
+  it('preserves native-script burns against the matching input asset', async () => {
+    const change = genSampleAdaAddresses()[3];
+    const script = RustModule.WasmScope(Module => {
+      const value = Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('22'.repeat(28)));
+      return { bytes: value.to_cbor_hex(), policy: value.hash().to_hex() };
+    });
+    const assetName = '6275726e';
+    const assetId = `${script.policy}.${assetName}`;
+    const input = {
+      ...genAddressedUtxos()[3],
+      assets: [{ amount: '1', assetId, policyId: script.policy, name: assetName }],
+    };
+    const response = await newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '5000000')],
+      [{ policyScript: script.bytes, assetName, amount: '-1' }],
+      { metadata: {}, nativeScripts: [] },
+      change,
+      [[input, { nativeScript: script.bytes }]],
+      [],
+      new BigNumber(5000000),
+      null,
+      null,
+      [],
+      getProtocolParams(),
+      network.NetworkId
+    );
+    const burnedAmount = RustModule.WasmScope(Module => {
+      const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
+      return body.mint().get(
+        Module.CML.ScriptHash.from_hex(script.policy),
+        Module.CML.AssetName.from_hex(assetName)
+      ).toString();
+    });
+    expect(burnedAmount).toEqual('-1');
   });
 });
 

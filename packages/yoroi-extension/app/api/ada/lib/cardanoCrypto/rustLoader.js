@@ -4,7 +4,6 @@ import typeof * as WasmV2 from 'cardano-wallet-browser';
 import type { BigNum, LinearFee, TransactionBuilder } from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import typeof * as WasmV4 from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import typeof * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
-import typeof * as CrossCsl from '@emurgo/cross-csl-browser';
 
 // TODO: unmagic the constants
 const MAX_VALUE_BYTES = 5000;
@@ -140,7 +139,6 @@ class Module {
   _wasmv2: WasmV2;
   _wasmv4: WasmV4;
   _messageSigning: WasmMessageSigning;
-  _crossCsl: CrossCsl;
   _cml: any;
 
   async load(): Promise<void> {
@@ -148,14 +146,12 @@ class Module {
       this._wasmv2 != null &&
       this._wasmv4 != null &&
       this._messageSigning != null &&
-      this._crossCsl != null &&
       this._cml != null
     )
       return;
     this._wasmv2 = await import('cardano-wallet-browser');
     this._wasmv4 = await import('@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib');
     this._messageSigning = await import('@emurgo/cardano-message-signing-browser/cardano_message_signing');
-    this._crossCsl = await import('@emurgo/cross-csl-browser');
     // $FlowFixMe[untyped-import]
     this._cml = await import('@dcspark/cardano-multiplatform-lib-browser');
   }
@@ -245,9 +241,6 @@ class Module {
   // Need to expose through a getter to get Flow to detect the type correctly
   get WalletV4(): WasmV4 {
     return this._wasmv4;
-  }
-  get CrossCsl(): CrossCsl {
-    return this._crossCsl;
   }
   get CML(): any {
     return this._cml;

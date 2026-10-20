@@ -152,7 +152,7 @@ import type { DefaultTokenEntry } from '../common/lib/MultiToken';
 import { MultiToken } from '../common/lib/MultiToken';
 import { getReceiveAddress } from '../../stores/stateless/addressStores';
 import { generateRegistrationMetadata } from './lib/cardanoCrypto/catalyst';
-import { bytesToHex, fail, hexToBytes, hexToUtf, iterateLenGet, first, sorted } from '../../coreUtils';
+import { bytesToHex, fail, hexToBytes, hexToUtf, first, sorted } from '../../coreUtils';
 import type { PersistedSubmittedTransaction } from '../localStorage';
 import type WalletTransaction from '../../domain/WalletTransaction';
 import { derivePrivateByAddressing, derivePublicByAddressing } from './lib/cardanoCrypto/deriveByAddressing';
@@ -2334,12 +2334,43 @@ function getDifferenceAfterTx(
 
   const sumOutForKey = new MultiToken([], defaultToken);
   {
-    const txBody = utxoResponse.txBuilder.build();
-    for (const output of iterateLenGet(txBody.outputs())) {
-      if (addrContainsAccountKey(output.address().to_hex(), accountKeyString, true)) {
-        sumOutForKey.joinAddMutable(multiTokenFromCardanoValue(output.amount(), defaultToken));
+    const cmlOutputs = RustModule.WasmScope(Module => {
+      const outputs = Module.CML.TransactionBody.from_cbor_bytes(utxoResponse.txBuilder).outputs();
+      const result = [];
+      for (let index = 0; index < outputs.len(); index++) {
+        const output = outputs.get(index);
+        if (!addrContainsAccountKey(output.address().to_hex(), accountKeyString, true)) continue;
+        const value = output.amount();
+        const entries = [{
+          identifier: defaultToken.defaultIdentifier,
+          amount: new BigNumber(value.coin().toString()),
+          networkId: defaultToken.defaultNetworkId,
+        }];
+        const assets = value.multi_asset();
+        if (assets != null) {
+          const policies = assets.keys();
+          for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
+            const policy = policies.get(policyIndex);
+            const names = assets.get_assets(policy)?.keys();
+            if (names == null) continue;
+            const policyAssets = assets.get_assets(policy);
+            for (let assetIndex = 0; assetIndex < names.len(); assetIndex++) {
+              const name = names.get(assetIndex);
+              const amount = policyAssets.get(name);
+              if (amount == null) continue;
+              entries.push({
+                identifier: `${policy.to_hex()}.${bytesToHex(name.to_raw_bytes())}`,
+                amount: new BigNumber(amount.toString()),
+                networkId: defaultToken.defaultNetworkId,
+              });
+            }
+          }
+        }
+        result.push(new MultiToken(entries, defaultToken));
       }
-    }
+      return result;
+    });
+    cmlOutputs.forEach(output => sumOutForKey.joinAddMutable(output));
   }
 
   return sumOutForKey.joinSubtractCopy(sumInForKey);

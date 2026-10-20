@@ -7,7 +7,6 @@ module.exports = {
     '@dcspark/cardano-multiplatform-lib-browser': '@dcspark/cardano-multiplatform-lib-nodejs',
     '@emurgo/cardano-serialization-lib-browser': '@emurgo/cardano-serialization-lib-nodejs',
     '@emurgo/cardano-message-signing-browser': '@emurgo/cardano-message-signing-nodejs',
-    '@emurgo/cross-csl-browser': '@emurgo/cross-csl-nodejs',
     '\\.png$': 'lodash/noop.js',
     '^axios$': 'axios/dist/node/axios.cjs',
   },

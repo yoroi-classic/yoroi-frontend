@@ -26,36 +26,17 @@ import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
 import {
-  cardanoValueFromMultiToken,
   cardanoValueFromRemoteFormat,
-  multiTokenFromCardanoValue,
+  identifierSplit,
   asAddressedUtxo,
   multiTokenFromRemote,
 } from '../utils';
-import { hexToBytes, iterateLenGet, logErr, forceNonNull } from '../../../../coreUtils';
+import { iterateLenGet, forceNonNull } from '../../../../coreUtils';
 import { getCardanoHaskellBaseConfig, getNetworkById } from '../../lib/storage/database/prepackaged/networks';
 import { builtSendTokenList } from '../../../common';
 import type { TokenRow } from '../../lib/storage/database/primitives/tables';
-import { setRuntime, WalletType } from '@emurgo/yoroi-eutxo-txs/dist/kernel';
-import {
-  UTxOSet as LibUtxoSet,
-  Value as LibValue,
-  Amount as LibAmount,
-  Address as LibAddress,
-  WalletAddress as LibWalletAddress,
-  NativeAssets as LibNativeAssets,
-} from '@emurgo/yoroi-eutxo-txs/dist/classes';
-import {
-  NotEnoughMoneyToSendError as LibNotEnoughMoneyToSendError,
-  OverflowError as LibOverflowError,
-} from '@emurgo/yoroi-eutxo-txs/dist/errors';
-import { TxBuilder, SendRequest } from '@emurgo/yoroi-eutxo-txs/dist/tx-builder';
 import blake2b from 'blake2b';
 import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
-import type { DerivationInfo } from '@emurgo/yoroi-eutxo-txs/dist/classes';
-import { DerivationLevel } from '@emurgo/yoroi-eutxo-txs/dist/classes/addresses/derivation-info.type';
-import type { RequiredInput, TxMint } from '@emurgo/yoroi-eutxo-txs/dist/tx-builder';
-import type { NetworkConfig } from '@emurgo/yoroi-eutxo-txs/dist/kernel';
 import { PublicDeriver } from '../../lib/storage/models/PublicDeriver';
 import { asGetAllAccounting, asGetSigningKey } from '../../lib/storage/models/PublicDeriver/traits';
 import { genOwnStakingKey } from '../../staking';
@@ -89,6 +70,12 @@ type TxAuxiliaryData = {|
 type TxMetadata = {
   [tag: string]: string,
 };
+
+type TxMint = {|
+  policyScript: string,
+  assetName: string,
+  amount: string,
+|};
 
 export function sendAllUnsignedTx(
   receiver: { ...Address, ...InexactSubset<Addressing>, ... },
@@ -143,132 +130,6 @@ export function sendAllUnsignedTx(
   };
 }
 
-const AddInputResult = Object.freeze({
-  VALID: 0,
-  // not worth the fee of adding it to input
-  TOO_SMALL: 1,
-  // token would overflow if added
-  OVERFLOW: 2,
-  // doesn't contribute to target
-  NO_NEED: 3,
-});
-function addUtxoInput(
-  txBuilder: RustModule.WalletV4.TransactionBuilder,
-  remaining: void | {|
-    hasInput: boolean, // every tx requires at least one input
-    value: RustModule.WalletV4.Value,
-  |},
-  input: RemoteUnspentOutput,
-  /* don't add the input if the amount is smaller than the fee to add it to the tx */
-  excludeIfSmall: boolean,
-  networkId: number,
-  witness?: ?CardanoUtxoScriptWitness
-): $Values<typeof AddInputResult> {
-  const wasmAddr = normalizeToAddress(input.receiver);
-  if (wasmAddr == null) {
-    throw new Error(`${nameof(addUtxoInput)} input not a valid Shelley address`);
-  }
-  const txInput = utxoToTxInput(input);
-  const wasmAmount = cardanoValueFromRemoteFormat(input);
-
-  const skipOverflow: void => $Values<typeof AddInputResult> = () => {
-    /**
-     * UTXOs can only contain at most u64 of a value
-     * so if the sum of UTXO inputs for a tx > u64
-     * it can cause the tx to fail (due to overflow) in the output / change
-     *
-     * This can be addressed by splitting up a tx to use multiple outputs / multiple change
-     * and this just requires more ADA to cover the min UTXO of these added inputs
-     * but as a simple solution for now, we just block > u64 inputs of any token
-     * This isn't a great workaround since it means features like sendAll may end up not sending all
-     */
-    const currentInputSum = txBuilder.get_explicit_input().checked_add(txBuilder.get_implicit_input());
-    try {
-      currentInputSum.checked_add(wasmAmount);
-    } catch (_e) {
-      return AddInputResult.OVERFLOW;
-    }
-    return AddInputResult.VALID;
-  };
-  const skipInput: void => $Values<typeof AddInputResult> = () => {
-    if (remaining == null) return skipOverflow();
-
-    const defaultEntry = {
-      defaultNetworkId: networkId,
-      defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-    };
-    const tokenSetInInput = new Set(input.assets.map(asset => asset.assetId));
-    const remainingTokens = multiTokenFromCardanoValue(remaining.value, defaultEntry);
-    const includedTargets = remainingTokens.nonDefaultEntries().filter(entry => tokenSetInInput.has(entry.identifier));
-
-    if (remainingTokens.getDefaultEntry().amount.gt(0) && new BigNumber(input.amount).gt(0)) {
-      includedTargets.push(remainingTokens.getDefaultEntry());
-    }
-
-    // it's possible to have no target left and yet have no input added yet
-    // due to refunds in Cardano
-    // so we still want to add the input in this case even if we don't care about the coins in it
-    // if (includedTargets.length === 0 && remaining.hasInput) {
-    //   return AddInputResult.NO_NEED;
-    // }
-
-    const onlyDefaultEntry = includedTargets.length === 1 && includedTargets[0].identifier === defaultEntry.defaultIdentifier;
-    // ignore UTXO that contribute less than their fee if they also don't contribute a token
-    if (onlyDefaultEntry && excludeIfSmall) {
-      const feeForInput = new BigNumber(txBuilder.fee_for_input(wasmAddr, txInput, wasmAmount).to_str());
-      if (feeForInput.gt(input.amount)) {
-        return AddInputResult.TOO_SMALL;
-      }
-    }
-
-    return skipOverflow();
-  };
-
-  const skipResult = skipInput();
-  if (skipResult !== AddInputResult.VALID) {
-    return skipResult;
-  }
-
-  if (witness == null) {
-    logErr(() => {
-      txBuilder.add_regular_input(wasmAddr, txInput, wasmAmount);
-    }, 'Failed to add a regular input');
-  } else if (witness.nativeScript != null) {
-    const nativeScript = logErr(
-      // $FlowFixMe[prop-missing]
-      () => RustModule.WalletV4.NativeScript.from_bytes(hexToBytes(witness.nativeScript)),
-      `Failed to parse witness.nativeScript: ${JSON.stringify(witness)}`
-    );
-    logErr(() => {
-      txBuilder.add_native_script_input(nativeScript, txInput, wasmAmount);
-    }, 'Failed to add a native script input');
-  } else if (witness.plutusScript != null) {
-    const plutusScript = logErr(
-      // $FlowFixMe[prop-missing]
-      () => RustModule.WalletV4.PlutusScript.from_bytes(hexToBytes(witness.plutusScript)),
-      `Failed to parse witness.plutusScript: ${JSON.stringify(witness)}`
-    );
-    const datum = logErr(
-      // $FlowFixMe[prop-missing]
-      () => RustModule.WalletV4.PlutusData.from_bytes(hexToBytes(witness.datum)),
-      `Failed to parse witness.datum: ${JSON.stringify(witness)}`
-    );
-    const redeemer = logErr(
-      // $FlowFixMe[prop-missing]
-      () => RustModule.WalletV4.Redeemer.from_bytes(hexToBytes(witness.redeemer)),
-      `Failed to parse witness.redeemer: ${JSON.stringify(witness)}`
-    );
-    logErr(() => {
-      txBuilder.add_plutus_script_input(
-        RustModule.WalletV4.PlutusWitness.new(plutusScript, datum, redeemer),
-        txInput,
-        wasmAmount
-      );
-    }, 'Failed to add a plutus script input');
-  }
-  return AddInputResult.VALID;
-}
-
 export function sendAllUnsignedTxFromUtxo(
   receiver: { ...Address, ...InexactSubset<Addressing>, ... },
   allUtxos: Array<RemoteUnspentOutput>,
@@ -281,92 +142,79 @@ export function sendAllUnsignedTxFromUtxo(
     networkId: number,
   |},
   metadata: RustModule.WalletV4.AuxiliaryData | void,
-  networkId: number
+  _networkId: number
 ): V4UnsignedTxUtxoResponse {
-  const totalBalance = allUtxos
-    .map(utxo => new BigNumber(utxo.amount))
-    .reduce((acc, amount) => acc.plus(amount), new BigNumber(0));
-  if (totalBalance.isZero()) {
+  if (allUtxos.length === 0) {
     throw new NotEnoughMoneyToSendError();
   }
-
-  const txBuilder = RustModule.WalletV4TxBuilder(protocolParams);
-  txBuilder.set_ttl(absSlotNumber.plus(defaultTtlOffset).toNumber());
-
-  for (const input of allUtxos) {
-    if (addUtxoInput(txBuilder, undefined, input, false, networkId) === AddInputResult.OVERFLOW) {
-      // for the send all case, prefer to throw an error
-      // instead of skipping inputs that would cause an error
-      // otherwise leads to unexpected cases like wallet migration leaving some UTXO behind
-      throw new AssetOverflowError();
-    }
-  }
-
-  if (metadata !== undefined) {
-    txBuilder.set_auxiliary_data(metadata);
-  }
-
-  let minFee;
-  try {
-    minFee = txBuilder.min_fee().to_str();
-  } catch (error) {
-    if (/Maximum transaction size of \d+ exceeded\./.test(error)) {
-      throw new OversizedTransactionError();
-    }
-    throw error;
-  }
-  if (totalBalance.lt(minFee)) {
-    // not enough in inputs to even cover the cost of including themselves in a tx
-    throw new NotEnoughMoneyToSendError();
-  }
-  {
-    const wasmReceiver = normalizeToAddress(receiver.address);
-    if (wasmReceiver == null) {
-      throw new Error(`${nameof(sendAllUnsignedTxFromUtxo)} receiver not a valid Shelley address`);
-    }
-
-    let couldSendAmount = false;
-    try {
-      // semantically, sending all ADA to somebody
-      // is the same as if you're sending all the ADA as change to yourself
-      // (module the fact the address doesn't belong to you)
-      couldSendAmount = txBuilder.add_change_if_needed(wasmReceiver);
-    } catch (e) {
-      if (!String(e).includes('Not enough ADA')) {
-        // any other error except not-enough-ada terminates here
-        // eslint-disable-next-line no-console
-        console.error('Failed to construct send-all output!', e);
-        throw e;
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const config = cml.TransactionBuilderConfigBuilder.new()
+      .fee_algo(cml.LinearFee.new(
+        // eslint-disable-next-line no-undef
+        BigInt(protocolParams.linearFee.coefficient().to_str()),
+        // eslint-disable-next-line no-undef
+        BigInt(protocolParams.linearFee.constant().to_str()),
+        0n
+      ))
+      // eslint-disable-next-line no-undef
+      .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte.to_str()))
+      // eslint-disable-next-line no-undef
+      .pool_deposit(BigInt(protocolParams.poolDeposit.to_str()))
+      // eslint-disable-next-line no-undef
+      .key_deposit(BigInt(protocolParams.keyDeposit.to_str()))
+      .max_value_size(MAX_VALUE_SIZE)
+      .max_tx_size(MAX_TRANSACTION_SIZE)
+      .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+      .collateral_percentage(150)
+      .max_collateral_inputs(3)
+      .build();
+    const txBuilder = cml.TransactionBuilder.new(config);
+    // eslint-disable-next-line no-undef
+    txBuilder.set_ttl(BigInt(absSlotNumber.plus(defaultTtlOffset).toFixed(0)));
+    const address = cml.Address.from_hex(receiver.address);
+    for (const utxo of allUtxos) {
+      let value;
+      try {
+        value = cmlValueFromRemoteFormat(cml, utxo);
+      } catch (_error) {
+        throw new AssetOverflowError();
       }
+      // eslint-disable-next-line no-undef
+      const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index));
+      const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
+      txBuilder.add_input(cml.SingleInputBuilder.new(input, output).payment_key());
     }
-    if (!couldSendAmount) {
-      // if you couldn't send any amount,
-      // it's because you couldn't cover the fee of adding an output
-      throw new NotEnoughMoneyToSendError();
+    if (metadata != null) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes()));
+    try {
+      if (!txBuilder.add_change_if_needed(address, false)) throw new NotEnoughMoneyToSendError();
+    } catch (error) {
+      if (error instanceof NotEnoughMoneyToSendError) throw error;
+      if (/Maximum transaction size/.test(String(error))) throw new OversizedTransactionError();
+      if (/overflow/i.test(String(error))) throw new AssetOverflowError();
+      if (/Not enough ADA|Insufficient/.test(String(error))) throw new NotEnoughMoneyToSendError();
+      throw error;
     }
-  }
-
-  const changeAddr = (() => {
-    if (receiver.addressing == null) return [];
-    const { addressing } = receiver;
-
-    return [
-      {
-        addressing,
+    const body = txBuilder.build(cml.ChangeSelectionAlgo.Default, address).body();
+    const outputs = body.outputs();
+    const changeAddr = receiver.addressing == null ? [] : Array.from({ length: outputs.len() }, (_, index) => {
+      const output = outputs.get(index);
+      if (output.address().to_hex() !== receiver.address) return null;
+      return {
+        addressing: receiver.addressing,
         address: receiver.address,
-        values: multiTokenFromCardanoValue(txBuilder.get_explicit_output(), {
+        values: multiTokenFromCmlValue(output.amount(), {
           defaultNetworkId: protocolParams.networkId,
           defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
         }),
-      },
-    ];
-  })();
-
-  return {
-    senderUtxos: allUtxos,
-    txBuilder,
-    changeAddr,
-  };
+      };
+    }).filter(item => item != null);
+    return {
+      senderUtxos: allUtxos,
+      txBuilder: body.to_cbor_bytes(),
+      changeAddr,
+    };
+  });
 }
 
 /**
@@ -510,6 +358,63 @@ export async function newAdaUnsignedTxForConnector(
   };
 }
 
+function multiTokenFromCmlValue(value: any, defaults: {| defaultIdentifier: string, defaultNetworkId: number |}): MultiToken {
+  const result = new MultiToken([], defaults);
+  result.add({
+    amount: new BigNumber(value.coin().toString()),
+    identifier: defaults.defaultIdentifier,
+    networkId: defaults.defaultNetworkId,
+  });
+  const multiAsset = value.multi_asset();
+  if (multiAsset == null) return result;
+  const policies = multiAsset.keys();
+  for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
+    const policy = policies.get(policyIndex);
+    const assets = multiAsset.get_assets(policy);
+    if (assets == null) continue;
+    const names = assets.keys();
+    for (let assetIndex = 0; assetIndex < names.len(); assetIndex++) {
+      const name = names.get(assetIndex);
+      const amount = assets.get(name);
+      if (amount == null) continue;
+      result.add({
+        amount: new BigNumber(amount.toString()),
+        identifier: `${policy.to_hex()}.${name.to_hex()}`,
+        networkId: defaults.defaultNetworkId,
+      });
+    }
+  }
+  return result;
+}
+
+function cmlValueFromRemoteFormat(cml: any, utxo: RemoteUnspentOutput): any {
+  const multiAsset = cml.MultiAsset.new();
+  for (const asset of utxo.assets) {
+    const { policyId, name } = identifierSplit(asset.assetId);
+    const policy = cml.ScriptHash.from_hex(policyId);
+    const policyAssets = multiAsset.get_assets(policy) ?? cml.MapAssetNameToCoin.new();
+    // eslint-disable-next-line no-undef
+    policyAssets.insert(cml.AssetName.from_hex(name), BigInt(asset.amount));
+    multiAsset.insert_assets(policy, policyAssets);
+  }
+  // eslint-disable-next-line no-undef
+  return cml.Value.new(BigInt(utxo.amount), multiAsset);
+}
+
+function cmlValueFromMultiToken(cml: any, tokens: MultiToken): any {
+  const multiAsset = cml.MultiAsset.new();
+  for (const entry of tokens.nonDefaultEntries()) {
+    const { policyId, name } = identifierSplit(entry.identifier);
+    const policy = cml.ScriptHash.from_hex(policyId);
+    const policyAssets = multiAsset.get_assets(policy) ?? cml.MapAssetNameToCoin.new();
+    // eslint-disable-next-line no-undef
+    policyAssets.insert(cml.AssetName.from_hex(name), BigInt(entry.amount.toString()));
+    multiAsset.insert_assets(policy, policyAssets);
+  }
+  // eslint-disable-next-line no-undef
+  return cml.Value.new(BigInt(tokens.getDefaultEntry().amount.toString()), multiAsset);
+}
+
 /**
  * This function operates on UTXOs without a way to generate the private key for them
  * Private key needs to be added afterwards either through
@@ -586,7 +491,6 @@ export async function newAdaUnsignedTxFromUtxo(
     if (auxiliaryData) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(auxiliaryData.to_bytes()));
 
     for (const output of outputs) {
-      const value = cardanoValueFromMultiToken(output.amount);
       let datumOption;
       if (output.dataHash != null) {
         datumOption = cml.DatumOption.new_hash(cml.DatumHash.from_hex(output.dataHash));
@@ -595,7 +499,7 @@ export async function newAdaUnsignedTxFromUtxo(
       }
       const transactionOutput = cml.TransactionOutput.new(
         cml.Address.from_hex(output.address),
-        cml.Value.from_cbor_bytes(value.to_bytes()),
+        cmlValueFromMultiToken(cml, output.amount),
         datumOption
       );
       txBuilder.add_output(cml.SingleOutputBuilderResult.new(transactionOutput));
@@ -613,7 +517,7 @@ export async function newAdaUnsignedTxFromUtxo(
     }
     const utxosByRef = new Map();
     const addSelectionCandidate = utxo => {
-      const value = cardanoValueFromRemoteFormat(utxo);
+      const value = cmlValueFromRemoteFormat(cml, utxo);
       const input = cml.TransactionInput.new(
         cml.TransactionHash.from_hex(utxo.tx_hash),
         // eslint-disable-next-line no-undef
@@ -621,7 +525,7 @@ export async function newAdaUnsignedTxFromUtxo(
       );
       const output = cml.TransactionOutput.new(
         cml.Address.from_hex(utxo.receiver),
-        cml.Value.from_cbor_bytes(value.to_bytes())
+        value
       );
       txBuilder.add_utxo(cml.SingleInputBuilder.new(input, output).payment_key());
       utxosByRef.set(`${utxo.tx_hash}${utxo.tx_index}`, utxo);
@@ -721,11 +625,10 @@ export async function newAdaUnsignedTxFromUtxo(
         const output = transactionOutputs.get(index);
         const address = output.address();
         if (address.to_hex() !== changeAdaAddr.address) continue;
-        const cslValue = Module.WalletV4.Value.from_bytes(output.amount().to_cbor_bytes());
         changeAddresses.push({
           address: changeAdaAddr.address,
           addressing: changeAdaAddr.addressing,
-          values: multiTokenFromCardanoValue(cslValue, {
+          values: multiTokenFromCmlValue(output.amount(), {
             defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
             defaultNetworkId: networkId,
           }),
@@ -827,7 +730,8 @@ export async function maxSendableADA(request: {|
           defaultNetworkId: request.publicDeriver.networkId,
           defaultIdentifier: request.publicDeriver.defaultTokenId,
         };
-        const output = cardanoValueFromMultiToken(
+        const output = cmlValueFromMultiToken(
+          cml,
           builtSendTokenList(
             defaultToken,
             request.tokens,
@@ -838,15 +742,14 @@ export async function maxSendableADA(request: {|
           cml.SingleOutputBuilderResult.new(
             cml.TransactionOutput.new(
               cmlReceiver,
-              cml.Value.from_cbor_bytes(output.to_bytes())
+              output
             )
           )
         );
       }
 
       for (const input of addressedUtxo) {
-        const inputValue = cardanoValueFromRemoteFormat(input);
-        const cmlValue = cml.Value.from_cbor_bytes(inputValue.to_bytes());
+        const cmlValue = cmlValueFromRemoteFormat(cml, input);
         try {
           txBuilder
             .get_explicit_input()
@@ -922,187 +825,211 @@ async function newAdaUnsignedTxFromUtxoForConnector(
   networkId: number
 ): Promise<V4UnsignedTxUtxoResponse> {
   await RustModule.load();
-  setRuntime(RustModule.CrossCsl.init);
+  const result = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const redeemersByUtxo = new Map();
+    for (const [utxo, witness] of mustIncludeUtxos) {
+      if (witness?.plutusScript == null) continue;
+      const redeemer = cml.LegacyRedeemer.from_cbor_hex(witness.redeemer);
+      redeemersByUtxo.set(`${utxo.tx_hash}${utxo.tx_index}`, redeemer);
+    }
+    const config = cml.TransactionBuilderConfigBuilder.new()
+      // eslint-disable-next-line no-undef
+      .fee_algo(cml.LinearFee.new(BigInt(protocolParams.linearFeeCoefficient), BigInt(protocolParams.linearFeeConstant), 0n))
+      // eslint-disable-next-line no-undef
+      .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte))
+      // eslint-disable-next-line no-undef
+      .pool_deposit(BigInt(protocolParams.poolDeposit))
+      // eslint-disable-next-line no-undef
+      .key_deposit(BigInt(protocolParams.keyDeposit))
+      .max_value_size(MAX_VALUE_SIZE)
+      .max_tx_size(MAX_TRANSACTION_SIZE)
+      .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+      .collateral_percentage(150)
+      .max_collateral_inputs(3)
+      .cost_models(cml.CostModels.from_cbor_hex(COSTMODELS))
+      .prefer_pure_change(false)
+      .build();
+    const txBuilder = cml.TransactionBuilder.new(config);
+    // eslint-disable-next-line no-undef
+    txBuilder.set_ttl(BigInt((ttl ?? absSlotNumber.plus(defaultTtlOffset).toNumber()).toString()));
+    if (validityStart != null) {
+      // eslint-disable-next-line no-undef
+      txBuilder.set_validity_start_interval(BigInt(validityStart));
+    }
 
-  const defaultNetworkConfig: NetworkConfig = {
-    networkId,
-    linearFee: {
-      coefficient: protocolParams.linearFeeCoefficient,
-      constant: protocolParams.linearFeeConstant,
-    },
-    coinsPerUtxoByte: protocolParams.coinsPerUtxoByte,
-    poolDeposit: protocolParams.poolDeposit,
-    keyDeposit: protocolParams.keyDeposit,
-    maxValueSize: 5000,
-    maxTxSize: 16384,
-    memPriceFrom: 577,
-    memPriceTo: 1000,
-    stepPriceFrom: 721,
-    stepPriceTo: 10000000,
-  };
-
-  const utxoSet = new LibUtxoSet(await Promise.all(coinSelectUtxos.map(toLibUTxO)));
-
-  const txBuilder = await TxBuilder.new(defaultNetworkConfig);
-
-  await txBuilder.addRequiredInputs(
-    // $FlowIgnore
-    await Promise.all(
-      mustIncludeUtxos.map(async ([utxo, witness]) => {
-        let taggedWitness;
-        if (witness == null) {
-          taggedWitness = [undefined];
-        } else if (witness.nativeScript) {
-          taggedWitness = [
-            {
-              type: 'native',
-              nativeScript: witness.nativeScript,
-            },
-          ];
-        } else if (witness.plutusScript) {
-          taggedWitness = [
-            {
-              type: 'plutus',
-              plutusScript: witness.plutusScript,
-              datum: witness.datum,
-              redeemer: witness.redeemer,
-            },
-          ];
-        } else {
-          throw new Error('unxpected witness value');
+    for (const signer of requiredSigners ?? []) {
+      const normalizedSigner = signer.trim();
+      if (/^[0-9a-fA-F]{56}$/.test(normalizedSigner)) {
+        txBuilder.add_required_signer(cml.Ed25519KeyHash.from_hex(normalizedSigner));
+      } else {
+        let address;
+        try {
+          address = /^[0-9a-fA-F]+$/.test(normalizedSigner)
+            ? cml.Address.from_hex(normalizedSigner)
+            : cml.Address.from_bech32(normalizedSigner);
+        } catch (_error) {
+          throw new Error(`Cannot process an invalid required signer, expecting an Ed25519KeyHash or a valid address with a payment key-hash, got: ${signer}`);
         }
-        return ([await toLibUTxO(utxo), ...taggedWitness]: RequiredInput);
-      })
-    )
-  );
-
-  // must set TTL before specifying change address, otherwise the TX builder
-  // miscalculate the tx fee by several bytes fewer
-  if (ttl != null) {
-    await txBuilder.setTtl(ttl);
-  } else {
-    await txBuilder.setTtl(absSlotNumber.plus(defaultTtlOffset).toNumber());
-  }
-
-  if (validityStart != null) {
-    await txBuilder.setValidityStartInterval(validityStart);
-  }
-  if (requiredSigners != null) {
-    await txBuilder.addRequiredSigners(requiredSigners);
-  }
-  const metadata = auxiliaryData.metadata ?? {};
-  if (Object.keys(metadata).length > 0) {
-    const record = {};
-    for (const tag of Object.keys(metadata)) {
-      record[parseInt(tag, 10)] = metadata[tag];
+        const credential = address.payment_cred();
+        const keyHash = credential?.as_pub_key();
+        if (keyHash == null) {
+          throw new Error(`Cannot process an invalid required signer, expecting an Ed25519KeyHash or a valid address with a payment key-hash, got: ${signer}`);
+        }
+        txBuilder.add_required_signer(keyHash);
+      }
     }
-    await txBuilder.withMetadata(record);
-  }
-  if (auxiliaryData.nativeScripts) {
-    await txBuilder.addNativeScripts(auxiliaryData.nativeScripts);
-  }
 
-  await txBuilder.addMint(mint);
-
-  const sendRequest = await SendRequest.from(
-    outputs.map(output => {
-      const defaultTokenAmount = output.amount.getDefaultEntry().amount.toString();
-      const nondefaultTokens = output.amount.values.filter(
-        ({ identifier }) => identifier !== outputs[0].amount.defaults.defaultIdentifier
-      );
-
-      return {
-        receiver: output.address,
-        value: new LibValue(
-          new LibAmount(defaultTokenAmount),
-          LibNativeAssets.from(
-            nondefaultTokens.map(t => {
-              const [policyId, assetName] = t.identifier.split('.');
-              return {
-                asset: {
-                  policy: hexToBytes(policyId),
-                  name: hexToBytes(assetName),
-                },
-                amount: new LibAmount(t.amount.toString()),
-              };
-            })
-          )
-        ),
-      };
-    })
-  );
-
-  try {
-    await txBuilder.withSendRequest(sendRequest);
-  } catch (error) {
-    if (error instanceof LibNotEnoughMoneyToSendError) {
-      throw new NotEnoughMoneyToSendError();
+    if (Object.keys(auxiliaryData.metadata ?? {}).length > 0 || (auxiliaryData.nativeScripts ?? []).length > 0) {
+      const auxData = cml.AuxiliaryData.new();
+      const metadata = cml.Metadata.new();
+      for (const [tag, json] of Object.entries(auxiliaryData.metadata ?? {})) {
+        // eslint-disable-next-line no-undef
+        metadata.set(BigInt(tag), cml.encode_json_str_to_metadatum(json, cml.MetadataJsonSchema.BasicConversions));
+      }
+      if (metadata.len() > 0) auxData.add_metadata(metadata);
+      const scripts = cml.NativeScriptList.new();
+      for (const script of auxiliaryData.nativeScripts ?? []) scripts.add(cml.NativeScript.from_cbor_hex(script));
+      if (scripts.len() > 0) auxData.add_native_scripts(scripts);
+      txBuilder.set_auxiliary_data(auxData);
     }
-    if (String(error).includes('less than the minimum UTXO value')) {
-      throw new CannotSendBelowMinimumValueError();
-    }
-    throw error;
-  }
 
-  let changeAddress;
-  if (changeAdaAddr != null) {
-    // $FlowIgnore[incompatible-type]
-    const derivationLevel: $Values<typeof DerivationLevel> = changeAdaAddr.addressing.startLevel;
-    if (derivationLevel < 1 || derivationLevel > 5) {
-      throw new Error('Invalid derivation level in change: ' + derivationLevel);
+    const mintGroups = new Map();
+    for (const entry of mint) {
+      const script = cml.NativeScript.from_cbor_hex(entry.policyScript);
+      const policyId = script.hash().to_hex();
+      const group = mintGroups.get(policyId) ?? { script, assets: new Map() };
+      const previous = group.assets.get(entry.assetName) ?? 0n;
+      // eslint-disable-next-line no-undef
+      group.assets.set(entry.assetName, previous + BigInt(entry.amount));
+      mintGroups.set(policyId, group);
     }
-    const spendingKeyInfo: DerivationInfo = {
-      path: changeAdaAddr.addressing.path,
-      start: derivationLevel,
+    for (const { script, assets } of mintGroups.values()) {
+      const cmlAssets = cml.MapAssetNameToNonZeroInt64.new();
+      for (const [assetName, amount] of assets) {
+        if (amount !== 0n) cmlAssets.insert(cml.AssetName.from_hex(assetName), amount);
+      }
+      if (cmlAssets.len() > 0) txBuilder.add_mint(cml.SingleMintBuilder.new(cmlAssets).native_script(script, cml.NativeScriptWitnessInfo.assume_signature_count()));
+    }
+
+    for (const [utxo, witness] of mustIncludeUtxos) {
+      // eslint-disable-next-line no-undef
+      const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index));
+      const value = cmlValueFromRemoteFormat(cml, utxo);
+      const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
+      const inputBuilder = cml.SingleInputBuilder.new(input, output);
+      if (witness?.nativeScript != null) {
+        txBuilder.add_input(inputBuilder.native_script(
+          cml.NativeScript.from_cbor_hex(witness.nativeScript),
+          cml.NativeScriptWitnessInfo.assume_signature_count()
+        ));
+      } else if (witness?.plutusScript != null) {
+        const redeemer = redeemersByUtxo.get(`${utxo.tx_hash}${utxo.tx_index}`);
+        if (redeemer == null) throw new Error('Missing parsed Plutus redeemer');
+        const script = cml.PlutusScript.from_v1(cml.PlutusV1Script.from_cbor_hex(witness.plutusScript));
+        const partialWitness = cml.PartialPlutusWitness.new(cml.PlutusScriptWitness.new_script(script), redeemer.data());
+        txBuilder.add_input(inputBuilder.plutus_script(
+          partialWitness,
+          cml.Ed25519KeyHashList.new(),
+          cml.PlutusData.from_cbor_hex(witness.datum)
+        ));
+        txBuilder.set_exunits(cml.RedeemerWitnessKey.from_redeemer(redeemer), redeemer.ex_units());
+      } else if (witness == null) {
+        txBuilder.add_input(inputBuilder.payment_key());
+      } else {
+        throw new Error('Unexpected script witness value');
+      }
+    }
+
+    for (const output of outputs) {
+      const datumOption = output.dataHash == null ? undefined : cml.DatumOption.new_hash(cml.DatumHash.from_hex(output.dataHash));
+      txBuilder.add_output(cml.SingleOutputBuilderResult.new(cml.TransactionOutput.new(
+        cml.Address.from_hex(output.address),
+        cmlValueFromMultiToken(cml, output.amount),
+        datumOption
+      )));
+    }
+
+    const utxosByRef = new Map();
+    const addCandidate = utxo => {
+      // eslint-disable-next-line no-undef
+      const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index));
+      const value = cmlValueFromRemoteFormat(cml, utxo);
+      const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
+      txBuilder.add_utxo(cml.SingleInputBuilder.new(input, output).payment_key());
+      utxosByRef.set(`${utxo.tx_hash}${utxo.tx_index}`, utxo);
     };
-    changeAddress = await LibWalletAddress.from(changeAdaAddr.address, WalletType.Shelley, spendingKeyInfo);
-  }
+    for (const [utxo] of mustIncludeUtxos) utxosByRef.set(`${utxo.tx_hash}${utxo.tx_index}`, utxo);
+    for (const utxo of coinSelectUtxos) addCandidate(utxo);
 
-  try {
-    await txBuilder.selectInputsFrom(utxoSet);
-  } catch (error) {
-    if (error instanceof LibNotEnoughMoneyToSendError) {
-      throw new NotEnoughMoneyToSendError();
+    if (coinSelectUtxos.length > 0) {
+      try {
+        const hasMultiAssetOutput = outputs.some(output => output.amount.nonDefaultEntries().length > 0);
+        txBuilder.select_utxos(hasMultiAssetOutput ? cml.CoinSelectionStrategyCIP2.RandomImproveMultiAsset : cml.CoinSelectionStrategyCIP2.RandomImprove);
+      } catch (error) {
+        if (/Not enough ADA|Insufficient/.test(String(error))) throw new NotEnoughMoneyToSendError();
+        if (/overflow/i.test(String(error))) throw new AssetOverflowError();
+        throw error;
+      }
     }
-    if (error instanceof LibOverflowError) {
-      throw new AssetOverflowError();
+
+    const changeAddress = changeAdaAddr == null ? null : cml.Address.from_hex(changeAdaAddr.address);
+    if (changeAddress != null) {
+      try {
+        txBuilder.add_change_if_needed(changeAddress, true);
+      } catch (error) {
+        if (/less than the minimum UTXO value/i.test(String(error))) throw new CannotSendBelowMinimumValueError();
+        if (/Not enough ADA|Insufficient|Not enough inputs/i.test(String(error))) throw new NotEnoughMoneyToSendError();
+        throw error;
+      }
+    } else {
+      const remainder = txBuilder.get_total_input().checked_sub(txBuilder.get_total_output());
+      txBuilder.set_fee(remainder.coin());
     }
-    if (String(error).includes('less than the minimum UTXO value')) {
-      throw new CannotSendBelowMinimumValueError();
+
+    const changeForBuild = changeAddress ?? (outputs.length > 0 ? cml.Address.from_hex(outputs[0].address) : null);
+    if (changeForBuild == null) throw new NoOutputsError();
+    let signedBuilder;
+    try {
+      signedBuilder = txBuilder.build(cml.ChangeSelectionAlgo.Default, changeForBuild);
+    } catch (error) {
+      if (/No outputs/.test(String(error))) throw new NoOutputsError();
+      if (/Not enough ADA/.test(String(error))) throw new NotEnoughMoneyToSendError();
+      throw error;
     }
-    throw error;
-  }
 
-  await txBuilder.addChangeAndFee(changeAddress);
-
-  const unsignedTx = await txBuilder.build();
-
-  const signRequestChangeAddr = [];
-  const change = unsignedTx.change;
-  if (change != null) {
-    const spendingKeyInfo = change.address.spendingKeyInfo;
-    if (spendingKeyInfo == null) {
-      throw new Error('Missing spending key info in change: ' + JSON.stringify(change));
+    const body = signedBuilder.body();
+    const selectedUtxos = [];
+    const inputs = body.inputs();
+    for (let index = 0; index < inputs.len(); index++) {
+      const input = inputs.get(index);
+      const utxo = utxosByRef.get(`${input.transaction_id().to_hex()}${input.index()}`);
+      if (utxo == null) throw new Error('CML selected an unknown input');
+      selectedUtxos.push(utxo);
     }
-    signRequestChangeAddr.push({
-      address: change.address.hex,
-      addressing: {
-        path: spendingKeyInfo.path,
-        startLevel: spendingKeyInfo.start,
-      },
-      values: libValueToMultiToken(change?.value, networkId, PRIMARY_ASSET_CONSTANTS.Cardano),
-    });
-  }
+    const changeAddresses = [];
+    if (changeAdaAddr != null) {
+      const transactionOutputs = body.outputs();
+      for (let index = outputs.length; index < transactionOutputs.len(); index++) {
+        const output = transactionOutputs.get(index);
+        if (output.address().to_hex() !== changeAdaAddr.address) continue;
+        changeAddresses.push({
+          address: changeAdaAddr.address,
+          addressing: changeAdaAddr.addressing,
+          values: multiTokenFromCmlValue(output.amount(), {
+            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+            defaultNetworkId: networkId,
+          }),
+        });
+      }
+    }
+    return { bodyBytes: body.to_cbor_bytes(), selectedUtxos, changeAddresses };
+  });
 
-  const utxosMap = new Map([...mustIncludeUtxos.map(([utxo, _]) => utxo), ...coinSelectUtxos].map(u => [u.utxo_id, u]));
   return {
-    senderUtxos: unsignedTx.inputs
-      .asArray()
-      .map(u => utxosMap.get(u.tx + u.index))
-      .filter(Boolean),
-    // $FlowIgnore[prop-missing] .wasm extracts original CSL instance from coss-csl wrapper
-    txBuilder: unsignedTx.builder.wasm,
-    changeAddr: signRequestChangeAddr,
+    senderUtxos: result.selectedUtxos,
+    txBuilder: result.bodyBytes,
+    changeAddr: result.changeAddresses,
   };
 }
 
@@ -1448,46 +1375,5 @@ export function genFilterSmallUtxo(request: {|
     const wasmAmount = cardanoValueFromRemoteFormat(utxo);
     const feeForInput = new BigNumber(txBuilder.fee_for_input(wasmAddr, utxoToTxInput(utxo), wasmAmount).to_str());
     return feeForInput.lte(utxo.amount);
-  };
-}
-
-function libValueToMultiToken(value: any, defaultNetworkId: number, defaultIdentifier: string): MultiToken {
-  return new MultiToken(
-    [
-      {
-        amount: new BigNumber(value.amount.toString()),
-        identifier: defaultIdentifier,
-        networkId: defaultNetworkId,
-      },
-      ...value.assets.asArray().map(([nativeAsset, amount]) => ({
-        amount: new BigNumber(amount.toString()),
-        identifier: nativeAsset.getHash(),
-        networkId: defaultNetworkId,
-      })),
-    ],
-    {
-      defaultIdentifier,
-      defaultNetworkId,
-    }
-  );
-}
-
-export async function toLibUTxO(utxo: RemoteUnspentOutput): any {
-  return {
-    address: await LibAddress.from(utxo.receiver),
-    tx: utxo.tx_hash,
-    index: utxo.tx_index,
-    value: new LibValue(
-      new LibAmount(utxo.amount),
-      LibNativeAssets.from(
-        utxo.assets.map(asset => ({
-          asset: {
-            policy: hexToBytes(asset.policyId),
-            name: hexToBytes(asset.name),
-          },
-          amount: new LibAmount(asset.amount),
-        }))
-      )
-    ),
   };
 }

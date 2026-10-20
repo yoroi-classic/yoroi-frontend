@@ -12,7 +12,6 @@
 import type { BigNum, LinearFee, TransactionBuilder } from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import * as WasmV4 from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
 import * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
-import * as CrossCslBrowser from '@emurgo/cross-csl-browser';
 // $FlowFixMe[untyped-import]
 import * as CMLBrowser from '@dcspark/cardano-multiplatform-lib-browser';
 
@@ -227,10 +226,6 @@ class Module {
 
   get MessageSigning(): typeof WasmMessageSigning {
     return WasmMessageSigning;
-  }
-
-  get CrossCsl(): typeof CrossCslBrowser {
-    return CrossCslBrowser;
   }
 
   get CML(): any {

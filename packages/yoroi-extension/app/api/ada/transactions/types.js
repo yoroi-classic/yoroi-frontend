@@ -41,14 +41,14 @@ export type CardanoAddressedUtxo = {|
 
 export type V4UnsignedTxUtxoResponse = {|
   senderUtxos: Array<RemoteUnspentOutput>,
-  txBuilder: RustModule.WalletV4.TransactionBuilder | Uint8Array,
+  txBuilder: Uint8Array,
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
   implicitInputValue?: Uint8Array,
   depositAmount?: string,
 |};
 export type V4UnsignedTxAddressedUtxoResponse = {|
   senderUtxos: Array<CardanoAddressedUtxo>,
-  txBuilder: RustModule.WalletV4.TransactionBuilder | Uint8Array,
+  txBuilder: Uint8Array,
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
   implicitInputValue?: Uint8Array,
   depositAmount?: string,
