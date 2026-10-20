@@ -27,7 +27,6 @@ import { normalizeAddressToHex } from '../../lib/cardanoCrypto/cmlAddress';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
 import {
-  cardanoValueFromRemoteFormat,
   identifierSplit,
   asAddressedUtxo,
   multiTokenFromRemote,
@@ -1314,10 +1313,6 @@ function signCmlTransaction(
   });
 }
 
-function utxoToTxInput(utxo: RemoteUnspentOutput): RustModule.WalletV4.TransactionInput {
-  return RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index);
-}
-
 function addWitnesses(
   txHash: RustModule.WalletV4.TransactionHash,
   uniqueAddressings: Array<UtxoOrAddressing>, // pre-req: does not contain duplicate keys
@@ -1366,26 +1361,41 @@ function addWitnesses(
 
 export function genFilterSmallUtxo(request: {|
   protocolParams: {|
-    linearFee: RustModule.WalletV4.LinearFee,
+    linearFeeCoefficient: string,
+    linearFeeConstant: string,
   |},
 |}): RemoteUnspentOutput => boolean {
-  const txBuilder = RustModule.WalletV4TxBuilder({
-    linearFee: request.protocolParams.linearFee,
-    // no need for the following parameters just to calculate the fee of adding a UTXO
-    coinsPerUtxoByte: RustModule.WalletV4.BigNum.zero(),
-    poolDeposit: RustModule.WalletV4.BigNum.zero(),
-    keyDeposit: RustModule.WalletV4.BigNum.zero(),
-  });
-
   return utxo => {
     const addressHex = normalizeToAddress(utxo.receiver);
     if (addressHex == null) {
       throw new Error(`${nameof(genFilterSmallUtxo)} input not a valid Shelley address`);
     }
-    const wasmAmount = cardanoValueFromRemoteFormat(utxo);
-    const feeForInput = new BigNumber(
-      txBuilder.fee_for_input(RustModule.WalletV4.Address.from_hex(addressHex), utxoToTxInput(utxo), wasmAmount).to_str()
-    );
+    const feeForInput = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const config = cml.TransactionBuilderConfigBuilder.new()
+        .fee_algo(cml.LinearFee.new(
+          // eslint-disable-next-line no-undef
+          BigInt(request.protocolParams.linearFeeCoefficient),
+          // eslint-disable-next-line no-undef
+          BigInt(request.protocolParams.linearFeeConstant),
+          0n
+        ))
+        .coins_per_utxo_byte(0n)
+        .pool_deposit(0n)
+        .key_deposit(0n)
+        .max_value_size(MAX_VALUE_SIZE)
+        .max_tx_size(MAX_TRANSACTION_SIZE)
+        .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+        .collateral_percentage(150)
+        .max_collateral_inputs(3)
+        .build();
+      const txBuilder = cml.TransactionBuilder.new(config);
+      // eslint-disable-next-line no-undef
+      const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index));
+      const output = cml.TransactionOutput.new(cml.Address.from_hex(addressHex), cmlValueFromRemoteFormat(cml, utxo));
+      const inputBuilder = cml.SingleInputBuilder.new(input, output).payment_key();
+      return new BigNumber(txBuilder.fee_for_input(inputBuilder).toString());
+    });
     return feeForInput.lte(utxo.amount);
   };
 }

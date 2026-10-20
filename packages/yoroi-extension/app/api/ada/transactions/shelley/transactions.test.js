@@ -10,6 +10,7 @@ import {
   newAdaUnsignedTx,
   newAdaUnsignedTxForConnector,
   newAdaUnsignedTxFromUtxo,
+  genFilterSmallUtxo,
   sendAllUnsignedTxFromUtxo,
   signTransaction,
 } from './transactions';
@@ -24,7 +25,13 @@ import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { CoinTypes, HARD_DERIVATION_START, STAKING_KEY_INDEX, WalletTypePurpose } from '../../../../config/numbersConfig';
 import { defaultAssets, getCardanoHaskellBaseConfig, networks } from '../../lib/storage/database/prepackaged/networks';
 import { MultiToken } from '../../../common/lib/MultiToken';
-import { getTransactionFeeFromCbor, getTransactionTotalOutputFromCbor, identifierSplit, multiTokenFromRemote } from '../utils';
+import {
+  cardanoValueFromRemoteFormat,
+  getTransactionFeeFromCbor,
+  getTransactionTotalOutputFromCbor,
+  identifierSplit,
+  multiTokenFromRemote,
+} from '../utils';
 import { getStakingKeyHashesInTransactionBody } from '../../lib/cardanoCrypto/utils';
 import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 import { bytesToHex, hexToBytes } from '../../../../coreUtils';
@@ -1164,6 +1171,41 @@ describe('Create signed transactions', () => {
 });
 
 describe('Create sendAll unsigned TX from UTXO', () => {
+  it('matches the legacy minimum-input fee cutoff for Shelley and Byron addresses', () => {
+    const protocolParams = getSendAllProtocolParams();
+    const cmlFilter = genFilterSmallUtxo({
+      protocolParams: {
+        linearFeeCoefficient: protocolParams.linearFeeCoefficient,
+        linearFeeConstant: protocolParams.linearFeeConstant,
+      },
+    });
+    const cslBuilder = RustModule.WalletV4TxBuilder({
+      linearFee: RustModule.WalletV4.LinearFee.new(
+        RustModule.WalletV4.BigNum.from_str(protocolParams.linearFeeCoefficient),
+        RustModule.WalletV4.BigNum.from_str(protocolParams.linearFeeConstant)
+      ),
+      coinsPerUtxoByte: RustModule.WalletV4.BigNum.zero(),
+      poolDeposit: RustModule.WalletV4.BigNum.zero(),
+      keyDeposit: RustModule.WalletV4.BigNum.zero(),
+    });
+
+    for (const source of [genSampleUtxos()[1], genSampleUtxos()[3], genSampleUtxos()[4]]) {
+      const utxo = {
+        ...source,
+        amount: '0',
+      };
+      const fee = cslBuilder
+        .fee_for_input(
+          RustModule.WalletV4.Address.from_hex(utxo.receiver),
+          RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
+          cardanoValueFromRemoteFormat(utxo)
+        )
+        .to_str();
+      expect(cmlFilter({ ...utxo, amount: fee })).toBe(true);
+      expect(cmlFilter({ ...utxo, amount: new BigNumber(fee).minus(1).toString() })).toBe(false);
+    }
+  });
+
   describe('Create send-all TX from UTXO', () => {
     it('Create a transaction involving all input with no change', () => {
       const sampleUtxos = genSampleUtxos();
