@@ -1123,7 +1123,7 @@ export function signTransaction(
     | Buffer
     | Uint8Array,
   keyLevel: number,
-  signingKey: RustModule.WalletV4.Bip32PrivateKey,
+  signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
   stakingKey: ?RustModule.WalletV4.PrivateKey,
   metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
@@ -1207,7 +1207,7 @@ export function signTransaction(
   const vkeyWits = witnessSet.vkeys() ?? RustModule.WalletV4.Vkeywitnesses.new();
   const bootstrapWits = witnessSet.bootstraps() ?? RustModule.WalletV4.BootstrapWitnesses.new();
 
-  addWitnesses(txHash, deduped, keyLevel, signingKey, vkeyWits, bootstrapWits);
+  addWitnesses(txHash, deduped, keyLevel, (signingKey: any), vkeyWits, bootstrapWits);
 
   const stakingKeyHashesInTx = getStakingKeyHashesInTransactionBody(txBody.to_hex());
   if (stakingKeyHashesInTx.size > 0) {
@@ -1248,7 +1248,7 @@ function signCmlTransaction(
   senderUtxos: Array<CardanoAddressedUtxo>,
   bodyBytes: Uint8Array,
   keyLevel: number,
-  signingKey: RustModule.WalletV4.Bip32PrivateKey,
+  signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
   stakingKey: ?RustModule.WalletV4.PrivateKey,
   metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}>
