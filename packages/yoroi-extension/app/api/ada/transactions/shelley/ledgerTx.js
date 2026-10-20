@@ -895,7 +895,7 @@ export function buildConnectorSignedTransaction(
   witnesses: Array<Witness>,
   publicKey: {|
     ...Addressing,
-    key: RustModule.WalletV4.Bip32PublicKey,
+    key: RustModule.CML.Bip32PublicKey,
   |},
   metadata: ?Uint8Array,
   // to support transfering from Byron address when initializing Ledger wallets

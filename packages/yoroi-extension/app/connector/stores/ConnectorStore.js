@@ -1361,7 +1361,7 @@ export default class ConnectorStore extends Store<StoresMap> {
     }
 
     const publicKeyInfo = {
-      key: RustModule.WalletV4.Bip32PublicKey.from_hex(publicDeriver.publicKey),
+      key: RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(publicDeriver.publicKey)),
       addressing: {
         startLevel: 1,
         path: publicDeriver.pathToPublic,
