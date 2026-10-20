@@ -16,12 +16,12 @@ test('derives private key bytes with CML matching the legacy Shelley path', () =
     startLevel: Bip44DerivationLevels.PURPOSE.level,
   };
   const expected = RustModule.WasmScope(Module => {
-    let derived = Module.WalletV4.Bip32PrivateKey.from_hex(privateKeyHex);
+    let derived = Module.CML.Bip32PrivateKey.from_raw_bytes(Buffer.from(privateKeyHex, 'hex'));
     const firstPathIndex = Bip44DerivationLevels.ACCOUNT.level - addressing.startLevel + 1;
     for (let i = firstPathIndex; i < addressing.path.length; i++) derived = derived.derive(addressing.path[i]);
     return {
-      privateBytes: derived.to_raw_key().as_bytes(),
-      extendedBytes: Uint8Array.from(Buffer.from(derived.to_hex(), 'hex')),
+      privateBytes: derived.to_raw_key().to_raw_bytes(),
+      extendedBytes: derived.to_raw_bytes(),
     };
   });
   expect(
