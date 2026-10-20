@@ -3,7 +3,6 @@
 import '../api/ada/lib/test-config.forTests';
 import { RustModule } from '../api/ada/lib/cardanoCrypto/rustLoader';
 import { WrongPassphraseError } from '../api/ada/lib/cardanoCrypto/cryptoErrors';
-import { bytesToHex } from '../coreUtils';
 import { decryptWithPassword, encryptWithPassword } from './passwordCipher';
 
 jest.mock('crypto-random-string', () => jest.fn(({ length }) => 'a'.repeat(length)));
@@ -13,16 +12,10 @@ describe('passwordCipher', () => {
     await RustModule.load();
   });
 
-  it('uses the same EMIP-3 ciphertext as CSL and decrypts it with CML', () => {
+  it('preserves the EMIP-3 ciphertext format and decrypts it', () => {
     const password = new Uint8Array([1, 2, 3, 4]);
     const plaintext = new Uint8Array([5, 6, 7, 8, 9]);
-    const passwordHex = bytesToHex(password);
-    const plaintextHex = bytesToHex(plaintext);
-    const salt = 'a'.repeat(64);
-    const nonce = 'a'.repeat(24);
-    const expected = RustModule.WasmScope(Module =>
-      Module.WalletV4.encrypt_with_password(passwordHex, salt, nonce, plaintextHex)
-    );
+    const expected = `${'a'.repeat(88)}ec270a8bf701c2ca038a30a8b2f85b348ab4e10cb9`;
 
     const ciphertext = encryptWithPassword(password, plaintext);
     expect(ciphertext).toBe(expected);

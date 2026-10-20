@@ -18,26 +18,19 @@ afterEach(() => {
 
 test('maps base and pointer address hashes through their canonical enterprise addresses', async () => {
   const { baseAddressHex, pointerAddressHex, baseEnterpriseHex, pointerEnterpriseHex } = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    const paymentCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
-    const stakeCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('22'.repeat(28)));
-    const baseAddress = CSL.BaseAddress.new(1, paymentCredential, stakeCredential).to_address();
-    const pointer = CSL.Pointer.new(CSL.BigNum.from_str('1'), CSL.BigNum.from_str('2'), CSL.BigNum.from_str('3'));
-    const pointerAddress = CSL.PointerAddress.new(1, paymentCredential, pointer).to_address();
+    const CML = Module.CML;
+    const paymentCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const stakeCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex('22'.repeat(28)));
+    const baseAddress = CML.BaseAddress.new(1, paymentCredential, stakeCredential).to_address();
+    const pointerAddress = CML.Address.from_raw_bytes(Uint8Array.from([0x41, ...new Uint8Array(28).fill(0x11), 1, 2, 3]));
 
     return {
       baseAddressHex: baseAddress.to_hex(),
       pointerAddressHex: pointerAddress.to_hex(),
-      baseEnterpriseHex: CSL.EnterpriseAddress.new(
-        baseAddress.network_id(),
-        CSL.BaseAddress.from_address(baseAddress).payment_cred()
-      )
+      baseEnterpriseHex: CML.EnterpriseAddress.new(baseAddress.network_id(), CML.BaseAddress.from_address(baseAddress).payment())
         .to_address()
         .to_hex(),
-      pointerEnterpriseHex: CSL.EnterpriseAddress.new(
-        pointerAddress.network_id(),
-        CSL.PointerAddress.from_address(pointerAddress).payment_cred()
-      )
+      pointerEnterpriseHex: CML.EnterpriseAddress.new(pointerAddress.network_id(), CML.PointerAddress.from_address(pointerAddress).payment())
         .to_address()
         .to_hex(),
     };
