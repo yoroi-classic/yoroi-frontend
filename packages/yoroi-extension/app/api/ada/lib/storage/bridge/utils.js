@@ -30,29 +30,28 @@ export function addressToKind(address: string, parseAs: 'bech32' | 'bytes', netw
       if (isCardanoHaskell(network)) {
         // Need to try parsing as a legacy address first
         // Since parsing as bech32 directly may give a wrong result if the address contains a 1
-        if (Scope.WalletV4.ByronAddress.is_valid(address)) {
+        if (Scope.CML.ByronAddress.is_valid(address)) {
           return CoreAddressTypes.CARDANO_LEGACY;
         }
-        const wasmAddr =
-          parseAs === 'bytes' ? Scope.WalletV4.Address.from_hex(address) : Scope.WalletV4.Address.from_bech32(address);
+        const wasmAddr = parseAs === 'bytes' ? Scope.CML.Address.from_hex(address) : Scope.CML.Address.from_bech32(address);
         {
-          const byronAddr = Scope.WalletV4.ByronAddress.from_address(wasmAddr);
+          const byronAddr = Scope.CML.ByronAddress.from_address(wasmAddr);
           if (byronAddr) return CoreAddressTypes.CARDANO_LEGACY;
         }
         {
-          const baseAddr = Scope.WalletV4.BaseAddress.from_address(wasmAddr);
+          const baseAddr = Scope.CML.BaseAddress.from_address(wasmAddr);
           if (baseAddr) return CoreAddressTypes.CARDANO_BASE;
         }
         {
-          const ptrAddr = Scope.WalletV4.PointerAddress.from_address(wasmAddr);
+          const ptrAddr = Scope.CML.PointerAddress.from_address(wasmAddr);
           if (ptrAddr) return CoreAddressTypes.CARDANO_PTR;
         }
         {
-          const enterpriseAddr = Scope.WalletV4.EnterpriseAddress.from_address(wasmAddr);
+          const enterpriseAddr = Scope.CML.EnterpriseAddress.from_address(wasmAddr);
           if (enterpriseAddr) return CoreAddressTypes.CARDANO_ENTERPRISE;
         }
         {
-          const rewardAddr = Scope.WalletV4.RewardAddress.from_address(wasmAddr);
+          const rewardAddr = Scope.CML.RewardAddress.from_address(wasmAddr);
           if (rewardAddr) return CoreAddressTypes.CARDANO_REWARD;
         }
         throw new Error(`${nameof(addressToKind)} unknown address type`);
@@ -117,7 +116,7 @@ export function isValidReceiveAddress(
 }
 
 export function byronAddrToHex(base58Addr: string): string {
-  return bytesToHex(RustModule.WalletV4.ByronAddress.from_base58(base58Addr).to_bytes());
+  return RustModule.WasmScope(Module => Module.CML.ByronAddress.from_base58(base58Addr).to_cbor_hex());
 }
 
 export function normalizeToBase58(addr: string): void | string {
@@ -125,27 +124,25 @@ export function normalizeToBase58(addr: string): void | string {
   // this function normalizes everything to base58
 
   // 1) If already base58, simply return
-  if (RustModule.WalletV4.ByronAddress.is_valid(addr)) {
-    return addr;
-  }
+  return RustModule.WasmScope(Module => {
+    if (Module.CML.ByronAddress.is_valid(addr)) return addr;
 
-  // 2) Try converting from base16
-  try {
-    const wasmAddr = RustModule.WalletV4.Address.from_hex(addr);
-    const byronAddr = RustModule.WalletV4.ByronAddress.from_address(wasmAddr);
-    if (byronAddr) return byronAddr.to_base58();
-    return undefined; // wrong address kind
-  } catch (_e) {} // eslint-disable-line no-empty
+    try {
+      const parsedAddress = Module.CML.Address.from_hex(addr);
+      const byronAddress = Module.CML.ByronAddress.from_address(parsedAddress);
+      if (byronAddress != null) return byronAddress.to_base58();
+      return undefined; // wrong address kind
+    } catch (_error) {} // eslint-disable-line no-empty
 
-  // 3) Try converting from base32
-  try {
-    const wasmAddr = RustModule.WalletV4.Address.from_bech32(addr);
-    const byronAddr = RustModule.WalletV4.ByronAddress.from_address(wasmAddr);
-    if (byronAddr) return byronAddr.to_base58();
-    return undefined; // wrong address kind
-  } catch (_e) {} // eslint-disable-line no-empty
+    try {
+      const parsedAddress = Module.CML.Address.from_bech32(addr);
+      const byronAddress = Module.CML.ByronAddress.from_address(parsedAddress);
+      if (byronAddress != null) return byronAddress.to_base58();
+      return undefined; // wrong address kind
+    } catch (_error) {} // eslint-disable-line no-empty
 
-  return undefined;
+    return undefined;
+  });
 }
 
 /**
@@ -318,15 +315,12 @@ export function addressToDisplayString(address: string, network: $ReadOnly<Netwo
     if (isCardanoHaskell(network)) {
       // Need to try parsing as a legacy address first
       // Since parsing as bech32 directly may give a wrong result if the address contains a 1
-      if (RustModule.WalletV4.ByronAddress.is_valid(address)) {
-        return address;
-      }
-      const wasmAddr = RustModule.WalletV4.Address.from_hex(address);
-      const byronAddr = RustModule.WalletV4.ByronAddress.from_address(wasmAddr);
-      if (byronAddr == null) {
-        return wasmAddr.to_bech32();
-      }
-      return byronAddr.to_base58();
+      return RustModule.WasmScope(Module => {
+        if (Module.CML.ByronAddress.is_valid(address)) return address;
+        const parsedAddress = Module.CML.Address.from_hex(address);
+        const byronAddress = Module.CML.ByronAddress.from_address(parsedAddress);
+        return byronAddress == null ? parsedAddress.to_bech32() : byronAddress.to_base58();
+      });
     }
     throw new Error(`${nameof(addressToDisplayString)} not implemented for network ${network.NetworkId}`);
   } catch (_e2) {
@@ -344,13 +338,11 @@ export function getAddressPayload(address: string, network: $ReadOnly<NetworkRow
     if (isCardanoHaskell(network)) {
       // Need to try parsing as a legacy address first
       // Since parsing as bech32 directly may give a wrong result if the address contains a 1
-      if (RustModule.WalletV4.ByronAddress.is_valid(address)) {
-        return address;
-      }
-      return (
-        RustModule.WalletV4.ByronAddress.from_address(RustModule.WalletV4.Address.from_bech32(address))?.to_base58() ??
-        RustModule.WalletV4.Address.from_bech32(address).to_hex()
-      );
+      return RustModule.WasmScope(Module => {
+        if (Module.CML.ByronAddress.is_valid(address)) return address;
+        const parsedAddress = Module.CML.Address.from_bech32(address);
+        return Module.CML.ByronAddress.from_address(parsedAddress)?.to_base58() ?? parsedAddress.to_hex();
+      });
     }
     throw new Error(`${nameof(getAddressPayload)} not implemented for network ${network.NetworkId}`);
   } catch (_e2) {
