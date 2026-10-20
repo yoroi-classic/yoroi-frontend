@@ -1273,23 +1273,27 @@ function signCmlTransaction(
     const body = cml.TransactionBody.from_cbor_bytes(bodyBytes);
     const txHash = cml.hash_transaction(body);
     const witnessBuilder = cml.TransactionWitnessSetBuilder.new();
+    const signingKeyBytes =
+      typeof ((signingKey: any).to_raw_bytes) === 'function' ? (signingKey: any).to_raw_bytes() : (signingKey: any).as_bytes();
+    const cmlSigningKey = cml.Bip32PrivateKey.from_raw_bytes(signingKeyBytes);
     for (const item of uniqueAddressings) {
       const lastLevelSpecified = item.addressing.startLevel + item.addressing.path.length - 1;
       if (lastLevelSpecified !== Bip44DerivationLevels.ADDRESS.level) {
         throw new Error(`${nameof(addWitnesses)} incorrect addressing size`);
       }
-      const derived = derivePrivateByAddressing({
-        addressing: item.addressing,
-        startingFrom: { level: keyLevel, key: signingKey },
-      });
+      const firstPathIndex = keyLevel - item.addressing.startLevel + 1;
+      if (firstPathIndex < 0) throw new Error(`${nameof(addWitnesses)} key level is before the addressing start level`);
+      let derived = cmlSigningKey;
+      for (let i = firstPathIndex; i < item.addressing.path.length; i++) {
+        const index = item.addressing.path[i];
+        if (index == null) throw new Error(`${nameof(addWitnesses)} invalid key derivation path`);
+        derived = derived.derive(index);
+      }
       const address = item.receiver ?? item.address;
       const cmlAddress = cml.Address.from_hex(address);
       const byronAddress = cml.ByronAddress.from_address(cmlAddress);
-      const derivedBytes =
-        typeof ((derived: any).to_raw_bytes) === 'function' ? (derived: any).to_raw_bytes() : (derived: any).as_bytes();
-      const cmlKey = cml.Bip32PrivateKey.from_raw_bytes(derivedBytes);
-      if (byronAddress == null) witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, cmlKey.to_raw_key()));
-      else witnessBuilder.add_bootstrap(cml.make_icarus_bootstrap_witness(txHash, byronAddress, cmlKey));
+      if (byronAddress == null) witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, derived.to_raw_key()));
+      else witnessBuilder.add_bootstrap(cml.make_icarus_bootstrap_witness(txHash, byronAddress, derived));
     }
 
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
