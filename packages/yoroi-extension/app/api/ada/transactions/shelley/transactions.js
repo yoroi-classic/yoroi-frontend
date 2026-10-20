@@ -23,6 +23,7 @@ import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { Bip44DerivationLevels } from '../../lib/storage/database/walletTypes/bip44/api/utils';
 import type { Address, Addressing, IGetAllUtxosResponse } from '../../lib/storage/models/PublicDeriver/interfaces';
 import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage/bridge/utils';
+import { normalizeAddressToHex } from '../../lib/cardanoCrypto/cmlAddress';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
 import {
@@ -1257,11 +1258,10 @@ function signCmlTransaction(
   for (const item of [...senderUtxos, ...otherRequiredSigners]) {
     const address = item.receiver ?? item.address;
     if (address == null) throw new Error('Missing address for signing');
-    const wasmAddr = normalizeToAddress(address);
-    if (wasmAddr == null) throw new Error(`${nameof(signTransaction)} utxo not a valid Shelley address`);
-    const keyHash = getCardanoSpendingKeyHash(wasmAddr);
+    const addressHex = normalizeAddressToHex(address);
+    const keyHash = getCardanoSpendingKeyHash(addressHex);
     if (keyHash === undefined) throw new Error(`${nameof(signTransaction)} cannot sign script inputs`);
-    const uniqueKey = keyHash == null ? wasmAddr.to_hex() : keyHash;
+    const uniqueKey = keyHash == null ? addressHex : keyHash;
     if (!seen.has(uniqueKey)) {
       seen.add(uniqueKey);
       uniqueAddressings.push(item);
