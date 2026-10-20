@@ -35,7 +35,6 @@ import type { Addressing, Address, Value } from '../../lib/storage/models/Public
 import type { LedgerNanoCatalystRegistrationTxSignData } from './HaskellShelleyTxSignRequest';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { WalletTypePurpose, HARD_DERIVATION_START } from '../../../../config/numbersConfig';
-import { derivePublicByAddressing } from '../../lib/cardanoCrypto/deriveByAddressing';
 import { bytesToHex, forceNonNull, hexToBytes, iterateLenGet, iterateLenGetMap, maybe } from '../../../../coreUtils';
 import { transactionHexToHash } from '../../lib/cardanoCrypto/utils';
 import { stakePointerFromRawBytes } from '../../lib/cardanoCrypto/cmlAddress';
@@ -905,6 +904,9 @@ export function buildConnectorSignedTransaction(
   const keyLevel = publicKey.addressing.startLevel + publicKey.addressing.path.length - 1;
   const txHex = RustModule.WasmScope(Module => {
     const cml = Module.CML;
+    const publicKeyBytes =
+      typeof ((publicKey.key: any).to_raw_bytes) === 'function' ? (publicKey.key: any).to_raw_bytes() : (publicKey.key: any).as_bytes();
+    const rootPublicKey = cml.Bip32PublicKey.from_raw_bytes(publicKeyBytes);
     const tx = cml.Transaction.from_cbor_hex(rawTxHex);
     const body = tx.body();
     const auxiliaryData = metadata == null
@@ -918,11 +920,15 @@ export function buildConnectorSignedTransaction(
     for (const witness of witnesses) {
       const addressing = { path: witness.path, startLevel: 1 };
       verifyFromDerivationRoot(addressing);
-      const witnessKey = derivePublicByAddressing({
-        addressing,
-        startingFrom: { level: keyLevel, key: publicKey.key },
-      });
-      const cmlPublicKey = cml.PublicKey.from_bytes(witnessKey.to_raw_key().as_bytes());
+      const firstPathIndex = keyLevel - addressing.startLevel + 1;
+      if (firstPathIndex < 0) throw new Error('Public key derivation level is before the addressing start level');
+      let witnessKey = rootPublicKey;
+      for (let i = firstPathIndex; i < addressing.path.length; i++) {
+        const index = addressing.path[i];
+        if (index == null) throw new Error('Invalid public key derivation path');
+        witnessKey = witnessKey.derive(index);
+      }
+      const witnessPublicKey = cml.PublicKey.from_bytes(witnessKey.to_raw_key().to_raw_bytes());
       const signature = cml.Ed25519Signature.from_raw_bytes(hexToBytes(witness.witnessSignatureHex));
 
       if (witness.path[0] === WalletTypePurpose.BIP44) {
@@ -930,10 +936,10 @@ export function buildConnectorSignedTransaction(
         if (!receiver) continue;
         const byronAddress = cml.ByronAddress.from_base58(receiver);
         bootstrapWitnesses.add(
-          cml.BootstrapWitness.new(cmlPublicKey, signature, witnessKey.chaincode(), byronAddress.content().addr_attributes())
+          cml.BootstrapWitness.new(witnessPublicKey, signature, witnessKey.chaincode(), byronAddress.content().addr_attributes())
         );
       } else if (witness.path[0] === WalletTypePurpose.CIP1852) {
-        vkeyWitnesses.add(cml.Vkeywitness.new(cmlPublicKey, signature));
+        vkeyWitnesses.add(cml.Vkeywitness.new(witnessPublicKey, signature));
       } else {
         throw new Error(`unexpected witness path purpose value ${witness.path[0]}`);
       }
