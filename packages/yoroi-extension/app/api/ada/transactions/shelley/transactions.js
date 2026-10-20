@@ -73,6 +73,37 @@ const COSTMODELS =
  */
 const defaultTtlOffset = 7200;
 
+function serializeCertificateList(certificates: $ReadOnlyArray<string>): Uint8Array {
+  return RustModule.WasmScope(Module => {
+    const certificateBytes = certificates.map(certificateHex =>
+      Module.CML.Certificate.from_cbor_hex(certificateHex).to_cbor_bytes()
+    );
+    const length = certificateBytes.length;
+    let header;
+    if (length < 24) {
+      header = [0x80 | length];
+    } else if (length <= 0xff) {
+      header = [0x98, length];
+    } else if (length <= 0xffff) {
+      header = [0x99, (length >> 8) & 0xff, length & 0xff];
+    } else if (length <= 0xffffffff) {
+      header = [0x9a, (length >>> 24) & 0xff, (length >>> 16) & 0xff, (length >>> 8) & 0xff, length & 0xff];
+    } else {
+      throw new Error('Too many transaction certificates');
+    }
+
+    const result = new Uint8Array(header.length + certificateBytes.reduce((total, bytes) => total + bytes.length, 0));
+    let offset = 0;
+    result.set(header, offset);
+    offset += header.length;
+    for (const bytes of certificateBytes) {
+      result.set(bytes, offset);
+      offset += bytes.length;
+    }
+    return result;
+  });
+}
+
 export type TxOutput = {|
   ...Address,
   amount: MultiToken,
@@ -384,7 +415,7 @@ export async function newAdaUnsignedTx(
     keyDeposit: string,
     networkId: number,
   |},
-  certificates: $ReadOnlyArray<RustModule.WalletV4.Certificate>,
+  certificates: $ReadOnlyArray<string>,
   withdrawals: $ReadOnlyArray<{|
     address: RustModule.WalletV4.RewardAddress,
     amount: RustModule.WalletV4.BigNum,
@@ -526,7 +557,7 @@ export async function newAdaUnsignedTxFromUtxo(
     keyDeposit: string,
     networkId: number,
   |},
-  certificates: $ReadOnlyArray<RustModule.WalletV4.Certificate>,
+  certificates: $ReadOnlyArray<string>,
   withdrawals: $ReadOnlyArray<{|
     address: RustModule.WalletV4.RewardAddress,
     amount: RustModule.WalletV4.BigNum,
@@ -612,11 +643,7 @@ export async function newAdaUnsignedTxFromUtxo(
   }
 
   if (certificates.length > 0) {
-    const certsWasm = certificates.reduce((certs, cert) => {
-      certs.add(cert);
-      return certs;
-    }, RustModule.WalletV4.Certificates.new());
-    await txBuilder.setCertificates(certsWasm.to_bytes());
+    await txBuilder.setCertificates(serializeCertificateList(certificates));
   }
 
   if (withdrawals.length > 0) {

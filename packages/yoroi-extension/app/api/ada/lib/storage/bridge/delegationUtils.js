@@ -7,7 +7,6 @@ import { addressHasStakeCredential } from '../../cardanoCrypto/cmlAddress';
 import type { IGetAllUtxosResponse } from '../models/PublicDeriver/interfaces';
 import { MultiToken } from '../../../../common/lib/MultiToken';
 import type { WalletState } from '../../../../../../chrome/extension/background/types';
-import { maybe, fail } from '../../../../../coreUtils';
 
 export type GetDelegatedBalanceRequest = {|
   wallet: WalletState,
@@ -103,55 +102,54 @@ export async function getUtxoDelegatedBalance(wallet: WalletState, _stakingAddre
 export const DREP_ALWAYS_ABSTAIN = 'ALWAYS_ABSTAIN';
 export const DREP_ALWAYS_NO_CONFIDENCE = 'ALWAYS_NO_CONFIDENCE';
 
-// <TODO:WASM_MONAD>
-function parseDrep(drepCredential: string): RustModule.WalletV4.DRep {
-  try {
-    const DRep = RustModule.WalletV4.DRep;
-    if (drepCredential === DREP_ALWAYS_ABSTAIN) return DRep.new_always_abstain();
-    if (drepCredential === DREP_ALWAYS_NO_CONFIDENCE) return DRep.new_always_no_confidence();
-    const credential = RustModule.WalletV4.Credential.from_hex(drepCredential);
-    return (
-      maybe(credential.to_keyhash(), k => DRep.new_key_hash(k)) ??
-      maybe(credential.to_scripthash(), s => DRep.new_script_hash(s)) ??
-      fail('weird credential cannot be converted into a drep: ' + credential.to_hex())
-    );
-  } catch (e) {
-    console.log('Fail to parse a drep credential: ' + drepCredential, e);
-    throw e;
-  }
+function parseDrep(CML: any, drepCredential: string): any {
+  if (drepCredential === DREP_ALWAYS_ABSTAIN) return CML.DRep.new_always_abstain();
+  if (drepCredential === DREP_ALWAYS_NO_CONFIDENCE) return CML.DRep.new_always_no_confidence();
+  const credential = CML.Credential.from_cbor_hex(drepCredential);
+  const keyHash = credential.as_pub_key();
+  if (keyHash != null) return CML.DRep.new_key(keyHash);
+  const scriptHash = credential.as_script();
+  if (scriptHash != null) return CML.DRep.new_script(scriptHash);
+  throw new Error('Credential cannot be converted into a DRep: ' + credential.to_cbor_hex());
 }
 
-// <TODO:WASM_MONAD>
 export function createCertificate(
   stakingKeyHashHex: string,
   isRegistered: boolean,
   poolRequest: void | string,
   drepCredential: void | string
-): Array<RustModule.WalletV4.Certificate> {
-  const credential = RustModule.WalletV4.Credential.from_keyhash(RustModule.WalletV4.Ed25519KeyHash.from_hex(stakingKeyHashHex));
-  if (poolRequest == null && drepCredential == null) {
-    if (isRegistered) {
-      return [RustModule.WalletV4.Certificate.new_stake_deregistration(RustModule.WalletV4.StakeDeregistration.new(credential))];
+): Array<string> {
+  return RustModule.WasmScope(Module => {
+    const CML = Module.CML;
+    const credential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(stakingKeyHashHex));
+    if (poolRequest == null && drepCredential == null) {
+      if (isRegistered) {
+        return [CML.Certificate.new_stake_deregistration(credential).to_cbor_hex()];
+      }
+      return []; // no need to undelegate if no staking key registered
     }
-    return []; // no need to undelegate if no staking key registered
-  }
-  const result = [];
-  if (!isRegistered) {
-    // if unregistered, need to register first
-    result.push(RustModule.WalletV4.Certificate.new_stake_registration(RustModule.WalletV4.StakeRegistration.new(credential)));
-  }
-  if (poolRequest != null) {
-    const poolKeyHash = RustModule.WalletV4.Ed25519KeyHash.from_hex(poolRequest);
-    result.push(
-      RustModule.WalletV4.Certificate.new_stake_delegation(RustModule.WalletV4.StakeDelegation.new(credential, poolKeyHash))
-    );
-  }
-  if (drepCredential != null) {
-    result.push(
-      RustModule.WalletV4.Certificate.new_vote_delegation(
-        RustModule.WalletV4.VoteDelegation.new(credential, parseDrep(drepCredential))
-      )
-    );
-  }
-  return result;
+    const result = [];
+    if (!isRegistered) {
+      // if unregistered, need to register first
+      result.push(CML.Certificate.new_stake_registration(credential).to_cbor_hex());
+    }
+    if (poolRequest != null) {
+      result.push(CML.Certificate.new_stake_delegation(credential, CML.Ed25519KeyHash.from_hex(poolRequest)).to_cbor_hex());
+    }
+    if (drepCredential != null) {
+      result.push(CML.Certificate.new_vote_deleg_cert(credential, parseDrep(CML, drepCredential)).to_cbor_hex());
+    }
+    return result;
+  });
+}
+
+export function stakeDeregistrationCertificateFromRewardAddress(rewardAddressHex: string): string {
+  return RustModule.WasmScope(Module => {
+    const address = Module.CML.Address.from_hex(rewardAddressHex);
+    const rewardAddress = Module.CML.RewardAddress.from_address(address);
+    if (rewardAddress == null) throw new Error(`${nameof(stakeDeregistrationCertificateFromRewardAddress)} not a reward address`);
+    const credential = rewardAddress.payment();
+    if (credential.as_pub_key() == null) throw new Error('Unexpected: withdrawal from a script hash');
+    return Module.CML.Certificate.new_stake_deregistration(credential).to_cbor_hex();
+  });
 }

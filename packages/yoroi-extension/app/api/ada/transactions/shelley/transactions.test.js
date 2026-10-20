@@ -19,6 +19,7 @@ import { defaultAssets, networks } from '../../lib/storage/database/prepackaged/
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { identifierSplit } from '../utils';
 import { bytesToHex, iterateLenGetMap } from '../../../../coreUtils';
+import { createCertificate } from '../../lib/storage/bridge/delegationUtils';
 
 const network = networks.CardanoMainnet;
 const defaultIdentifier = defaultAssets.filter(asset => asset.NetworkId === network.NetworkId)[0].Identifier;
@@ -997,22 +998,31 @@ describe('Create signed transactions', () => {
       [addressedUtxos[3]],
       new BigNumber(0),
       getProtocolParams(),
-      [
-        RustModule.WalletV4.Certificate.new_stake_registration(
-          RustModule.WalletV4.StakeRegistration.new(RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_public().hash()))
-        ),
-        RustModule.WalletV4.Certificate.new_stake_delegation(
-          RustModule.WalletV4.StakeDelegation.new(
-            RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_public().hash()),
-            RustModule.WalletV4.Ed25519KeyHash.from_hex('1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5')
-          )
-        ),
-      ],
+      createCertificate(stakingKey.to_public().hash().to_hex(), false, '1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5', undefined),
       [],
       true,
       undefined,
       network.NetworkId
     );
+    const expectedCertificates = RustModule.WalletV4.Certificates.new();
+    const stakeCredential = RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_public().hash());
+    expectedCertificates.add(
+      RustModule.WalletV4.Certificate.new_stake_registration(RustModule.WalletV4.StakeRegistration.new(stakeCredential))
+    );
+    expectedCertificates.add(
+      RustModule.WalletV4.Certificate.new_stake_delegation(
+        RustModule.WalletV4.StakeDelegation.new(
+          stakeCredential,
+          RustModule.WalletV4.Ed25519KeyHash.from_hex('1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5')
+        )
+      )
+    );
+    expect(
+      unsignedTxResponse.txBuilder
+        .build()
+        .certs()
+        .to_bytes()
+    ).toEqual(expectedCertificates.to_bytes());
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder.build().to_bytes(),
@@ -1059,11 +1069,7 @@ describe('Create signed transactions', () => {
       [addressedUtxos[3]],
       new BigNumber(0),
       protocolParams,
-      [
-        RustModule.WalletV4.Certificate.new_stake_deregistration(
-          RustModule.WalletV4.StakeDeregistration.new(stakingKeyCredential)
-        ),
-      ],
+      createCertificate(stakingKey.to_public().hash().to_hex(), true, undefined, undefined),
       [
         {
           address: RustModule.WalletV4.RewardAddress.new(
@@ -1077,6 +1083,17 @@ describe('Create signed transactions', () => {
       undefined,
       network.NetworkId
     );
+
+    const expectedCertificates = RustModule.WalletV4.Certificates.new();
+    expectedCertificates.add(
+      RustModule.WalletV4.Certificate.new_stake_deregistration(RustModule.WalletV4.StakeDeregistration.new(stakingKeyCredential))
+    );
+    expect(
+      unsignedTxResponse.txBuilder
+        .build()
+        .certs()
+        .to_bytes()
+    ).toEqual(expectedCertificates.to_bytes());
 
     const signedTx = signTransaction(
       unsignedTxResponse.senderUtxos,

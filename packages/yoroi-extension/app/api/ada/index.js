@@ -19,7 +19,12 @@ import {
   updateTransactions,
   updateUtxos,
 } from './lib/storage/bridge/updateTransactions';
-import { addrContainsAccountKey, createCertificate, filterAddressesByStakingKey } from './lib/storage/bridge/delegationUtils';
+import {
+  addrContainsAccountKey,
+  createCertificate,
+  filterAddressesByStakingKey,
+  stakeDeregistrationCertificateFromRewardAddress,
+} from './lib/storage/bridge/delegationUtils';
 
 import type { TransactionMetadata } from './lib/storage/bridge/metadataUtils';
 import { createMetadata } from './lib/storage/bridge/metadataUtils';
@@ -1349,23 +1354,10 @@ export default class AdaApi {
       const changeAddr = request.wallet.receiveAddress;
       const certificates = [];
 
-      const requiredWits: Array<RustModule.WalletV4.Ed25519KeyHash> = [];
       for (const withdrawal of request.withdrawals) {
-        const wasmAddr = RustModule.WalletV4.RewardAddress.from_address(
-          RustModule.WalletV4.Address.from_hex(withdrawal.rewardAddress)
-        );
-        if (wasmAddr == null)
-          throw new Error(`${nameof(AdaApi)}::${nameof(this.createUnsignedTx)} withdrawal not a reward address`);
-        const paymentCred = wasmAddr.payment_cred();
-
-        const keyHash = paymentCred.to_keyhash();
-        if (keyHash == null) throw new Error(`Unexpected: withdrawal from a script hash`);
-        requiredWits.push(keyHash);
-
+        const deregistrationCertificate = stakeDeregistrationCertificateFromRewardAddress(withdrawal.rewardAddress);
         if (withdrawal.shouldDeregister) {
-          certificates.push(
-            RustModule.WalletV4.Certificate.new_stake_deregistration(RustModule.WalletV4.StakeDeregistration.new(paymentCred))
-          );
+          certificates.push(deregistrationCertificate);
         }
       }
       const accountStates = await request.getAccountState({
