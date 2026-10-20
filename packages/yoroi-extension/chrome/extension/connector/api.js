@@ -26,7 +26,6 @@ import LocalStorageApi, { loadSubmittedTransactions, persistSubmittedTransaction
 import {
   asAddressedUtxo as asAddressedUtxoCardano,
   cardanoValueFromRemoteFormat,
-  multiTokenFromCardanoValue,
   parseTokenList,
 } from '../../../app/api/ada/transactions/utils';
 import type { AccountStateRequest, AccountStateResponse, RemoteUnspentOutput } from '../../../app/api/ada/lib/state-fetch/types';
@@ -449,9 +448,9 @@ export async function connectorGetStakeKey(
   )[0];
   const network = wallet.getParent().getNetworkInfo();
   const stakeAddrHex = RustModule.WasmScope(Module => {
-    return Module.WalletV4.RewardAddress.new(
+    return Module.CML.RewardAddress.new(
       Number.parseInt(network.BaseConfig[0].ChainNetworkId, 10),
-      Module.WalletV4.Credential.from_keyhash(stakeKey.hash())
+      Module.CML.Credential.new_pub_key(stakeKey.hash())
     )
       .to_address()
       .to_hex();
@@ -480,87 +479,50 @@ export async function connectorGetChangeAddress(wallet: PublicDeriver<>): Promis
 }
 
 export function getScriptRequiredSigningKeys(
-  witnessSet: ?RustModule.WalletV4.TransactionWitnessSet,
+  witnessSet: any,
   // eslint-disable-next-line no-shadow
   RustModule: typeof RustModule
 ): Set<string> {
-  const nativeScripts: ?RustModule.WalletV4.NativeScripts = witnessSet?.native_scripts();
+  const nativeScripts = witnessSet?.native_scripts();
   return iterateLenGet(nativeScripts)
     .flatMap(ns => iterateLenGet(ns.get_required_signers()))
     .map(requiredKeyHash => requiredKeyHash.to_hex())
     .toSet();
 }
 
-function getTxRequiredSigningKeys(txBody: RustModule.WalletV4.TransactionBody): Set<string> {
+function getTxRequiredSigningKeys(txBody: any): Set<string> {
   return iterateLenGet(txBody.required_signers())
     .map(requiredKeyHash => requiredKeyHash.to_hex())
     .toSet();
 }
 
-type CertToKeyhashFuncs<CertType> = [
-  (RustModule.WalletV4.Certificate) => CertType | void,
-  (CertType) => RustModule.WalletV4.Ed25519KeyHash | Array<RustModule.WalletV4.Ed25519KeyHash> | void,
+const CERT_TO_KEYHASH_FUNCS: Array<[any, any]> = [
+  [cert => cert.as_stake_deregistration(), cert => cert.stake_credential().as_pub_key()],
+  [cert => cert.as_stake_delegation(), cert => cert.stake_credential().as_pub_key()],
+  [cert => cert.as_vote_deleg_cert(), cert => cert.stake_credential().as_pub_key()],
+  [cert => cert.as_stake_vote_deleg_cert(), cert => cert.stake_credential().as_pub_key()],
+  [cert => cert.as_stake_reg_deleg_cert(), cert => cert.stake_credential().as_pub_key()],
+  [cert => cert.as_stake_vote_reg_deleg_cert(), cert => cert.stake_credential().as_pub_key()],
+  [cert => cert.as_reg_drep_cert(), cert => cert.drep_credential().as_pub_key()],
+  [cert => cert.as_unreg_drep_cert(), cert => cert.drep_credential().as_pub_key()],
+  [cert => cert.as_update_drep_cert(), cert => cert.drep_credential().as_pub_key()],
+  [cert => cert.as_pool_registration(), cert => iterateLenGet(cert.pool_params().pool_owners()).toArray()],
 ];
 
-const CERT_TO_KEYHASH_FUNCS = [
-  ([
-    cert => cert.as_stake_deregistration(),
-    cert => cert.stake_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.StakeDeregistration>),
-  ([
-    cert => cert.as_stake_delegation(),
-    cert => cert.stake_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.StakeDelegation>),
-  ([
-    cert => cert.as_vote_delegation(),
-    cert => cert.stake_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.VoteDelegation>),
-  ([
-    cert => cert.as_stake_and_vote_delegation(),
-    cert => cert.stake_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.StakeAndVoteDelegation>),
-  ([
-    cert => cert.as_stake_registration_and_delegation(),
-    cert => cert.stake_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.StakeRegistrationAndDelegation>),
-
-  ([
-    cert => cert.as_stake_vote_registration_and_delegation(),
-    cert => cert.stake_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.StakeVoteRegistrationAndDelegation>),
-  ([
-    cert => cert.as_drep_registration(),
-    cert => cert.voting_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.DRepRegistration>),
-  ([
-    cert => cert.as_drep_deregistration(),
-    cert => cert.voting_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.DRepDeregistration>),
-  ([
-    cert => cert.as_drep_update(),
-    cert => cert.voting_credential().to_keyhash(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.DRepUpdate>),
-  ([
-    cert => cert.as_pool_registration(),
-    cert => iterateLenGet(cert.pool_params().pool_owners()).toArray(),
-  ]: CertToKeyhashFuncs<RustModule.WalletV4.PoolRegistration>),
-];
-
-function getCertificatesRequiredSignKeys(txBody: RustModule.WalletV4.TransactionBody): Set<string> {
+export function getCertificatesRequiredSignKeys(txBody: any): Set<string> {
   const certSigners = iterateLenGet(txBody.certs())
     .nonNull()
     .flatMap(cert => {
       for (const [convertFunc, getKeyhashFunc] of CERT_TO_KEYHASH_FUNCS) {
-        // $FlowFixMe[incompatible-call]
         const result = maybe(convertFunc(cert), getKeyhashFunc);
-        if (result != null) return ensureArray<RustModule.WalletV4.Ed25519KeyHash>(result);
+        if (result != null) return ensureArray(result);
       }
       return [];
     });
 
   const votingSigners = iterateLenGet(txBody.voting_procedures()?.get_voters())
     .nonNull()
-    .map(voter => voter.to_drep_credential()?.to_keyhash())
+    .map(voter => voter.as_d_rep_key_hash())
     .nonNull();
 
   return certSigners
@@ -593,8 +555,8 @@ export async function connectorSignCardanoTxs(
       RustModule.WasmScope(Module => __connectorSignCardanoTx(publicDeriver, password, tx, chainedUtxos, Module)),
     tx =>
       RustModule.WasmScope(Module => {
-        const { txBody, rawTxBody } = resolveTxOrTxBody(tx, Module);
-        const txHash = Module.WalletV4.FixedTransaction.new_from_body_bytes(rawTxBody).transaction_hash().to_hex();
+        const { txBody } = resolveTxOrTxBody(tx, Module);
+        const txHash = Module.CML.hash_transaction(txBody).to_hex();
         const outputs = [];
         for (let outputIndex = 0; outputIndex < txBody.outputs().len(); outputIndex++) {
           const output = txBody.outputs().get(outputIndex);
@@ -622,28 +584,28 @@ export function resolveTxOrTxBody(
   // eslint-disable-next-line no-shadow
   RustModule: typeof RustModule
 ): {|
-  txBody: RustModule.WalletV4.TransactionBody,
+  txBody: any,
   rawTxBody: Buffer,
-  witnessSet: ?RustModule.WalletV4.TransactionWitnessSet,
-  auxiliaryData: ?RustModule.WalletV4.AuxiliaryData,
+  witnessSet: ?any,
+  auxiliaryData: ?any,
 |} {
   const { tx: txHex } = tx;
-  let txBody: RustModule.WalletV4.TransactionBody;
-  let witnessSet: RustModule.WalletV4.TransactionWitnessSet;
-  let auxiliaryData: ?RustModule.WalletV4.AuxiliaryData;
+  let txBody: any;
+  let witnessSet: ?any;
+  let auxiliaryData: ?any;
   let rawTxBody: Buffer;
   const bytes = hexToBytes(txHex);
   try {
-    const fullTx = RustModule.WalletV4.FixedTransaction.from_bytes(bytes);
+    const fullTx = RustModule.CML.Transaction.from_cbor_bytes(bytes);
     txBody = fullTx.body();
     witnessSet = fullTx.witness_set();
     auxiliaryData = fullTx.auxiliary_data();
-    rawTxBody = Buffer.from(fullTx.raw_body());
+    rawTxBody = Buffer.from(txBody.to_cbor_bytes());
   } catch (originalErr) {
     try {
       // Try parsing as body for backward compatibility
-      txBody = RustModule.WalletV4.TransactionBody.from_bytes(bytes);
-      rawTxBody = bytes;
+      txBody = RustModule.CML.TransactionBody.from_cbor_bytes(bytes);
+      rawTxBody = Buffer.from(txBody.to_cbor_bytes());
     } catch (_e) {
       throw originalErr;
     }
@@ -714,21 +676,21 @@ async function __connectorSignCardanoTx(
     if (allBaseAddresses.length === 0) {
       throw new Error('Cannot sign transaction script - no base addresses are available in the wallet!');
     }
-    const parsedBaseAddr = RustModule.WalletV4.Address.from_bytes(hexToBytes(allBaseAddresses[0].address));
+    const parsedBaseAddr = RustModule.CML.Address.from_raw_bytes(hexToBytes(allBaseAddresses[0].address));
     const parsedNetworkId = parsedBaseAddr.network_id();
-    const parsedStakingCred = RustModule.WalletV4.BaseAddress.from_address(parsedBaseAddr)?.stake_cred();
+    const parsedStakingCred = RustModule.CML.BaseAddress.from_address(parsedBaseAddr)?.stake();
     if (parsedStakingCred == null) {
       throw new Error('Cannot sign transaction script - failed to parse the base address staking cred!');
     }
     for (const signingKeyHash of totalAdditionalRequiredSignKeys) {
-      const requiredKeyHash = RustModule.WalletV4.Ed25519KeyHash.from_bytes(hexToBytes(signingKeyHash));
-      const requiredPaymentCred = RustModule.WalletV4.Credential.from_keyhash(requiredKeyHash);
-      const requiredAddress = RustModule.WalletV4.BaseAddress.new(
+      const requiredKeyHash = RustModule.CML.Ed25519KeyHash.from_raw_bytes(hexToBytes(signingKeyHash));
+      const requiredPaymentCred = RustModule.CML.Credential.new_pub_key(requiredKeyHash);
+      const requiredAddress = RustModule.CML.BaseAddress.new(
         parsedNetworkId,
         requiredPaymentCred,
         parsedStakingCred
       ).to_address();
-      requiredTxSignAddresses.add(bytesToHex(requiredAddress.to_bytes()));
+      requiredTxSignAddresses.add(bytesToHex(requiredAddress.to_address().to_raw_bytes()));
     }
     for (const baseAddress of allBaseAddresses) {
       const { address, addressing } = baseAddress;
@@ -748,9 +710,9 @@ async function __connectorSignCardanoTx(
     const [drepKey, addressing] = await getDRepKeyAndAddressing(publicDeriver);
     const drepCred = drepKey.hash().to_hex();
     if (totalAdditionalRequiredSignKeys.has(drepCred)) {
-      const address = RustModule.WalletV4.RewardAddress.new(
+      const address = RustModule.CML.RewardAddress.new(
         0, // strictly speaking should use `ChainNetworkId` but doesn't matter
-        RustModule.WalletV4.Credential.from_keyhash(drepKey.hash())
+        RustModule.CML.Credential.new_pub_key(drepKey.hash())
       )
         .to_address()
         .to_hex();
@@ -878,7 +840,30 @@ export async function connectorRecordSubmittedCardanoTransaction(
   utxos = await adaApi.addressedUtxosWithSubmittedTxs(utxos, publicDeriver, submittedTxs);
 
   const txId = transactionHexToHash(sourceTxHex);
-  const tx = RustModule.WalletV4.Transaction.from_hex(sourceTxHex);
+  const txData = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const tx = cml.Transaction.from_cbor_hex(sourceTxHex);
+    const body = tx.body();
+    return {
+      fee: body.fee().toString(),
+      ttl: String(body.ttl()),
+      inputs: iterateLenGet(body.inputs()).map(input => ({
+        txHash: input.transaction_id().to_hex(),
+        index: Number(input.index()),
+      })).toArray(),
+      outputs: iterateLenGet(body.outputs()).map(output => ({
+        address: output.address().to_hex(),
+        amount: output.amount().coin().toString(),
+        assets: parseTokenList(output.amount().multi_asset()),
+      })).toArray(),
+      withdrawals: iterateLenGetMap(body.withdrawals())
+        .nonNullValue()
+        .map(([key, amount]) => ({ address: key.to_address().to_hex(), amount: amount.toString() }))
+        .toArray(),
+      isDrepDelegation: iterateLenGet(body.certs()).some(cert => isCertificateKindDrepDelegation(cert.kind())),
+      metadata: tx.auxiliary_data()?.to_cbor_hex(),
+    };
+  });
   const defaultToken = publicDeriver.getParent().defaultToken;
   const defaults = {
     defaultNetworkId: defaultToken.NetworkId,
@@ -888,15 +873,11 @@ export async function connectorRecordSubmittedCardanoTransaction(
   const amount = new MultiToken([], defaults);
   const addresses = { from: [], to: [] };
   let isIntraWallet = true;
-  const txBody = tx.body();
-
   const mt = new MultiToken([], defaults);
-  const fee = mt.add(mt.createDefaultEntry(new BigNumber(txBody.fee().to_str())));
+  const fee = mt.add(mt.createDefaultEntry(new BigNumber(txData.fee)));
 
   const usedUtxos = [];
-  for (const input of iterateLenGet(txBody.inputs())) {
-    const txHash = input.transaction_id().to_hex();
-    const index = input.index();
+  for (const { txHash, index } of txData.inputs) {
     const utxo = utxos.find(u => u.tx_hash === txHash && u.tx_index === index);
 
     if (!utxo) {
@@ -926,9 +907,13 @@ export async function connectorRecordSubmittedCardanoTransaction(
       amount.joinSubtractMutable(value);
     }
   }
-  for (const output of iterateLenGet(txBody.outputs())) {
-    const value = multiTokenFromCardanoValue(output.amount(), defaults);
-    const address = output.address().to_hex();
+  for (const output of txData.outputs) {
+    const value = new MultiToken([], defaults);
+    value.add({ amount: new BigNumber(output.amount), identifier: defaultToken.Identifier, networkId: defaultToken.NetworkId });
+    for (const asset of output.assets) {
+      value.add({ amount: new BigNumber(asset.amount), identifier: asset.assetId, networkId: defaultToken.NetworkId });
+    }
+    const address = output.address;
     addresses.to.push({
       address,
       value,
@@ -941,32 +926,19 @@ export async function connectorRecordSubmittedCardanoTransaction(
     }
   }
 
-  const withdrawalsData = iterateLenGetMap(txBody.withdrawals())
-    .nonNullValue()
-    .map(([key, withdrawalAmount]) => ({
-      address: key.to_address().to_hex(),
+  const withdrawalsData = txData.withdrawals.map(withdrawal => ({
+      address: withdrawal.address,
       value: new MultiToken(
         [
           {
-            amount: new BigNumber(withdrawalAmount.to_str()),
+            amount: new BigNumber(withdrawal.amount),
             identifier: defaultToken.Identifier,
             networkId: defaultToken.NetworkId,
           },
         ],
         defaults
       ),
-    }))
-    .toArray();
-
-  let isDrepDelegation = false;
-  for (const cert of iterateLenGet(txBody.certs())) {
-    if (isCertificateKindDrepDelegation(cert.kind())) {
-      isDrepDelegation = true;
-      break;
-    }
-  }
-
-  const auxData = tx.auxiliary_data();
+    }));
 
   const submittedTx: CardanoShelleyTransactionCtorData = {
     txid: txId,
@@ -979,8 +951,8 @@ export async function connectorRecordSubmittedCardanoTransaction(
     errorMsg: null,
     block: null,
     certificates: [],
-    ttl: new BigNumber(String(txBody.ttl())),
-    metadata: auxData?.to_hex(),
+    ttl: new BigNumber(txData.ttl),
+    metadata: txData.metadata,
     withdrawals: withdrawalsData,
     isValid: true,
   };
@@ -990,7 +962,7 @@ export async function connectorRecordSubmittedCardanoTransaction(
     transaction: submittedTx,
     networkId: publicDeriver.getParent().getNetworkInfo().NetworkId,
     usedUtxos,
-    isDrepDelegation,
+    isDrepDelegation: txData.isDrepDelegation,
   });
   await persistSubmittedTransactions(submittedTxs);
 }
@@ -1006,45 +978,22 @@ export function getTokenMetadataFromIds(
   });
 }
 
-export function assetToRustMultiasset(jsonAssets: $PropertyType<RemoteUnspentOutput, 'assets'>): RustModule.WalletV4.MultiAsset {
-  const groupedAssets = jsonAssets.reduce((res, a) => {
-    (res[a.policyId] = res[a.policyId] || []).push(a);
-    return res;
-  }, {});
-  const W4 = RustModule.WalletV4;
-  const multiasset = W4.MultiAsset.new();
-  for (const policyHex of Object.keys(groupedAssets)) {
-    const assetGroup = groupedAssets[policyHex];
-    const policyId = W4.ScriptHash.from_hex(policyHex);
-    const assets = RustModule.WalletV4.Assets.new();
-    for (const asset of assetGroup) {
-      assets.insert(W4.AssetName.new(hexToBytes(asset.name)), W4.BigNum.from_str(asset.amount));
-    }
-    multiasset.insert(policyId, assets);
-  }
-  return multiasset;
-}
-
 export async function transformCardanoUtxos(utxos: Array<RemoteUnspentOutput>, isCBOR: boolean): any {
   const cardanoUtxos: $ReadOnlyArray<$ReadOnly<RemoteUnspentOutput>> = utxos;
   await RustModule.load();
-  const W4 = RustModule.WalletV4;
-  if (isCBOR) {
-    return cardanoUtxos.map(u => {
-      const input = W4.TransactionInput.new(W4.TransactionHash.from_hex(u.tx_hash), u.tx_index);
-      const value = W4.Value.new(W4.BigNum.from_str(u.amount));
-      if ((u.assets || []).length > 0) {
-        value.set_multiasset(assetToRustMultiasset(u.assets));
-      }
-      const output = W4.TransactionOutput.new(W4.Address.from_hex(u.receiver), value);
-      return W4.TransactionUnspentOutput.new(input, output).to_hex();
-    });
-  }
-
-  return cardanoUtxos.map(u => {
-    return {
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    if (isCBOR) {
+      return cardanoUtxos.map(u => {
+        // eslint-disable-next-line no-undef
+        const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(u.tx_hash), BigInt(u.tx_index));
+        const output = cml.TransactionOutput.new(cml.Address.from_hex(u.receiver), cardanoValueFromRemoteFormat(u));
+        return cml.TransactionUnspentOutput.new(input, output).to_cbor_hex();
+      });
+    }
+    return cardanoUtxos.map(u => ({
       ...u,
-      receiver: W4.Address.from_hex(u.receiver).to_bech32(),
-    };
+      receiver: cml.Address.from_hex(u.receiver).to_bech32(),
+    }));
   });
 }

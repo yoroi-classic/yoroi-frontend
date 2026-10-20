@@ -69,4 +69,97 @@ describe('connectorGetUtxosCardano CML selection', () => {
     expect(result).toHaveLength(2);
     expect(result.every(utxo => utxo.assets.some(asset => asset.assetId === tokenId))).toBe(true);
   });
+
+  test('serializes connector UTxOs through the CML bridge with legacy-compatible CBOR', async () => {
+    await RustModule.load();
+    const cml = RustModule.CML;
+    const address = cml.EnterpriseAddress.new(
+      1,
+      cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)))
+    ).to_address();
+    const utxo = {
+      utxo_id: `${'22'.repeat(32)}1`,
+      tx_hash: '22'.repeat(32),
+      tx_index: 1,
+      receiver: address.to_hex(),
+      amount: '5000000',
+      assets: [{ assetId: `${'44'.repeat(28)}.74657374`, policyId: '44'.repeat(28), name: '74657374', amount: '7' }],
+    };
+    const { transformCardanoUtxos } = require('./api');
+    const [actual] = await transformCardanoUtxos([utxo], true);
+    expect(actual).toBe(
+      '8282582022222222222222222222222222222222222222222222222222222222222222220182581d6111111111111111111111111111111111111111111111111111111111821a004c4b40a1581c44444444444444444444444444444444444444444444444444444444a1447465737407'
+    );
+    const [textOutput] = await transformCardanoUtxos([utxo], false);
+    expect(textOutput.receiver).toBe(address.to_bech32());
+  });
+
+  test('resolves either full transaction CBOR or body CBOR for signing', async () => {
+    await RustModule.load();
+    const { txBodyHex, txHex } = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const inputs = cml.TransactionInputList.new();
+      const outputs = cml.TransactionOutputList.new();
+      outputs.add(
+        cml.TransactionOutput.new(
+          cml.Address.from_hex(`61${'11'.repeat(28)}`),
+          cml.Value.from_coin(5000000n)
+        )
+      );
+      const body = cml.TransactionBody.new(inputs, outputs, 170000n);
+      const transaction = cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true);
+      return { txBodyHex: body.to_cbor_hex(), txHex: transaction.to_cbor_hex() };
+    });
+    const { resolveTxOrTxBody } = require('./api');
+
+    for (const tx of [txHex, txBodyHex]) {
+      const parsed = RustModule.WasmScope(Module => {
+        const result = resolveTxOrTxBody({ tx }, Module);
+        return { bodyHex: result.txBody.to_cbor_hex(), rawBodyHex: result.rawTxBody.toString('hex') };
+      });
+      expect(parsed.bodyHex).toBe(txBodyHex);
+      expect(parsed.rawBodyHex).toBe(txBodyHex);
+    }
+  });
+
+  test('extracts certificate signing hashes from CML credentials', async () => {
+    await RustModule.load();
+    const keyHashHex = '77'.repeat(28);
+    const drepHashHex = '88'.repeat(28);
+    const hashes = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const certificates = cml.CertificateList.new();
+      certificates.add(
+        cml.Certificate.new_stake_deregistration(
+          cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(keyHashHex))
+        )
+      );
+      certificates.add(
+        cml.Certificate.new_reg_drep_cert(
+          cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(drepHashHex)),
+          500000000n
+        )
+      );
+      const body = cml.TransactionBody.new(cml.TransactionInputList.new(), cml.TransactionOutputList.new(), 0n);
+      body.set_certs(certificates);
+      const { getCertificatesRequiredSignKeys } = require('./api');
+      return Array.from(getCertificatesRequiredSignKeys(body));
+    });
+    expect(hashes).toEqual([keyHashHex, drepHashHex]);
+  });
+
+  test('extracts required key hashes from CML native scripts', async () => {
+    await RustModule.load();
+    const keyHashHex = '99'.repeat(28);
+    const hashes = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const nativeScripts = cml.NativeScriptList.new();
+      nativeScripts.add(cml.NativeScript.new_script_pubkey(cml.Ed25519KeyHash.from_hex(keyHashHex)));
+      const witnessSet = cml.TransactionWitnessSet.new();
+      witnessSet.set_native_scripts(nativeScripts);
+      const { getScriptRequiredSigningKeys } = require('./api');
+      return Array.from(getScriptRequiredSigningKeys(witnessSet, Module));
+    });
+    expect(hashes).toEqual([keyHashHex]);
+  });
 });
