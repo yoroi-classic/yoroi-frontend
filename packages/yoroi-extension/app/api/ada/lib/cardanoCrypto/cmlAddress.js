@@ -1,5 +1,28 @@
 // @flow
 import { RustModule } from './rustLoader';
+import { hexToBytes } from '../../../../coreUtils';
+
+const derivePublicKeyHashHex = (accountPublicKey: any, path: Array<number>, startIndex: number): string => {
+  let publicKey = accountPublicKey;
+  for (let i = startIndex; i < path.length; i++) {
+    const index = path[i];
+    if (index == null) throw new Error('Invalid public key derivation path');
+    publicKey = publicKey.derive(index);
+  }
+  return publicKey.to_raw_key().hash().to_hex();
+};
+
+export const deriveBip32PublicKeyHashHex = (accountPublicKeyHex: string, path: Array<number>, startIndex: number = 0): string =>
+  RustModule.WasmScope(Module => {
+    const accountPublicKey = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
+    return derivePublicKeyHashHex(accountPublicKey, path, startIndex);
+  });
+
+export const deriveBip32PublicKeyHashesHex = (accountPublicKeyHex: string, paths: Array<Array<number>>): Array<string> =>
+  RustModule.WasmScope(Module => {
+    const accountPublicKey = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
+    return paths.map(path => derivePublicKeyHashHex(accountPublicKey, path, 0));
+  });
 
 const parseAddress = (Module: any, address: string): any => {
   try {
@@ -45,6 +68,15 @@ export const enterpriseAddressHexFromBaseOrPointerAddress = (addressHex: string)
 
 export const credentialCborHexFromKeyHash = (keyHash: string): string =>
   RustModule.WasmScope(Module => Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(keyHash)).to_cbor_hex());
+
+export const paymentKeyHashHex = (keyHash: string): string =>
+  RustModule.WasmScope(Module => {
+    try {
+      return Module.CML.Ed25519KeyHash.from_hex(keyHash).to_hex();
+    } catch (_hexError) {
+      return Module.CML.Ed25519KeyHash.from_bech32(keyHash).to_hex();
+    }
+  });
 
 export const stakingCredentialCborHexFromRewardAddress = (stakingAddressHex: string): string =>
   RustModule.WasmScope(Module => {

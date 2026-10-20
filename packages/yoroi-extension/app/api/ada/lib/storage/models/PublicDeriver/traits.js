@@ -105,7 +105,7 @@ import { RustModule } from '../../../cardanoCrypto/rustLoader';
 import { isCardanoHaskell } from '../../database/prepackaged/networks';
 import { GetUtxoAtSafePoint, GetUtxoDiffToBestBlock } from '../../database/utxo/api/read';
 import type { Utxo } from '@emurgo/yoroi-lib/dist/utxo/models';
-import { derivePublicByAddressing } from '../../../cardanoCrypto/deriveByAddressing';
+import { deriveBip32PublicKeyHashHex } from '../../../cardanoCrypto/cmlAddress';
 import { addressBech32ToHex } from '../../../cardanoCrypto/utils';
 
 // ===============
@@ -1344,15 +1344,10 @@ const ScanShelleyAccountUtxoMixin = (superclass: Class<ScanShelleyAccountUtxoDep
     ) => Promise<IScanAccountResponse> = async (tx, deps, body, derivationTables): Promise<IScanAccountResponse> => {
       const stakingAddressDbRow = await this.rawGetStakingKey(tx, deps, undefined, derivationTables);
 
-      const publicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(body.accountPublicKey);
-
-      const stakingKey = derivePublicByAddressing({
-        addressing: stakingAddressDbRow.addressing,
-        startingFrom: {
-          level: this.getParent().getPublicDeriverLevel(),
-          key: publicKey,
-        },
-      });
+      const addressing = stakingAddressDbRow.addressing;
+      const firstPathIndex = this.getParent().getPublicDeriverLevel() - addressing.startLevel + 1;
+      if (firstPathIndex < 0) throw new Error('Public key derivation level is before the addressing start level');
+      const stakingKeyHash = deriveBip32PublicKeyHashHex(body.accountPublicKey, addressing.path, firstPathIndex);
 
       const network = this.getParent().getNetworkInfo();
 
@@ -1363,7 +1358,7 @@ const ScanShelleyAccountUtxoMixin = (superclass: Class<ScanShelleyAccountUtxoDep
         checkAddressesInUse: body.checkAddressesInUse,
         network,
         addByHash: rawGenAddByHash(new Set([...body.internalAddresses, ...body.externalAddresses])),
-        stakingKey: stakingKey.to_raw_key(),
+        stakingKeyHash,
       });
     };
   };
