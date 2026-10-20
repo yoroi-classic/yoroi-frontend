@@ -72,6 +72,8 @@ const COSTMODELS =
  * note: slots are 1 second in Shelley mainnet, so this is 2hrs
  */
 const defaultTtlOffset = 7200;
+const MAX_VALUE_SIZE = 5000;
+const MAX_TRANSACTION_SIZE = 16384;
 
 function serializeCertificateList(certificates: $ReadOnlyArray<string>): Uint8Array {
   return RustModule.WasmScope(Module => {
@@ -751,17 +753,6 @@ export async function maxSendableADA(request: {|
     const network = getNetworkById(request.publicDeriver.networkId);
     const config = getCardanoHaskellBaseConfig(network).reduce((acc, next) => Object.assign(acc, next), {});
 
-    const protocolParams = {
-      keyDeposit: RustModule.WalletV4.BigNum.from_str(config.KeyDeposit),
-      linearFee: RustModule.WalletV4.LinearFee.new(
-        RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
-        RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant)
-      ),
-      coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str(config.CoinsPerUtxoByte),
-      poolDeposit: RustModule.WalletV4.BigNum.from_str(config.PoolDeposit),
-      networkId: network.NetworkId,
-    };
-
     const addressedUtxo = asAddressedUtxo(request.publicDeriver.utxos);
     const totalBalance = addressedUtxo
       .map(utxo => new BigNumber(utxo.amount))
@@ -770,74 +761,116 @@ export async function maxSendableADA(request: {|
       throw new NotEnoughMoneyToSendError();
     }
 
-    const txBuilder = RustModule.WalletV4TxBuilder(protocolParams);
-    txBuilder.set_ttl(request.absSlotNumber.plus(defaultTtlOffset).toNumber());
-
     if (request.receiver == null) {
       throw new Error(`${nameof(maxSendableADA)} requires wallet address.`);
     }
-    const wasmReceiver = normalizeToAddress(request.receiver);
-    if (wasmReceiver == null) {
-      throw new Error(`${nameof(maxSendableADA)} receiver not a valid Shelley address`);
-    }
-    const isAssetsSelected = request.tokens.length >= 2; // [ada, ...tokens]
-    if (isAssetsSelected) {
-      const defaultToken = {
-        defaultNetworkId: request.publicDeriver.networkId,
-        defaultIdentifier: request.publicDeriver.defaultTokenId,
-      };
-      txBuilder.add_output(
-        RustModule.WalletV4.TransactionOutput.new(
-          wasmReceiver,
-          cardanoValueFromMultiToken(
-            builtSendTokenList(
-              defaultToken,
-              request.tokens,
-              addressedUtxo.map(utxo => multiTokenFromRemote(utxo, request.publicDeriver.networkId))
-            )
+    const cmlResult = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      let cmlReceiver;
+      try {
+        cmlReceiver = cml.Address.from_hex(request.receiver);
+      } catch (_error) {
+        throw new Error(`${nameof(maxSendableADA)} receiver not a valid Shelley address`);
+      }
+      const configBuilder = cml.TransactionBuilderConfigBuilder.new()
+        .fee_algo(
+          cml.LinearFee.new(
+            // eslint-disable-next-line no-undef
+            BigInt(config.LinearFee.coefficient),
+            // eslint-disable-next-line no-undef
+            BigInt(config.LinearFee.constant),
+            0n
           )
         )
-      );
-    }
+        // eslint-disable-next-line no-undef
+        .coins_per_utxo_byte(BigInt(config.CoinsPerUtxoByte))
+        // eslint-disable-next-line no-undef
+        .pool_deposit(BigInt(config.PoolDeposit))
+        // eslint-disable-next-line no-undef
+        .key_deposit(BigInt(config.KeyDeposit))
+        .max_value_size(MAX_VALUE_SIZE)
+        .max_tx_size(MAX_TRANSACTION_SIZE)
+        .ex_unit_prices(
+          cml.ExUnitPrices.new(
+            cml.Rational.new(577n, 10000n),
+            cml.Rational.new(721n, 10000000n)
+          )
+        )
+        .collateral_percentage(150)
+        .max_collateral_inputs(3)
+        .prefer_pure_change(true);
+      const txBuilder = cml.TransactionBuilder.new(configBuilder.build());
+      // eslint-disable-next-line no-undef
+      txBuilder.set_ttl(BigInt(request.absSlotNumber.plus(defaultTtlOffset).toFixed(0)));
 
-    for (const input of addressedUtxo) {
-      if (
-        addUtxoInput(
-          txBuilder,
-          undefined,
-          {
-            amount: input.amount,
-            receiver: input.receiver,
-            tx_hash: input.tx_hash,
-            tx_index: input.tx_index,
-            utxo_id: input.utxo_id,
-            assets: input.assets,
-          },
-          false,
-          network.NetworkId
-        ) === AddInputResult.OVERFLOW
-      ) {
-        throw new AssetOverflowError();
+      const isAssetsSelected = request.tokens.length >= 2; // [ada, ...tokens]
+      if (isAssetsSelected) {
+        const defaultToken = {
+          defaultNetworkId: request.publicDeriver.networkId,
+          defaultIdentifier: request.publicDeriver.defaultTokenId,
+        };
+        const output = cardanoValueFromMultiToken(
+          builtSendTokenList(
+            defaultToken,
+            request.tokens,
+            addressedUtxo.map(utxo => multiTokenFromRemote(utxo, request.publicDeriver.networkId))
+          )
+        );
+        txBuilder.add_output(
+          cml.SingleOutputBuilderResult.new(
+            cml.TransactionOutput.new(
+              cmlReceiver,
+              cml.Value.from_cbor_bytes(output.to_bytes())
+            )
+          )
+        );
       }
-    }
 
-    txBuilder.add_change_if_needed(wasmReceiver);
-    const outputs = txBuilder.build().outputs();
+      for (const input of addressedUtxo) {
+        const inputValue = cardanoValueFromRemoteFormat(input);
+        const cmlValue = cml.Value.from_cbor_bytes(inputValue.to_bytes());
+        try {
+          txBuilder
+            .get_explicit_input()
+            .checked_add(txBuilder.get_implicit_input())
+            .checked_add(cmlValue);
+        } catch (_error) {
+          throw new AssetOverflowError();
+        }
+        const txInput = cml.TransactionInput.new(
+          cml.TransactionHash.from_hex(input.tx_hash),
+          // eslint-disable-next-line no-undef
+          BigInt(input.tx_index)
+        );
+        const txOutput = cml.TransactionOutput.new(
+          cml.Address.from_hex(input.receiver),
+          cmlValue
+        );
+        txBuilder.add_input(cml.SingleInputBuilder.new(txInput, txOutput).payment_key());
+      }
+
+      const signedBuilder = txBuilder.build(cml.ChangeSelectionAlgo.Default, cmlReceiver);
+      const outputs = signedBuilder.body().outputs();
+      const outputValues = [];
+      for (let index = 0; index < outputs.len(); index++) {
+        const output = outputs.get(index).amount();
+        outputValues.push({ amount: output.coin().toString(), hasAssets: output.has_multiassets() });
+      }
+      return outputValues;
+    });
+    const outputs = cmlResult;
     let adaLockedForAssets = 0;
-    if (isAssetsSelected) {
-      const adaStr = outputs.get(0).amount().coin().to_str();
-      adaLockedForAssets = new BigNumber(adaStr);
+    if (request.tokens.length >= 2) {
+      adaLockedForAssets = new BigNumber(outputs[0].amount);
     }
 
-    for (const output of iterateLenGet(outputs)) {
-      const value = output.amount();
-      const assets = value.multiasset();
-      if (assets == null || assets.len() === 0) {
-        return new BigNumber(value.coin().to_str()).plus(adaLockedForAssets);
+    for (const output of outputs) {
+      if (!output.hasAssets) {
+        return new BigNumber(output.amount).plus(adaLockedForAssets);
       }
     }
     // No pure sendable ADA left
-    if (isAssetsSelected) return new BigNumber(adaLockedForAssets);
+    if (request.tokens.length >= 2) return new BigNumber(adaLockedForAssets);
     // Reaching this point means user has not enough pure ADA to send.
     throw new NotEnoughMoneyToSendError();
   } catch (e) {
