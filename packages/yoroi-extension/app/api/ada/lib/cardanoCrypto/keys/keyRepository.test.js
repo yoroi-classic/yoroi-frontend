@@ -9,20 +9,13 @@ beforeAll(async () => {
 });
 
 describe('CML BIP32-Ed25519 key wrappers', () => {
-  it('preserves CSL key bytes, derivation, signing, and verification behavior', () => {
-    const fixture = RustModule.WasmScope(Module => {
-      const root = Module.WalletV4.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
-      const cslPrivate = root.derive(0x8000002c).derive(0x80000717).derive(0x80000000).derive(0).derive(7);
-      const cslPublic = cslPrivate.to_public();
-      const message = Buffer.from('CML key wrapper parity');
-      const signature = cslPrivate.to_raw_key().sign(message);
-      return {
-        privateBytes: Buffer.from(cslPrivate.as_bytes()),
-        publicBytes: Buffer.from(cslPublic.as_bytes()),
-        signature: Buffer.from(signature.to_bytes()),
-        publicSignature: Buffer.from(cslPublic.to_raw_key().verify(message, signature) ? signature.to_bytes() : []),
-      };
-    });
+  it('preserves key bytes, derivation, signing, and verification behavior', () => {
+    const fixture = {
+      privateBytes: Buffer.from('9083f33a8075db9834f9d5dfc7fef6319ad382931cd52803d12409d9770e6f5374d5290b5d1036f3cda15ea58c2478df609d830da5e1bf1871ce6c2bc9ff33f2e2c5ba0973b868a55acb6b69f7297a0994013f31d44b188282b9dd2da8f46c27', 'hex'),
+      publicBytes: Buffer.from('9084b82b7f96526e3156be44d01113ec20fa2e0936929cfa5ae6fca24980c42ae2c5ba0973b868a55acb6b69f7297a0994013f31d44b188282b9dd2da8f46c27', 'hex'),
+      signature: Buffer.from('ce907cfa0cc1e693f7bbc643a06c746023463ced641014812ac2e9fbd083620db8620e9dc1d962236432265b24dcafe2b76c708a34498685f735c62114c15c08', 'hex'),
+      publicSignature: Buffer.from('ce907cfa0cc1e693f7bbc643a06c746023463ced641014812ac2e9fbd083620db8620e9dc1d962236432265b24dcafe2b76c708a34498685f735c62114c15c08', 'hex'),
+    };
 
     const privateKey = BIP32ED25519PrivateKey.fromBuffer(fixture.privateBytes);
     const publicKey = BIP32ED25519PublicKey.fromBuffer(fixture.publicBytes);
@@ -39,22 +32,14 @@ describe('CML BIP32-Ed25519 key wrappers', () => {
   });
 
   it('preserves public and private path derivation bytes', () => {
-    const fixture = RustModule.WasmScope(Module => {
-      const root = Module.WalletV4.Bip32PrivateKey.from_bip39_entropy(new Uint8Array(16), new Uint8Array(0));
-      const account = root.derive(0x8000002c).derive(0x80000717).derive(0x80000000);
-      const publicAccount = account.to_public();
-      const path = [0, 9];
-      const privateChild = account.derive(path[0]).derive(path[1]);
-      const publicChild = publicAccount.derive(path[0]).derive(path[1]);
-      return {
-        privateChild: Buffer.from(privateChild.as_bytes()),
-        publicChild: Buffer.from(publicChild.as_bytes()),
-        publicPrivateChild: Buffer.from(privateChild.to_public().as_bytes()),
-        softPath: path,
-        accountPrivate: Buffer.from(account.as_bytes()),
-        accountPublic: Buffer.from(publicAccount.as_bytes()),
-      };
-    });
+    const fixture = {
+      privateChild: Buffer.from('c014290440d86d690ad1e54b8c172e510b08693a340398750fbcecb7760e6f5328be95663cca1ecb8eb644e452dc2c5783386de0a205fe4142cadd536cc4aa4238772999e5df97500737e8670aa0e66bd2a0a7269d1ae8fde27537a9f4576025', 'hex'),
+      publicChild: Buffer.from('9c62ac41c7bd765b9e150ba12b01b42784762dd3ddaa601dafb15d0180acc5f138772999e5df97500737e8670aa0e66bd2a0a7269d1ae8fde27537a9f4576025', 'hex'),
+      publicPrivateChild: Buffer.from('9c62ac41c7bd765b9e150ba12b01b42784762dd3ddaa601dafb15d0180acc5f138772999e5df97500737e8670aa0e66bd2a0a7269d1ae8fde27537a9f4576025', 'hex'),
+      softPath: [0, 9],
+      accountPrivate: Buffer.from('50fc30e83bde38470955247d32a6d35bb2bcbccc18a648bcbfbe07716f0e6f53fabf6d38e5bac238d796cdae15dedbc6083238a6ceaef6a2f6626224a2abbc02b3ea35f04f2ca79e4a69c8e920be85486e4c8c3986675d3a32b41b362cd52c40', 'hex'),
+      accountPublic: Buffer.from('589d388a38a61902a3216b49c7e818de2375102a960f50611b26273790bcc33db3ea35f04f2ca79e4a69c8e920be85486e4c8c3986675d3a32b41b362cd52c40', 'hex'),
+    };
     const privateAccount = BIP32ED25519PrivateKey.fromBuffer(fixture.accountPrivate);
     const publicAccount = BIP32ED25519PublicKey.fromBuffer(fixture.accountPublic);
     const privateChild = derivePath(privateAccount, fixture.softPath);
