@@ -163,7 +163,7 @@ export async function selectCmlUtxosForValue(
       }
     }
     const candidates = formattedUtxos.map(utxo => {
-      const value = cml.Value.from_cbor_bytes(cardanoValueFromRemoteFormat(utxo).to_bytes());
+      const value = cardanoValueFromRemoteFormat(utxo);
       const multiAsset = value.multi_asset();
       const matchingAssets = requestedAssets.reduce((count, requested) => {
         const assets = multiAsset.get_assets(cml.ScriptHash.from_hex(requested.policy));
@@ -256,7 +256,7 @@ export async function connectorGetUtxosCardano(
   wallet: PublicDeriver<>,
   valueExpected: ?Value,
   paginate: ?Paginate,
-  coinsPerUtxoByte: RustModule.WalletV4.BigNum
+  coinsPerUtxoByte: string
 ): Promise<Array<RemoteUnspentOutput>> {
   const withUtxos = asGetAllUtxos(wallet);
   if (withUtxos == null) {
@@ -283,7 +283,7 @@ export async function connectorGetUtxosCardano(
     return Promise.resolve(paginateResults(formattedUtxos, paginate));
   }
 
-  return selectCmlUtxosForValue(formattedUtxos, valueStr, coinsPerUtxoByte.to_str());
+  return selectCmlUtxosForValue(formattedUtxos, valueStr, coinsPerUtxoByte);
 }
 
 export const MAX_COLLATERAL: BigNumber = new BigNumber('5000000');

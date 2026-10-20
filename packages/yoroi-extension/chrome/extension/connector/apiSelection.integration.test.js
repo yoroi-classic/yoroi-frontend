@@ -63,7 +63,7 @@ describe('connectorGetUtxosCardano CML selection', () => {
       { publicDeriverId: 1, testUtxos: dbUtxos },
       fixture.valueHex,
       null,
-      RustModule.WalletV4.BigNum.from_str('4310')
+      '4310'
     );
 
     expect(result).toHaveLength(2);

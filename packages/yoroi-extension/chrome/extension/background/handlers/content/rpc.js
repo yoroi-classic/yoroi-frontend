@@ -37,7 +37,6 @@ import {
   connectorGetDRepKey,
   connectorGetStakeKey,
   transformCardanoUtxos,
-  assetToRustMultiasset,
 } from '../../../connector/api';
 import { authSignHexPayload } from '../../../../../app/connector/api';
 import { sendToInjector, getBoundsForTabWindow, popupProps } from './utils';
@@ -56,7 +55,7 @@ import type { CardanoTxRequest } from '../../../../../app/api/ada';
 import type { NFTMetadata } from '../../../../../app/api/ada/lib/storage/database/primitives/tables';
 import { getProtocolParameters } from '../yoroi/protocolParameters';
 import { hexToBytes } from '../../../../../app/coreUtils';
-import { transactionHexToHash } from '../../../../../app/api/ada/lib/cardanoCrypto/utils';
+import { addressBech32ToHex, transactionHexToHash } from '../../../../../app/api/ada/lib/cardanoCrypto/utils';
 
 declare var chrome;
 
@@ -177,7 +176,7 @@ const signDataHandler = NewHandler.withSyncedWallet<
   }
   let address;
   try {
-    address = RustModule.WalletV4.Address.from_bech32(rawAddress).to_hex();
+    address = addressBech32ToHex(rawAddress);
   } catch {
     address = rawAddress;
   }
@@ -312,22 +311,19 @@ const Handlers = Object.freeze({
       const tokenId = asTokenId(message.params[0]);
       const balance = await connectorGetBalance(wallet, tokenId);
       if (message.returnType === 'cbor' && tokenId === '*' && !(typeof balance === 'string')) {
-        const W4 = RustModule.WalletV4;
-        const value = W4.Value.new(W4.BigNum.from_str(balance.default));
-        if (balance.assets.length > 0) {
-          const mappedAssets = balance.assets.map(a => {
-            const [policyId, name] = a.identifier.split('.');
-            return {
-              amount: a.amount,
-              assetId: a.identifier,
-              policyId,
-              name,
-            };
-          });
-          value.set_multiasset(assetToRustMultiasset(mappedAssets));
-        }
-        const result = value.to_hex();
-        value.free();
+        const result = RustModule.WasmScope(Module => {
+          const cml = Module.CML;
+          const assets = cml.MultiAsset.new();
+          for (const asset of balance.assets) {
+            const [policyId, name] = asset.identifier.split('.');
+            // eslint-disable-next-line no-undef
+            assets.set(cml.ScriptHash.from_hex(policyId), cml.AssetName.from_hex(name), BigInt(asset.amount));
+          }
+          // eslint-disable-next-line no-undef
+          const coin = BigInt(balance.default);
+          const value = assets.policy_count() > 0 ? cml.Value.new(coin, assets) : cml.Value.from_coin(coin);
+          return value.to_cbor_hex();
+        });
         return { ok: result };
       }
       return { ok: balance };
@@ -345,11 +341,9 @@ const Handlers = Object.freeze({
     const paginate = message.params[1] == null ? null : asPaginate(message.params[1]);
 
     const protocolParameters = await getProtocolParameters(wallet.getParent().getNetworkInfo().NetworkId);
-    const coinsPerUtxoByte = RustModule.WalletV4.BigNum.from_str(protocolParameters.coinsPerUtxoByte);
     try {
-      // fixme: put in wasmscope
       const utxos = await transformCardanoUtxos(
-        await connectorGetUtxosCardano(wallet, valueExpected, paginate, coinsPerUtxoByte),
+        await connectorGetUtxosCardano(wallet, valueExpected, paginate, protocolParameters.coinsPerUtxoByte),
         message.returnType === 'cbor'
       );
       return { ok: utxos };
@@ -358,8 +352,6 @@ const Handlers = Object.freeze({
         return { ok: null };
       }
       return { err: (e.message: string) };
-    } finally {
-      coinsPerUtxoByte.free();
     }
   }),
 
@@ -420,7 +412,6 @@ const Handlers = Object.freeze({
     try {
       await connectorRecordSubmittedCardanoTransaction(wallet, txHex);
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('error recording submitted tx', error);
     }
 
@@ -519,10 +510,12 @@ const Handlers = Object.freeze({
       return { err: 'auth_check_hex_payload is requested but no auth is present in the connection!' };
     }
     const [payloadHex, signatureHex] = message.params;
-    const pk = RustModule.WalletV4.PublicKey.from_hex(String(connection.status?.auth?.pubkey));
-    const sig = RustModule.WalletV4.Ed25519Signature.from_hex(signatureHex);
-    const res = pk.verify(hexToBytes(payloadHex), sig);
-    pk.free();
+    const res = RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_hex(String(connection.status?.auth?.pubkey)).verify(
+        hexToBytes(payloadHex),
+        Module.CML.Ed25519Signature.from_raw_bytes(hexToBytes(signatureHex))
+      )
+    );
     return { ok: res };
   }),
 
@@ -532,7 +525,9 @@ const Handlers = Object.freeze({
     let requiredAmount: string = firstParam || String(MAX_COLLATERAL);
     if (!/^\d+$/.test(requiredAmount)) {
       try {
-        requiredAmount = RustModule.WalletV4.Value.from_hex(requiredAmount).coin().to_str();
+        requiredAmount = RustModule.WasmScope(Module =>
+          Module.CML.Value.from_cbor_hex(requiredAmount).coin().toString()
+        );
       } catch {
         return {
           err: {
@@ -698,10 +693,5 @@ export async function handleRpc(message: Object, sender: Object) {
 }
 
 async function addressesToBech(addressesHex: string[]): Promise<string[]> {
-  return addressesHex.map(addrHex => {
-    const addr = RustModule.WalletV4.Address.from_hex(addrHex);
-    const bech32 = addr.to_bech32();
-    addr.free();
-    return bech32;
-  });
+  return RustModule.WasmScope(Module => addressesHex.map(addrHex => Module.CML.Address.from_hex(addrHex).to_bech32()));
 }
