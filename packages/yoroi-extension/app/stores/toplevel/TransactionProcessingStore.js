@@ -248,7 +248,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
   |}) => Promise<{|
     signedTxHex: string,
     txId: string,
-    metadata: ?RustModule.WalletV4.AuxiliaryData,
+    metadata: ?Uint8Array,
   |}> = async request => {
     try {
       Logger.debug(`${nameof(TransactionProcessingStore)}::${nameof(this.trezorSignRawTx)} called: ` + stringifyData(request));
@@ -319,7 +319,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
         metadata
       );
 
-      return { signedTxHex: txHex, txId, metadata };
+      return { signedTxHex: txHex, txId, metadata: metadata?.to_bytes() };
     } catch (error) {
       Logger.error(`${nameof(TransactionProcessingStore)}::${nameof(this.trezorSignRawTx)} error: ` + stringifyError(error));
       throw new trezorConvertToLocalizableError(error);
@@ -396,7 +396,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
   |}) => Promise<{|
     signedTxHex: string,
     txId: string,
-    metadata: ?RustModule.WalletV4.AuxiliaryData,
+    metadata: ?Uint8Array,
   |}> = async request => {
     try {
       Logger.debug(
@@ -404,7 +404,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       );
 
       const publicKeyInfo = {
-        key: RustModule.WalletV4.Bip32PublicKey.from_hex(request.wallet.publicKey),
+        key: RustModule.CML.Bip32PublicKey.from_hex(request.wallet.publicKey),
         addressing: {
           startLevel: 1,
           path: request.wallet.pathToPublic,
@@ -508,7 +508,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
         new Map((request.additionalSenderUtxos || []).map(({ addressing, receiver }) => [addressing.path.join('/'), receiver]))
       );
 
-      return { signedTxHex: txHex, txId, metadata };
+      return { signedTxHex: txHex, txId, metadata: metadata?.to_bytes() };
     } catch (error) {
       Logger.error(
         `${nameof(TransactionProcessingStore)}::${nameof(this.ledgerWalletSignRawTx)} error: ` + stringifyError(error)
