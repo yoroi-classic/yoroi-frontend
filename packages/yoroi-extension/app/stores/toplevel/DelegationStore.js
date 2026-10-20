@@ -12,10 +12,10 @@ import type { MangledAmountFunc, MangledAmountsResponse } from '../stateless/man
 import type { StoresMap } from '../index';
 import type { ExplorerPoolInfo as PoolInfo } from '@emurgo/yoroi-lib';
 import type { RemotePoolDisplayInfo } from '../../api/ada/lib/state-fetch/types';
-import { PoolInfoApi } from '@emurgo/yoroi-lib';
 import { MultiToken } from '../../api/common/lib/MultiToken';
 import { forceNonNull, maybe } from '../../coreUtils';
 import { stakingKeyHashFromRewardAddress } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
+import { getPoolTransition } from '../../api/ada/poolTransition';
 
 import type {
   GetDelegatedBalanceFunc,
@@ -23,7 +23,6 @@ import type {
   RewardHistoryFunc,
 } from '../../api/ada/lib/storage/bridge/delegationUtils';
 import { getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import { Logger, stringifyError } from '../../utils/logging';
 
 export type DelegationRequests = {|
@@ -257,11 +256,7 @@ export default class DelegationStore extends Store<StoresMap> {
 
     try {
       const { BackendService } = getNetworkById(publicDeriver.networkId).Backend;
-      const transitionResult = await maybe(currentPool, p =>
-        new PoolInfoApi(forceNonNull(BackendService) + '/api')
-          // $FlowIgnore
-          .getTransition(p, RustModule.CrossCsl.init)
-      );
+      const transitionResult = await maybe(currentPool, p => getPoolTransition(forceNonNull(BackendService) + '/api', p));
 
       const response = {
         currentPool: transitionResult?.current,
