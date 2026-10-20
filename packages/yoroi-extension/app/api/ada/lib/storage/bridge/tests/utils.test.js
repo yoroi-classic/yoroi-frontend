@@ -72,13 +72,13 @@ test('extracts key-controlled payment hashes from bech32 addresses using CML-com
   ];
   const expected = RustModule.WasmScope(Module =>
     addresses.map(address => {
-      const cslAddress = Module.WalletV4.Address.from_bech32(address);
+      const cmlAddress = Module.CML.Address.from_bech32(address);
       const keyHash =
-        Module.WalletV4.BaseAddress.from_address(cslAddress)?.payment_cred().to_keyhash() ??
-        Module.WalletV4.PointerAddress.from_address(cslAddress)?.payment_cred().to_keyhash() ??
-        Module.WalletV4.EnterpriseAddress.from_address(cslAddress)?.payment_cred().to_keyhash() ??
-        Module.WalletV4.RewardAddress.from_address(cslAddress)?.payment_cred().to_keyhash();
-      return keyHash?.to_hex() ?? null;
+        Module.CML.BaseAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex() ??
+        Module.CML.PointerAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex() ??
+        Module.CML.EnterpriseAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex() ??
+        Module.CML.RewardAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex();
+      return keyHash ?? null;
     })
   );
 
@@ -96,16 +96,16 @@ test('derives enterprise address bytes from key-controlled address forms with CM
   ];
   const expected = RustModule.WasmScope(Module =>
     addressHexes.map(addressHex => {
-      const address = Module.WalletV4.Address.from_hex(addressHex);
+      const address = Module.CML.Address.from_hex(addressHex);
       const keyHash =
-        Module.WalletV4.BaseAddress.from_address(address)?.payment_cred().to_keyhash() ??
-        Module.WalletV4.PointerAddress.from_address(address)?.payment_cred().to_keyhash() ??
-        Module.WalletV4.EnterpriseAddress.from_address(address)?.payment_cred().to_keyhash() ??
-        Module.WalletV4.RewardAddress.from_address(address)?.payment_cred().to_keyhash();
+        Module.CML.BaseAddress.from_address(address)?.payment().as_pub_key() ??
+        Module.CML.PointerAddress.from_address(address)?.payment().as_pub_key() ??
+        Module.CML.EnterpriseAddress.from_address(address)?.payment().as_pub_key() ??
+        Module.CML.RewardAddress.from_address(address)?.payment().as_pub_key();
       if (keyHash == null) return undefined;
-      return Module.WalletV4.EnterpriseAddress.new(
+      return Module.CML.EnterpriseAddress.new(
         address.network_id(),
-        Module.WalletV4.Credential.from_keyhash(keyHash)
+        Module.CML.Credential.new_pub_key(keyHash)
       ).to_address().to_hex();
     })
   );
