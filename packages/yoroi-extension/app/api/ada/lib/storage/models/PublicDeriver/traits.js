@@ -101,7 +101,6 @@ import { ChainDerivations } from '../../../../../../config/numbersConfig';
 
 import type { Cip1852PublicDeriver } from './index';
 import { ConceptualWallet } from '../ConceptualWallet/index';
-import { RustModule } from '../../../cardanoCrypto/rustLoader';
 import { isCardanoHaskell } from '../../database/prepackaged/networks';
 import { GetUtxoAtSafePoint, GetUtxoDiffToBestBlock } from '../../database/utxo/api/read';
 import type { Utxo } from '@emurgo/yoroi-lib/dist/utxo/models';
@@ -1286,11 +1285,6 @@ const ScanLegacyCardanoAccountUtxoMixin = (superclass: Class<ScanLegacyCardanoAc
       IScanAccountRequest,
       Map<number, string>
     ) => Promise<IScanAccountResponse> = async (_tx, _deps, body, _derivationTables): Promise<IScanAccountResponse> => {
-      const key = RustModule.WalletV2.Bip44AccountPublic.new(
-        RustModule.WalletV2.PublicKey.from_hex(body.accountPublicKey),
-        RustModule.WalletV2.DerivationScheme.v2()
-      );
-
       const network = this.getParent().getNetworkInfo();
       if (network.BaseConfig[0].ByronNetworkId == null) {
         throw new Error(`${nameof(ScanLegacyCardanoAccountUtxo)}::${nameof(this.rawScanAccount)} missing Byron network id`);
@@ -1298,8 +1292,8 @@ const ScanLegacyCardanoAccountUtxoMixin = (superclass: Class<ScanLegacyCardanoAc
       const { ByronNetworkId } = network.BaseConfig[0];
 
       return await scanBip44Account({
-        generateInternalAddresses: v2genAddressBatchFunc(key.bip44_chain(false), ByronNetworkId),
-        generateExternalAddresses: v2genAddressBatchFunc(key.bip44_chain(true), ByronNetworkId),
+        generateInternalAddresses: v2genAddressBatchFunc(body.accountPublicKey, 0, ByronNetworkId),
+        generateExternalAddresses: v2genAddressBatchFunc(body.accountPublicKey, 1, ByronNetworkId),
         network,
         lastUsedInternal: body.lastUsedInternal,
         lastUsedExternal: body.lastUsedExternal,
