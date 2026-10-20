@@ -8,18 +8,19 @@ describe('transaction metadata CML migration', () => {
     await RustModule.load();
   });
 
-  it('encodes auxiliary metadata identically to CSL basic conversions', () => {
+  it('encodes auxiliary metadata with CML basic conversions', () => {
     const metadata = [{ label: '674', data: { msg: 'hello', count: 42 } }];
     const expected = RustModule.WasmScope(Module => {
-      const values = Module.WalletV4.GeneralTransactionMetadata.new();
-      const metadatum = Module.WalletV4.encode_json_str_to_metadatum(
+      const cml = Module.CML;
+      const values = cml.Metadata.new();
+      const metadatum = cml.encode_json_str_to_metadatum(
         JSON.stringify(metadata[0].data),
-        Module.WalletV4.MetadataJsonSchema.BasicConversions
+        cml.MetadataJsonSchema.BasicConversions
       );
-      values.insert(Module.WalletV4.BigNum.from_str(metadata[0].label), metadatum);
-      const auxiliaryData = Module.WalletV4.AuxiliaryData.new();
-      auxiliaryData.set_metadata(values);
-      return Buffer.from(auxiliaryData.to_bytes());
+      // eslint-disable-next-line no-undef
+      values.set(BigInt(metadata[0].label), metadatum);
+      const auxiliaryData = cml.AuxiliaryData.new_shelley(values);
+      return Buffer.from(auxiliaryData.to_cbor_bytes());
     });
 
     expect(createMetadata(metadata)).toEqual(expected);
@@ -27,11 +28,12 @@ describe('transaction metadata CML migration', () => {
 
   it('decodes metadatum with CML basic and detailed schemas', () => {
     const metadatumHex = RustModule.WasmScope(Module => {
-      const metadatum = Module.WalletV4.encode_json_str_to_metadatum(
+      const cml = Module.CML;
+      const metadatum = cml.encode_json_str_to_metadatum(
         JSON.stringify({ msg: 'hello', count: 42 }),
-        Module.WalletV4.MetadataJsonSchema.BasicConversions
+        cml.MetadataJsonSchema.BasicConversions
       );
-      return metadatum.to_hex();
+      return Buffer.from(metadatum.to_cbor_bytes()).toString('hex');
     });
 
     expect(JSON.parse(parseMetadata(metadatumHex))).toEqual({ msg: 'hello', count: 42 });

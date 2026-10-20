@@ -16,19 +16,13 @@ beforeAll(async () => {
 test('creates byte-compatible stake registration, delegation, and deregistration certificates with CML', () => {
   const stakingKeyHash = '11'.repeat(28);
   const poolKeyHash = '22'.repeat(28);
-  const expected = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    const credential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex(stakingKeyHash));
-    return {
-      registrationAndDelegation: [
-        CSL.Certificate.new_stake_registration(CSL.StakeRegistration.new(credential)).to_hex(),
-        CSL.Certificate.new_stake_delegation(
-          CSL.StakeDelegation.new(credential, CSL.Ed25519KeyHash.from_hex(poolKeyHash))
-        ).to_hex(),
-      ],
-      deregistration: [CSL.Certificate.new_stake_deregistration(CSL.StakeDeregistration.new(credential)).to_hex()],
-    };
-  });
+  const expected = {
+    registrationAndDelegation: [
+      `82008200581c${stakingKeyHash}`,
+      `83028200581c${stakingKeyHash}581c${poolKeyHash}`,
+    ],
+    deregistration: [`82018200581c${stakingKeyHash}`],
+  };
 
   expect(createCertificate(stakingKeyHash, false, poolKeyHash, undefined)).toEqual(expected.registrationAndDelegation);
   expect(createCertificate(stakingKeyHash, true, undefined, undefined)).toEqual(expected.deregistration);
@@ -40,28 +34,22 @@ test('creates byte-compatible vote delegation certificates for key, script, and 
   const stakingKeyHash = '11'.repeat(28);
   const drepKeyHash = '22'.repeat(28);
   const drepScriptHash = '33'.repeat(28);
-  const { keyCredentialHex, scriptCredentialHex, expected } = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    const stakeCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex(stakingKeyHash));
-    const keyCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex(drepKeyHash));
-    const scriptCredential = CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex(drepScriptHash));
+  const { keyCredentialHex, scriptCredentialHex } = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const keyCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(drepKeyHash));
+    const scriptCredential = cml.Credential.new_script(cml.ScriptHash.from_hex(drepScriptHash));
     return {
-      keyCredentialHex: keyCredential.to_hex(),
-      scriptCredentialHex: scriptCredential.to_hex(),
-      expected: [
-        CSL.Certificate.new_vote_delegation(
-          CSL.VoteDelegation.new(stakeCredential, CSL.DRep.new_key_hash(CSL.Ed25519KeyHash.from_hex(drepKeyHash)))
-        ).to_hex(),
-        CSL.Certificate.new_vote_delegation(
-          CSL.VoteDelegation.new(stakeCredential, CSL.DRep.new_script_hash(CSL.ScriptHash.from_hex(drepScriptHash)))
-        ).to_hex(),
-        CSL.Certificate.new_vote_delegation(CSL.VoteDelegation.new(stakeCredential, CSL.DRep.new_always_abstain())).to_hex(),
-        CSL.Certificate.new_vote_delegation(
-          CSL.VoteDelegation.new(stakeCredential, CSL.DRep.new_always_no_confidence())
-        ).to_hex(),
-      ],
+      keyCredentialHex: keyCredential.to_cbor_hex(),
+      scriptCredentialHex: scriptCredential.to_cbor_hex(),
     };
   });
+  const stakeCredentialHex = `8200581c${stakingKeyHash}`;
+  const expected = [
+    `8309${stakeCredentialHex}${keyCredentialHex}`,
+    `8309${stakeCredentialHex}${scriptCredentialHex}`,
+    `8309${stakeCredentialHex}8102`,
+    `8309${stakeCredentialHex}8103`,
+  ];
 
   expect(createCertificate(stakingKeyHash, true, undefined, keyCredentialHex)).toEqual([expected[0]]);
   expect(createCertificate(stakingKeyHash, true, undefined, scriptCredentialHex)).toEqual([expected[1]]);
@@ -71,19 +59,19 @@ test('creates byte-compatible vote delegation certificates for key, script, and 
 
 test('creates byte-compatible deregistration certificates from key reward addresses and rejects script credentials', () => {
   const { keyRewardAddressHex, scriptRewardAddressHex, expected } = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    const keyCredential = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
-    const scriptCredential = CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
-    const keyAddressHex = CSL.RewardAddress.new(1, keyCredential)
+    const cml = Module.CML;
+    const keyCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const scriptCredential = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
+    const keyAddressHex = cml.RewardAddress.new(1, keyCredential)
       .to_address()
       .to_hex();
-    const scriptAddressHex = CSL.RewardAddress.new(1, scriptCredential)
+    const scriptAddressHex = cml.RewardAddress.new(1, scriptCredential)
       .to_address()
       .to_hex();
     return {
       keyRewardAddressHex: keyAddressHex,
       scriptRewardAddressHex: scriptAddressHex,
-      expected: CSL.Certificate.new_stake_deregistration(CSL.StakeDeregistration.new(keyCredential)).to_hex(),
+      expected: `82018200581c${'11'.repeat(28)}`,
     };
   });
 
