@@ -126,24 +126,19 @@ async function getWalletState(publicDeriver: PublicDeriver<>): Promise<WalletSta
   const protocolParameters = await getProtocolParameters(network.NetworkId);
   const deposits: Array<BigNumber> = addressedUtxos.map(u => {
     try {
-      const output = RustModule.WalletV4.TransactionOutput.new(
-        // using a dummy common base address here. This is the longest address
-        // to ensure safety but and not optimum.
-        RustModule.WalletV4.Address.from_hex('0'.repeat(114)),
-        // $FlowIgnore[prop-missing] property `addressing` is missing in  `RemoteUnspentOutput` [1] but exists in  `CardanoAddressedUtxo` [2]
-        cardanoValueFromRemoteFormat(u)
-      );
-      // todo: set data hash here if necessary
       return new BigNumber(
-        RustModule.WalletV4.min_ada_for_output(
-          output,
-          RustModule.WalletV4.DataCost.new_coins_per_byte(
-            RustModule.WalletV4.BigNum.from_str(protocolParameters.coinsPerUtxoByte)
-          )
-        ).to_str()
+        RustModule.WasmScope(Module => {
+          const cml = Module.CML;
+          // Use a maximum-length Shelley base address to keep the legacy conservative reserve.
+          const output = cml.TransactionOutput.new(
+            cml.Address.from_hex('0'.repeat(114)),
+            cardanoValueFromRemoteFormat(u)
+          );
+          // eslint-disable-next-line no-undef
+          return cml.min_ada_required(output, BigInt(protocolParameters.coinsPerUtxoByte)).toString();
+        })
       );
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error(`Failed to calculate min-required ADA for utxo: ${JSON.stringify(u)}`, e);
       return new BigNumber('0');
     }
