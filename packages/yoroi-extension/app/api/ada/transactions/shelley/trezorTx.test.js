@@ -4,7 +4,7 @@ import '../../lib/test-config.forTests';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { toTrezorSignRequest, toTrezorAddressParameters, buildConnectorSignedTransaction } from './trezorTx';
 import { networks } from '../../lib/storage/database/prepackaged/networks';
-import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage/bridge/utils';
+import { normalizeToAddress } from '../../lib/storage/bridge/utils';
 import { CardanoCertificateType, CardanoAddressType, CardanoTxWitnessType } from 'trezor-connect-flow';
 import { ChainDerivations } from '../../../../config/numbersConfig';
 import { hexToBytes } from '../../../../coreUtils';
@@ -15,25 +15,6 @@ beforeAll(async () => {
 });
 
 const network = networks.CardanoMainnet;
-
-function getProtocolParams(): {|
-  linearFee: RustModule.WalletV4.LinearFee,
-  coinsPerUtxoByte: RustModule.WalletV4.BigNum,
-  poolDeposit: RustModule.WalletV4.BigNum,
-  keyDeposit: RustModule.WalletV4.BigNum,
-  networkId: number,
-|} {
-  return {
-    linearFee: RustModule.WalletV4.LinearFee.new(
-      RustModule.WalletV4.BigNum.from_str('2'),
-      RustModule.WalletV4.BigNum.from_str('500')
-    ),
-    coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str('1'),
-    poolDeposit: RustModule.WalletV4.BigNum.from_str('500'),
-    keyDeposit: RustModule.WalletV4.BigNum.from_str('500'),
-    networkId: network.NetworkId,
-  };
-}
 
 test('Generate address parameters', async () => {
   const path = [2147483692, 2147485463, 2147483648, 1, 1];
@@ -103,10 +84,10 @@ test('Generate address parameters', async () => {
 
 test('address parameters preserve script stake credentials with CML', () => {
   const addressHex = RustModule.WasmScope(Module => {
-    const CSL = Module.WalletV4;
-    const payment = CSL.Credential.from_keyhash(CSL.Ed25519KeyHash.from_hex('11'.repeat(28)));
-    const stake = CSL.Credential.from_scripthash(CSL.ScriptHash.from_hex('22'.repeat(28)));
-    return CSL.BaseAddress.new(0, payment, stake).to_address().to_hex();
+    const cml = Module.CML;
+    const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const stake = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
+    return cml.BaseAddress.new(0, payment, stake).to_address().to_hex();
   });
   expect(toTrezorAddressParameters(addressHex, [1, 2])).toEqual({
     addressType: CardanoAddressType.BASE,
@@ -236,57 +217,45 @@ test('Create Trezor transaction', async () => {
       assets: [],
     },
   ];
-  const protocolParams = getProtocolParams();
-  const txBuilder = RustModule.WalletV4TxBuilder(protocolParams);
-  for (const utxo of senderUtxos) {
-    const wasmAddr = normalizeToAddress(utxo.receiver);
-    if (wasmAddr == null) throw new Error(`Unknown address ${utxo.receiver}`);
-    const keyHash = getCardanoSpendingKeyHash(wasmAddr);
-    if (keyHash === undefined) throw new Error(`Unexpected script address ${utxo.receiver}`);
-    if (keyHash == null) {
-      txBuilder.add_bootstrap_input(
-        RustModule.WalletV4.ByronAddress.from_base58(utxo.receiver),
-        RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
-        RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount))
-      );
-    } else {
-      txBuilder.add_key_input(
-        RustModule.WalletV4.Ed25519KeyHash.from_hex(keyHash),
-        RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
-        RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount))
-      );
+  const bodyHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const inputs = cml.TransactionInputList.new();
+    // Transaction inputs are serialized as a ledger set; use canonical hash order as the old builder did.
+    for (const utxo of [...senderUtxos].sort((left, right) => left.tx_hash.localeCompare(right.tx_hash))) {
+      // eslint-disable-next-line no-undef
+      inputs.add(cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index)));
     }
-  }
-  const outputValue = RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str('6323634'));
-  const outputAssets = RustModule.WalletV4.Assets.new();
-  outputAssets.insert(RustModule.WalletV4.AssetName.new(hexToBytes('aabb')), RustModule.WalletV4.BigNum.from_str('4'));
-  const outputMultiAsset = RustModule.WalletV4.MultiAsset.new();
-  outputMultiAsset.insert(RustModule.WalletV4.ScriptHash.from_hex('11'.repeat(28)), outputAssets);
-  outputValue.set_multiasset(outputMultiAsset);
-  txBuilder.add_output(
-    RustModule.WalletV4.TransactionOutput.new(
-      RustModule.WalletV4.Address.from_bech32('addr1stvpskppsdvpezg6ex464jvekztus84rcpzskramdy7sh53jh67q7j3er7sqqxhjlalzzsk0pgc'),
-      outputValue
-    )
-  );
-  const certs = RustModule.WalletV4.Certificates.new();
+    const multiAsset = cml.MultiAsset.new();
+    multiAsset.set(cml.ScriptHash.from_hex('11'.repeat(28)), cml.AssetName.from_raw_bytes(hexToBytes('aabb')), 4n);
+    const outputs = cml.TransactionOutputList.new();
+    outputs.add(
+      cml.TransactionOutput.new(
+        cml.Address.from_bech32('addr1stvpskppsdvpezg6ex464jvekztus84rcpzskramdy7sh53jh67q7j3er7sqqxhjlalzzsk0pgc'),
+        cml.Value.new(6_323_634n, multiAsset)
+      )
+    );
 
-  // note: key doesn't belong to the account signing. Just used to test witness generation
-  const accountKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-    '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
-  );
-  const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-  const stakeCredential = RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_raw_key().to_public().hash());
-  certs.add(RustModule.WalletV4.Certificate.new_stake_registration(RustModule.WalletV4.StakeRegistration.new(stakeCredential)));
-  txBuilder.set_certs(certs);
-  txBuilder.set_fee(RustModule.WalletV4.BigNum.from_str('2000'));
-  txBuilder.set_ttl(500);
+    // note: key doesn't belong to the account signing. Just used to test certificate parsing.
+    const accountKey = cml.Bip32PrivateKey.from_raw_bytes(
+      hexToBytes(
+        '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
+      )
+    );
+    const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
+    const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_raw_key().to_public().hash());
+    const certificates = cml.CertificateList.new();
+    certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
+    const body = cml.TransactionBody.new(inputs, outputs, 2_000n);
+    body.set_certs(certificates);
+    body.set_ttl(500n);
+    return body.to_cbor_hex();
+  });
 
   const baseConfig = network.BaseConfig.reduce((acc, next) => Object.assign(acc, next), {});
   const { ByronNetworkId, ChainNetworkId } = baseConfig;
 
   const response = toTrezorSignRequest(
-    txBuilder.build().to_hex(),
+    bodyHex,
     Number.parseInt(ChainNetworkId, 10),
     ByronNetworkId,
     _address => [2147483692, 2147485463, 2147483648, 2, 0],
