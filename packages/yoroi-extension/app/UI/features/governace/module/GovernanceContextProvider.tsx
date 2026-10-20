@@ -1,6 +1,5 @@
-import { GovernanceApi } from '@emurgo/yoroi-lib/dist/governance/emurgo-api';
 import * as React from 'react';
-import { RustModule } from '../../../../api/ada/lib/cardanoCrypto/rustLoader';
+import CmlGovernanceApi from '../../../../api/ada/lib/cardanoCrypto/cmlGovernanceApi';
 import { dRepNormalize } from '../../../../api/ada/lib/cardanoCrypto/utils';
 import { stakingKeyHashFromRewardAddress } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { getPrivateStakingKey } from '../../../../api/thunk';
@@ -104,11 +103,10 @@ export const GovernanceContextProvider = ({
   }, [stakingKeyHex]);
 
   const getGovApiState = async () => {
-    const govApi = new GovernanceApi({
+    const govApi = new CmlGovernanceApi({
       oldBackendUrl: String(backendService),
       newBackendUrl: String(backendServiceZero),
       networkId: networkId,
-      wasmFactory: RustModule.CrossCsl.init,
     });
     const governanceStatusState: any = await govApi.getAccountState(
       stakingAddress.substring(2) || '',

@@ -4,7 +4,7 @@ import { action, observable, runInAction } from 'mobx';
 import { find } from 'lodash';
 import LocalizedRequest from '../lib/LocalizedRequest';
 import Store from '../base/Store';
-import { GovernanceApi } from '@emurgo/yoroi-lib/dist/governance/emurgo-api';
+import CmlGovernanceApi from '../../api/ada/lib/cardanoCrypto/cmlGovernanceApi';
 import CachedRequest from '../lib/LocalizedCachedRequest';
 import LocalizableError from '../../i18n/LocalizableError';
 import { PoolMissingApiError, GetPoolInfoApiError } from '../../api/common/errors';
@@ -326,12 +326,10 @@ export default class DelegationStore extends Store<StoresMap> {
       if (!BackendService || !BackendServiceZero) {
         throw new Error('unexpectedly missing backend');
       }
-      const govApi = new GovernanceApi({
+      const govApi = new CmlGovernanceApi({
         oldBackendUrl: BackendService,
         newBackendUrl: BackendServiceZero,
         networkId: publicDeriver.networkId,
-        // $FlowIgnore
-        wasmFactory: RustModule.CrossCsl.init,
       });
 
       const governanceStatus = await govApi.getAccountState(skey, skey);
