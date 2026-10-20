@@ -221,7 +221,7 @@ export type SignAndBroadcastRequest = {|
       | RustModule.WalletV4.TransactionBody
       | Buffer
       | Uint8Array,
-    metadata: void | RustModule.WalletV4.AuxiliaryData | Uint8Array,
+    metadata: void | Uint8Array,
     ...
   },
   password: string,
@@ -371,7 +371,7 @@ export type CreateVotingRegTxRequest =
   | {|
       ...CreateVotingRegTxRequestCommon,
       normalWallet: {|
-        metadata: RustModule.WalletV4.AuxiliaryData,
+        metadata: Uint8Array,
       |},
     |}
   | {|
@@ -391,7 +391,7 @@ export type CreateSimpleTxRequest = {|
     ...
   },
   entries: Array<TxOutput>,
-  metadata: RustModule.WalletV4.AuxiliaryData,
+  metadata: Uint8Array,
   protocolParameters: ProtocolParameters,
 |};
 

@@ -72,10 +72,6 @@ export type TrezorTCatalystRegistrationTxSignData = LedgerNanoCatalystRegistrati
 type UnsignedTx = Uint8Array;
 type TxMetadata = Uint8Array;
 
-function metadataBytes(metadata: RustModule.WalletV4.AuxiliaryData | Uint8Array): Uint8Array {
-  return metadata instanceof Uint8Array ? metadata : metadata.to_bytes();
-}
-
 export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   receiver: ?{| address: string, handle: {| handle: string, nameServer: string |} | void |};
   senderUtxos: Array<CardanoAddressedUtxo>;
@@ -94,7 +90,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     implicitInputValue?: void | Uint8Array,
     depositAmount?: void | string,
     changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
-    metadata: void | (RustModule.WalletV4.AuxiliaryData | TxMetadata),
+    metadata: void | TxMetadata,
     networkSettingSnapshot: NetworkSettingSnapshot,
     trezorTCatalystRegistrationTxSignData?: void | TrezorTCatalystRegistrationTxSignData,
     ledgerNanoCatalystRegistrationTxSignData?: void | LedgerNanoCatalystRegistrationTxSignData,
@@ -105,7 +101,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     this.implicitInputValue = data.implicitInputValue;
     this.depositAmount = data.depositAmount;
     this.changeAddr = data.changeAddr;
-    this.metadata = data.metadata == null ? undefined : metadataBytes(data.metadata);
+    this.metadata = data.metadata;
     this.networkSettingSnapshot = data.networkSettingSnapshot;
     this.trezorTCatalystRegistrationTxSignData = data.trezorTCatalystRegistrationTxSignData;
     this.ledgerNanoCatalystRegistrationTxSignData = data.ledgerNanoCatalystRegistrationTxSignData;
@@ -123,7 +119,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
       const cml = Module.CML;
       const body = cml.TransactionBody.from_cbor_bytes(this.unsignedTx);
       const witnesses = cml.TransactionWitnessSet.new();
-      const metadata = this.metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(metadataBytes(this.metadata));
+      const metadata = this.metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(this.metadata);
       return cml.Transaction.new(body, witnesses, true, metadata).to_cbor_hex();
     });
   }
@@ -338,7 +334,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     return this.unsignedTx;
   }
 
-  setMetadata(metadata: RustModule.WalletV4.AuxiliaryData | Uint8Array): void {
-    this.metadata = metadataBytes(metadata);
+  setMetadata(metadata: TxMetadata): void {
+    this.metadata = metadata;
   }
 }

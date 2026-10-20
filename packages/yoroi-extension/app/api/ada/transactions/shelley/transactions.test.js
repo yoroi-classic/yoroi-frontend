@@ -1212,7 +1212,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
         utxos,
         new BigNumber(0),
         getSendAllProtocolParams(),
-        metadata.to_bytes(),
+        metadata,
         network.NetworkId
       );
 
@@ -1222,7 +1222,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       expect(body.inputCount).toBe(2);
       expect(expectedInput.minus(body.outputTotal).toString()).toBe(body.fee);
       expect(new BigNumber(body.fee).gt(0)).toBe(true);
-      const auxiliaryData = RustModule.WalletV4.AuxiliaryData.from_bytes(metadata.to_bytes());
+      const auxiliaryData = RustModule.WalletV4.AuxiliaryData.from_bytes(metadata);
       expect(body.auxiliaryDataHash).toBe(RustModule.WalletV4.hash_auxiliary_data(auxiliaryData).to_hex());
       expect(sendAllResponse.changeAddr).toHaveLength(1);
       expect(sendAllResponse.changeAddr[0].address).toBe(changeAddress.address);
@@ -1239,13 +1239,13 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       [utxo],
       new BigNumber(0),
       getSendAllProtocolParams(),
-      metadata.to_bytes(),
+      metadata,
       network.NetworkId
     );
     const { fullTxHex, auxiliaryDataHex } = RustModule.WasmScope(Module => {
       const cml = Module.CML;
       const body = cml.TransactionBody.from_cbor_bytes(response.txBuilder);
-      const auxiliaryData = cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes());
+      const auxiliaryData = cml.AuxiliaryData.from_cbor_bytes(metadata);
       const sourceAuxiliaryDataHex = auxiliaryData.to_cbor_hex();
       return {
         fullTxHex: cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true, auxiliaryData).to_cbor_hex(),

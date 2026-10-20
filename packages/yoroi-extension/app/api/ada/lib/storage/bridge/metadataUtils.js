@@ -9,7 +9,7 @@ export type TransactionMetadata = {|
 
 // Keep the existing to_bytes() boundary expected by transaction code, while
 // ensuring all metadata parsing and encoding is performed by CML.
-export function createMetadata(metadata: Array<TransactionMetadata>): any {
+export function createMetadata(metadata: Array<TransactionMetadata>): Uint8Array {
   return RustModule.WasmScope(Module => {
     const transactionMetadata = Module.CML.Metadata.new();
 
@@ -26,9 +26,7 @@ export function createMetadata(metadata: Array<TransactionMetadata>): any {
     const bytes = Buffer.from(auxData.to_cbor_bytes());
     auxData.free();
     transactionMetadata.free();
-    return {
-      to_bytes: () => Buffer.from(bytes),
-    };
+    return bytes;
   });
 }
 

@@ -897,7 +897,7 @@ export function buildConnectorSignedTransaction(
     ...Addressing,
     key: RustModule.WalletV4.Bip32PublicKey,
   |},
-  metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
+  metadata: ?Uint8Array,
   // to support transfering from Byron address when initializing Ledger wallets
   pathToReceiverMapping: Map<string, string> = new Map()
 ): {| txHex: string, txId: string |} {
@@ -911,7 +911,7 @@ export function buildConnectorSignedTransaction(
     const body = tx.body();
     const auxiliaryData = metadata == null
       ? tx.auxiliary_data()
-      : cml.AuxiliaryData.from_cbor_bytes(metadata instanceof Uint8Array ? metadata : metadata.to_bytes());
+      : cml.AuxiliaryData.from_cbor_bytes(metadata);
     if (metadata != null) body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
     const witnessSet = tx.witness_set();
     const vkeyWitnesses = witnessSet.vkeywitnesses() ?? cml.VkeywitnessList.new();

@@ -163,8 +163,8 @@ test('Assemble Trezor witnesses and metadata with CML', () => {
       signatures: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).ed25519_signature().to_hex()),
       metadataHex: transaction.auxiliary_data().to_cbor_hex(),
       metadataHash: body.auxiliary_data_hash().to_hex(),
-      expectedMetadataHex: cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes()).to_cbor_hex(),
-      expectedMetadataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes())).to_hex(),
+      expectedMetadataHex: cml.AuxiliaryData.from_cbor_bytes(metadata).to_cbor_hex(),
+      expectedMetadataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata)).to_hex(),
     };
   });
 

@@ -496,7 +496,7 @@ test('Create Ledger transaction', async () => {
       bootstrapHex: bootstraps.get(0).to_cbor_hex(),
       auxiliaryDataHex: auxiliaryData.to_cbor_hex(),
       auxiliaryDataHash: body.auxiliary_data_hash().to_hex(),
-      expectedAuxiliaryDataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes())).to_hex(),
+      expectedAuxiliaryDataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata)).to_hex(),
     };
   });
   expect(signedSummary.bodyHex).not.toEqual(originalBodyHex);
@@ -523,7 +523,7 @@ test('Create Ledger transaction', async () => {
     ).to_hex()
   );
   expect(signedSummary.auxiliaryDataHex).toEqual(
-    RustModule.WasmScope(Module => Module.CML.AuxiliaryData.from_cbor_bytes(metadata.to_bytes()).to_cbor_hex())
+    RustModule.WasmScope(Module => Module.CML.AuxiliaryData.from_cbor_bytes(metadata).to_cbor_hex())
   );
   expect(signedSummary.auxiliaryDataHash).toEqual(signedSummary.expectedAuxiliaryDataHash);
 });

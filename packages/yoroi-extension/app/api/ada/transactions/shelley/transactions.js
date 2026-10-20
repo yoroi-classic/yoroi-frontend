@@ -241,7 +241,7 @@ export async function newAdaUnsignedTx(
     amount: RustModule.WalletV4.BigNum,
   |}>,
   allowNoOutputs: boolean,
-  metadata: RustModule.WalletV4.AuxiliaryData | void,
+  metadata: Uint8Array | void,
   networkId: number
 ): Promise<V4UnsignedTxAddressedUtxoResponse> {
   const addressingMap = new Map<RemoteUnspentOutput, CardanoAddressedUtxo>();
@@ -442,7 +442,7 @@ export async function newAdaUnsignedTxFromUtxo(
     amount: RustModule.WalletV4.BigNum,
   |}>,
   allowNoOutputs: boolean,
-  auxiliaryData: RustModule.WalletV4.AuxiliaryData | void,
+  auxiliaryData: Uint8Array | void,
   networkId: number
 ): Promise<V4UnsignedTxUtxoResponse> {
   await RustModule.load();
@@ -490,7 +490,7 @@ export async function newAdaUnsignedTxFromUtxo(
         ).payment_key()
       );
     }
-    if (auxiliaryData) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(auxiliaryData.to_bytes()));
+    if (auxiliaryData) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(auxiliaryData));
 
     for (const output of outputs) {
       let datumOption;
@@ -1047,7 +1047,7 @@ export async function signTransactionFromWallet(
     | Uint8Array,
   wallet: PublicDeriver<>,
   password: string,
-  metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
+  metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
 ): Promise<RustModule.WalletV4.Transaction | Uint8Array> {
   const withSigning = asGetSigningKey(wallet);
@@ -1126,7 +1126,7 @@ export function signTransaction(
   keyLevel: number,
   signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
   stakingKey: ?Uint8Array,
-  metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
+  metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
 ): RustModule.WalletV4.Transaction | Uint8Array {
   if (unsignedTx instanceof Buffer || unsignedTx instanceof Uint8Array) {
@@ -1234,9 +1234,7 @@ export function signTransaction(
 
   // Have to do this, because `Transaction.new` receives by value instead of reference
   // <TODO:SERLIB_REFERENCE_CALL_FIX>
-  const metadataClone = metadata == null
-    ? null
-    : RustModule.WalletV4.AuxiliaryData.from_bytes(Buffer.from(metadata instanceof Uint8Array ? metadata : metadata.to_bytes()));
+  const metadataClone = metadata == null ? null : RustModule.WalletV4.AuxiliaryData.from_bytes(Buffer.from(metadata));
 
   return RustModule.WalletV4.Transaction.new(
     txBody,
@@ -1252,7 +1250,7 @@ function signCmlTransaction(
   keyLevel: number,
   signingKey: RustModule.WalletV4.Bip32PrivateKey | RustModule.CML.Bip32PrivateKey,
   stakingKey: ?Uint8Array,
-  metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array),
+  metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}>
 ): Uint8Array {
   const uniqueAddressings: Array<UtxoOrAddressing> = [];
@@ -1307,9 +1305,7 @@ function signCmlTransaction(
       }
     }
     const witnesses = witnessBuilder.build();
-    const cmlMetadata = metadata == null
-      ? undefined
-      : cml.AuxiliaryData.from_cbor_bytes(metadata instanceof Uint8Array ? metadata : metadata.to_bytes());
+    const cmlMetadata = metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(metadata);
     return cml.Transaction.new(body, witnesses, true, cmlMetadata).to_cbor_bytes();
   });
 }

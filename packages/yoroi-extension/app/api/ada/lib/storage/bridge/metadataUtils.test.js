@@ -22,7 +22,7 @@ describe('transaction metadata CML migration', () => {
       return Buffer.from(auxiliaryData.to_bytes());
     });
 
-    expect(createMetadata(metadata).to_bytes()).toEqual(expected);
+    expect(createMetadata(metadata)).toEqual(expected);
   });
 
   it('decodes metadatum with CML basic and detailed schemas', () => {

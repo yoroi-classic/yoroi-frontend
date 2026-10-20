@@ -534,7 +534,7 @@ export function toTrezorSignRequest(
 export function buildConnectorSignedTransaction(
   rawTxHex: string,
   witnesses: Array<CardanoSignedTxWitness>,
-  metadata: ?(RustModule.WalletV4.AuxiliaryData | Uint8Array)
+  metadata: ?Uint8Array
 ): {| txHex: string, txId: string |} {
   const txHex = RustModule.WasmScope(Module => {
     const cml = Module.CML;
@@ -542,7 +542,7 @@ export function buildConnectorSignedTransaction(
     const body = tx.body();
     const auxiliaryData = metadata == null
       ? tx.auxiliary_data()
-      : cml.AuxiliaryData.from_cbor_bytes(metadata instanceof Uint8Array ? metadata : metadata.to_bytes());
+      : cml.AuxiliaryData.from_cbor_bytes(metadata);
     if (metadata != null) body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
     const witnessSet = tx.witness_set();
     const vkeyWitnesses = witnessSet.vkeywitnesses() ?? cml.VkeywitnessList.new();
