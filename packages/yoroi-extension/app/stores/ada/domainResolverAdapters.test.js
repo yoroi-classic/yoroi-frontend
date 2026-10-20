@@ -127,8 +127,10 @@ describe.each(adapterCases.map(adapter => [adapter.name, adapter]))('%s producti
 
 test('mainnet address validation rejects malformed and reward addresses', () => {
   const rewardAddress = 'stake1u9ylzsgz7ueq3xqu0jj8r39jex5mfrt8k2cl98y4g8n6tzqf3tk9k';
+  const legacyAddress = 'Ae2tdPwUPEZC6WJfVQxTNN2tWw4skGrN6zRVukvxJmTFy1nYkVGQBuURU3L';
 
   expect(isValidMainnetPaymentAddress(MAINNET_ADDRESS)).toBe(true);
   expect(isValidMainnetPaymentAddress(rewardAddress)).toBe(false);
+  expect(isValidMainnetPaymentAddress(legacyAddress)).toBe(false);
   expect(isValidMainnetPaymentAddress('not-an-address')).toBe(false);
 });
