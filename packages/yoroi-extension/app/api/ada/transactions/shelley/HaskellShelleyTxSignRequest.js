@@ -70,6 +70,11 @@ export type LedgerNanoCatalystRegistrationTxSignData = {|
 export type TrezorTCatalystRegistrationTxSignData = LedgerNanoCatalystRegistrationTxSignData;
 
 type UnsignedTx = RustModule.WalletV4.TransactionBuilder | Uint8Array;
+type TxMetadata = RustModule.WalletV4.AuxiliaryData | Uint8Array;
+
+function metadataBytes(metadata: TxMetadata): Uint8Array {
+  return metadata instanceof Uint8Array ? metadata : metadata.to_bytes();
+}
 
 export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   receiver: ?{| address: string, handle: {| handle: string, nameServer: string |} | void |};
@@ -78,7 +83,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   implicitInputValue: void | Uint8Array;
   depositAmount: void | string;
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>;
-  metadata: void | RustModule.WalletV4.AuxiliaryData;
+  metadata: void | TxMetadata;
   networkSettingSnapshot: NetworkSettingSnapshot;
   trezorTCatalystRegistrationTxSignData: void | TrezorTCatalystRegistrationTxSignData;
   ledgerNanoCatalystRegistrationTxSignData: void | LedgerNanoCatalystRegistrationTxSignData;
@@ -89,7 +94,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     implicitInputValue?: void | Uint8Array,
     depositAmount?: void | string,
     changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
-    metadata: void | RustModule.WalletV4.AuxiliaryData,
+    metadata: void | TxMetadata,
     networkSettingSnapshot: NetworkSettingSnapshot,
     trezorTCatalystRegistrationTxSignData?: void | TrezorTCatalystRegistrationTxSignData,
     ledgerNanoCatalystRegistrationTxSignData?: void | LedgerNanoCatalystRegistrationTxSignData,
@@ -122,7 +127,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
       const cml = Module.CML;
       const body = cml.TransactionBody.from_cbor_bytes(this.unsignedTx);
       const witnesses = cml.TransactionWitnessSet.new();
-      const metadata = this.metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(this.metadata.to_bytes());
+      const metadata = this.metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(metadataBytes(this.metadata));
       return cml.Transaction.new(body, witnesses, true, metadata).to_cbor_hex();
     });
   }

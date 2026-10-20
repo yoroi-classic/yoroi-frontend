@@ -218,7 +218,7 @@ export type SignAndBroadcastRequest = {|
       | RustModule.WalletV4.TransactionBody
       | Buffer
       | Uint8Array,
-    metadata: void | RustModule.WalletV4.AuxiliaryData,
+    metadata: void | RustModule.WalletV4.AuxiliaryData | Uint8Array,
     ...
   },
   password: string,

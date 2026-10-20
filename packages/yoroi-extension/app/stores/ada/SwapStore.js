@@ -31,7 +31,7 @@ import type { WalletState } from '../../../chrome/extension/background/types';
 import { broadcastTransaction, getProtocolParameters } from '../../api/thunk';
 import { getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import { CoreAddressTypes } from '../../api/ada/lib/storage/database/primitives/enums';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
+import { extractSwapCmlTransaction } from './swapCmlTx';
 
 const FRONTEND_FEE_ADDRESS_MAINNET =
   'addr1q9ry6jfdgm0lcrtfpgwrgxg7qfahv80jlghhrthy6w8hmyjuw9ngccy937pm7yw0jjnxasm7hzxjrf8rzkqcj26788lqws5fke';
@@ -239,15 +239,13 @@ export default class SwapStore extends Store<StoresMap> {
   }) => {
     const protocolParameters = await getProtocolParameters(wallet);
 
-    const tx = RustModule.WalletV4.Transaction.from_hex(swapState.createTx.cbor);
+    const swapTx = extractSwapCmlTransaction(swapState.createTx.cbor);
     const senderUtxos = [];
-    const inputs = tx.body().inputs();
-    for (let i = 0; i < inputs.len(); i++) {
-      const input = inputs.get(i);
+    for (const input of swapTx.inputRefs) {
       for (const utxo of wallet.utxos) {
         if (
-          utxo.output.Transaction.Hash === input.transaction_id().to_hex() &&
-          utxo.output.UtxoTransactionOutput.OutputIndex === input.index()
+          utxo.output.Transaction.Hash === input.txHash &&
+          utxo.output.UtxoTransactionOutput.OutputIndex === input.index
         ) {
           senderUtxos.push({
             utxo_id: `${utxo.output.Transaction.Hash}${utxo.output.UtxoTransactionOutput.OutputIndex}`,
@@ -264,14 +262,9 @@ export default class SwapStore extends Store<StoresMap> {
     }
     return new HaskellShelleyTxSignRequest({
       senderUtxos,
-      // $FlowIgnore: by type definition RustModule.WalletV4.TransactionBuilder is expected here but we can get away with what will actually be used
-      unsignedTx: {
-        build_tx() {
-          return tx;
-        },
-      },
+      unsignedTx: swapTx.bodyBytes,
       changeAddr: [], // no used
-      metadata: tx.auxiliary_data(),
+      metadata: swapTx.metadataBytes,
       networkSettingSnapshot: {
         ChainNetworkId: 0, // incorrect, but unused
         KeyDeposit: new BigNumber(protocolParameters.keyDeposit),

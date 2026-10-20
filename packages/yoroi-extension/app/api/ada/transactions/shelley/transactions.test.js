@@ -30,6 +30,8 @@ import { derivePrivateByAddressing } from '../../lib/cardanoCrypto/deriveByAddre
 import { bytesToHex, hexToBytes } from '../../../../coreUtils';
 import { createCertificate } from '../../lib/storage/bridge/delegationUtils';
 import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
+import { extractSwapCmlTransaction } from '../../../../stores/ada/swapCmlTx';
+import { HaskellShelleyTxSignRequest } from './HaskellShelleyTxSignRequest';
 
 const network = networks.CardanoMainnet;
 const defaultIdentifier = defaultAssets.filter(asset => asset.NetworkId === network.NetworkId)[0].Identifier;
@@ -1180,6 +1182,69 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       expect(sendAllResponse.changeAddr[0].address).toBe(changeAddress.address);
       expect(sendAllResponse.changeAddr[0].values.getDefaultEntry().amount.toString()).toBe(body.outputs[0]);
     });
+  });
+
+  it('extracts swap body, inputs, and metadata with CML', () => {
+    const utxo = genSampleUtxos()[1];
+    const receiver = genSampleAdaAddresses()[0];
+    const metadata = createMetadata([{ label: '0', data: { value: 4 } }]);
+    const response = sendAllUnsignedTxFromUtxo(
+      receiver,
+      [utxo],
+      new BigNumber(0),
+      {
+        linearFee: RustModule.WalletV4.LinearFee.new(
+          RustModule.WalletV4.BigNum.from_str('2'),
+          RustModule.WalletV4.BigNum.from_str('500')
+        ),
+        coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str('1'),
+        poolDeposit: RustModule.WalletV4.BigNum.from_str('500'),
+        keyDeposit: RustModule.WalletV4.BigNum.from_str('500'),
+        networkId: network.NetworkId,
+      },
+      metadata,
+      network.NetworkId
+    );
+    const { fullTxHex, auxiliaryDataHex } = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const body = cml.TransactionBody.from_cbor_bytes(response.txBuilder);
+      const auxiliaryData = cml.AuxiliaryData.from_cbor_bytes(metadata.to_bytes());
+      const sourceAuxiliaryDataHex = auxiliaryData.to_cbor_hex();
+      return {
+        fullTxHex: cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true, auxiliaryData).to_cbor_hex(),
+        auxiliaryDataHex: sourceAuxiliaryDataHex,
+      };
+    });
+
+    const extracted = extractSwapCmlTransaction(fullTxHex);
+    expect(Array.from(extracted.bodyBytes)).toEqual(Array.from(response.txBuilder));
+    expect(extracted.inputRefs).toEqual([{ txHash: utxo.tx_hash, index: utxo.tx_index }]);
+    expect(bytesToHex(extracted.metadataBytes)).toEqual(auxiliaryDataHex);
+
+    const signRequest = new HaskellShelleyTxSignRequest({
+      senderUtxos: [],
+      unsignedTx: extracted.bodyBytes,
+      changeAddr: [],
+      metadata: extracted.metadataBytes,
+      networkSettingSnapshot: {
+        NetworkId: network.NetworkId,
+        ChainNetworkId: 1,
+        PoolDeposit: new BigNumber('500'),
+        KeyDeposit: new BigNumber('500'),
+      },
+    });
+    const serializedSignRequestHex = signRequest.serializedUnsignedTxHex();
+    const signRequestSummary = RustModule.WasmScope(Module => {
+      const serializedSignRequest = Module.CML.Transaction.from_cbor_hex(serializedSignRequestHex);
+      return {
+        bodyBytes: serializedSignRequest.body().to_cbor_bytes(),
+        metadataBytes: serializedSignRequest.auxiliary_data().to_cbor_bytes(),
+        vkeyWitnesses: serializedSignRequest.witness_set().vkeywitnesses(),
+      };
+    });
+    expect(Array.from(signRequestSummary.bodyBytes)).toEqual(Array.from(response.txBuilder));
+    expect(bytesToHex(signRequestSummary.metadataBytes)).toEqual(auxiliaryDataHex);
+    expect(signRequestSummary.vkeyWitnesses == null).toBe(true);
   });
 
   it('Should fail due to insufficient funds (no inputs)', () => {
