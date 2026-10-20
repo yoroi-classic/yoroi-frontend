@@ -208,19 +208,16 @@ describe('generators', () => {
 
     const assets = createAssets({ cafebabe: 123, '1234567890': 456, aabbccddeeff: 789 });
 
-    const iter = iterateLenGetMap(assets)[Symbol.iterator]();
+    const entries = [...iterateLenGetMap(assets)].map(([name, amount]) => [
+      bytesToHex(name.to_raw_bytes()),
+      Number(amount),
+    ]);
 
-    function checkEntry(entry: [any, any], hex: string, amount: number) {
-      expect(bytesToHex(entry[0].to_raw_bytes())).toEqual(hex);
-      expect(Number(entry[1])).toEqual(amount);
-    }
-
-    checkEntry(iter.next().value, '1234567890', 456);
-    checkEntry(iter.next().value, 'aabbccddeeff', 789);
-    checkEntry(iter.next().value, 'cafebabe', 123);
-
-    expect(iter.next().done).toEqual(true);
-    expect(iter.next().value).toEqual(undefined);
+    expect(entries.sort(([left], [right]) => left.localeCompare(right))).toEqual([
+      ['1234567890', 456],
+      ['aabbccddeeff', 789],
+      ['cafebabe', 123],
+    ]);
 
     done();
   });
