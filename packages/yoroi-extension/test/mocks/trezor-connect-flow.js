@@ -34,6 +34,7 @@ const cardanoTxSigningMode = {
 };
 
 module.exports = {
+  __esModule: true,
   CardanoAddressType: cardanoAddressType,
   CardanoCertificateType: cardanoCertificateType,
   CardanoDRepType: cardanoDRepType,
