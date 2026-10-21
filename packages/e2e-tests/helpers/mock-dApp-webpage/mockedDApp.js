@@ -3,7 +3,7 @@ import {
   addressToCbor,
   addressesFromCborIfNeeded,
   getAmountInHex,
-  getPublicKeyHash,
+  getPubKeyHashFromHex,
   getCmlValue,
   getDRepIDHexAndBechFromHex,
   mapCborUtxos,
@@ -565,7 +565,7 @@ export class MockDAppWebpage {
     });
     if (response.success && response.retValue.length > 0 && convert) {
       const regPubStakeKey = response.retValue[0];
-      response.retValue = [getPublicKeyHash(regPubStakeKey).to_hex()];
+      response.retValue = [getPubKeyHashFromHex(regPubStakeKey).to_hex()];
     }
     this.logger.info(`MockDApp::getRegisteredPubStakeKeys The response is ${JSON.stringify(response, null, 2)}`);
     return response;
@@ -586,7 +586,7 @@ export class MockDAppWebpage {
     });
     if (response.success && response.retValue.length > 0 && convert) {
       const unregPubStakeKey = response.retValue[0];
-      response.retValue = [getPublicKeyHash(unregPubStakeKey).to_hex()];
+      response.retValue = [getPubKeyHashFromHex(unregPubStakeKey).to_hex()];
     }
     this.logger.info(`MockDApp::getUnregisteredPubStakeKeys The response is ${JSON.stringify(response, null, 2)}`);
     return response;
