@@ -6,12 +6,10 @@ import type { Address, Addressing, Value } from '../../lib/storage/models/Public
 import BigNumber from 'bignumber.js';
 import { ISignRequest } from '../../../common/lib/transactions/ISignRequest';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
-import { toHexOrBase58 } from '../../lib/storage/bridge/utils';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
-import { multiTokenFromCardanoValue, multiTokenFromRemote } from '../utils';
-import typeof { CertificateKind } from '@emurgo/cardano-serialization-lib-browser/cardano_serialization_lib';
-import { iterateLenGet, iterateLenGetMap } from '../../../../coreUtils';
+import { multiTokenFromCMLValue, multiTokenFromRemote } from '../utils';
+import { bytesToHex } from '../../../../coreUtils';
 
 /**
  * We take a copy of these parameters instead of re-evaluating them from the network
@@ -42,21 +40,28 @@ export type LedgerNanoCatalystRegistrationTxSignData = {|
 
 export type TrezorTCatalystRegistrationTxSignData = LedgerNanoCatalystRegistrationTxSignData;
 
-export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.WalletV4.TransactionBuilder> {
+type UnsignedTx = Uint8Array;
+type TxMetadata = Uint8Array;
+
+export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   receiver: ?{| address: string, handle: {| handle: string, nameServer: string |} | void |};
   senderUtxos: Array<CardanoAddressedUtxo>;
-  unsignedTx: RustModule.WalletV4.TransactionBuilder;
+  unsignedTx: UnsignedTx;
+  implicitInputValue: void | Uint8Array;
+  depositAmount: void | string;
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>;
-  metadata: void | RustModule.WalletV4.AuxiliaryData;
+  metadata: void | TxMetadata;
   networkSettingSnapshot: NetworkSettingSnapshot;
   trezorTCatalystRegistrationTxSignData: void | TrezorTCatalystRegistrationTxSignData;
   ledgerNanoCatalystRegistrationTxSignData: void | LedgerNanoCatalystRegistrationTxSignData;
 
   constructor(data: {|
     senderUtxos: Array<CardanoAddressedUtxo>,
-    unsignedTx: RustModule.WalletV4.TransactionBuilder,
+    unsignedTx: UnsignedTx,
+    implicitInputValue?: void | Uint8Array,
+    depositAmount?: void | string,
     changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
-    metadata: void | RustModule.WalletV4.AuxiliaryData,
+    metadata: void | TxMetadata,
     networkSettingSnapshot: NetworkSettingSnapshot,
     trezorTCatalystRegistrationTxSignData?: void | TrezorTCatalystRegistrationTxSignData,
     ledgerNanoCatalystRegistrationTxSignData?: void | LedgerNanoCatalystRegistrationTxSignData,
@@ -64,6 +69,8 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.Wall
   |}) {
     this.senderUtxos = data.senderUtxos;
     this.unsignedTx = data.unsignedTx;
+    this.implicitInputValue = data.implicitInputValue;
+    this.depositAmount = data.depositAmount;
     this.changeAddr = data.changeAddr;
     this.metadata = data.metadata;
     this.networkSettingSnapshot = data.networkSettingSnapshot;
@@ -73,27 +80,44 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.Wall
   }
 
   txId(): string {
-    return RustModule.WalletV4.FixedTransaction.from_hex(this.unsignedTx.build_tx().to_hex()).transaction_hash().to_hex();
+    return RustModule.WasmScope(Module =>
+      Module.CML.hash_transaction(Module.CML.TransactionBody.from_cbor_bytes(this.unsignedTx)).to_hex()
+    );
+  }
+
+  serializedUnsignedTxHex(): string {
+    return RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const body = cml.TransactionBody.from_cbor_bytes(this.unsignedTx);
+      const witnesses = cml.TransactionWitnessSet.new();
+      const metadata = this.metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(this.metadata);
+      return cml.Transaction.new(body, witnesses, true, metadata).to_cbor_hex();
+    });
+  }
+
+  bodyBytes(): Uint8Array {
+    return this.unsignedTx;
   }
 
   size(): {| full: number, outputs: number[] |} {
-    return {
-      full: this.unsignedTx.full_size(),
-      outputs: [...this.unsignedTx.output_sizes()],
-    };
+    return RustModule.WasmScope(Module => {
+      const outputs = Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).outputs();
+      return {
+        full: this.serializedUnsignedTxHex().length / 2,
+        outputs: Array.from({ length: outputs.len() }, (_, index) => outputs.get(index).to_cbor_bytes().length),
+      };
+    });
   }
 
   inputs(): Array<{|
     address: string,
     value: MultiToken,
   |}> {
-    const body = this.unsignedTx.build();
-    return iterateLenGet(body.inputs())
-      .map(input => {
-        const key = {
-          hash: input.transaction_id().to_hex(),
-          index: input.index(),
-        };
+    return RustModule.WasmScope(Module => {
+      const inputs = Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).inputs();
+      return Array.from({ length: inputs.len() }, (_, index) => {
+        const input = inputs.get(index);
+        const key = { hash: input.transaction_id().to_hex(), index: Number(input.index()) };
         const utxoEntry = this.senderUtxos.find(utxo => utxo.tx_hash === key.hash && utxo.tx_index === key.index);
         if (utxoEntry == null) {
           throw new Error(`${nameof(this.inputs)} missing ${nameof(this.senderUtxos)} input for ${JSON.stringify(key)}`);
@@ -102,42 +126,58 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.Wall
           value: multiTokenFromRemote(utxoEntry, this.networkSettingSnapshot.NetworkId),
           address: utxoEntry.receiver,
         };
-      })
-      .toArray();
+      });
+    });
   }
 
   totalInput(): MultiToken {
-    const values = multiTokenFromCardanoValue(
-      this.unsignedTx.get_implicit_input().checked_add(this.unsignedTx.get_explicit_input()),
-      {
+    const values = this.senderUtxos.reduce(
+      (total, utxo) => total.joinAddMutable(multiTokenFromRemote(utxo, this.networkSettingSnapshot.NetworkId)),
+      new MultiToken([], {
         defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
         defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-      }
+      })
     );
+    if (this.implicitInputValue != null) {
+      values.joinAddMutable(
+        RustModule.WasmScope(Module =>
+          multiTokenFromCMLValue(Module.CML.Value.from_cbor_bytes(this.implicitInputValue), {
+            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+          })
+        )
+      );
+    }
     this.changeAddr.forEach(change => values.joinSubtractMutable(change.values));
 
     return values;
   }
 
   outputs(): Array<TxDataOutput> {
-    const body = this.unsignedTx.build();
-    return iterateLenGet(body.outputs())
-      .map(output => ({
-        value: multiTokenFromCardanoValue(output.amount(), {
-          defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-          defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-        }),
-        isForeign: false,
-        address: output.address().to_hex(),
-      }))
-      .toArray();
+    return RustModule.WasmScope(Module => {
+      const outputs = Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).outputs();
+      return Array.from({ length: outputs.len() }, (_, index) => {
+        const output = outputs.get(index);
+        return {
+          value: multiTokenFromCMLValue(output.amount(), {
+            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+          }),
+          isForeign: false,
+          address: output.address().to_hex(),
+        };
+      });
+    });
   }
 
   totalOutput(): MultiToken {
-    return multiTokenFromCardanoValue(this.unsignedTx.get_explicit_output(), {
-      defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-      defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-    });
+    return this.outputs().reduce(
+      (total, output) => total.joinAddMutable(output.value),
+      new MultiToken([], {
+        defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+        defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+      })
+    );
   }
 
   fee(): MultiToken {
@@ -147,7 +187,9 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.Wall
     });
     values.add({
       identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-      amount: new BigNumber(this.unsignedTx.get_fee_if_set()?.to_str() || '0').plus(this.unsignedTx.get_deposit().to_str()),
+      amount: new BigNumber(
+        RustModule.WasmScope(Module => Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).fee().toString())
+      ).plus(this.depositAmount ?? '0'),
       networkId: this.networkSettingSnapshot.NetworkId,
     });
 
@@ -158,68 +200,79 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.Wall
     +address: string,
     +amount: MultiToken,
   |}> {
-    const withdrawals = this.unsignedTx.build().withdrawals();
-    return iterateLenGetMap(withdrawals)
-      .nonNullValue()
-      .map(([rewardAddress, withdrawalAmount]) => ({
-        address: rewardAddress.to_address().to_hex(),
-        amount: new MultiToken(
-          [
+    return RustModule.WasmScope(Module => {
+      const withdrawals = Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).withdrawals();
+      if (withdrawals == null) return [];
+      const rewardAccounts = withdrawals.keys();
+      return Array.from({ length: rewardAccounts.len() }, (_, index) => {
+        const rewardAddress = rewardAccounts.get(index);
+        return {
+          address: rewardAddress.to_address().to_hex(),
+          amount: new MultiToken(
+            [
+              {
+                identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+                amount: new BigNumber(withdrawals.get(rewardAddress).toString()),
+                networkId: this.networkSettingSnapshot.NetworkId,
+              },
+            ],
             {
-              identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-              amount: new BigNumber(withdrawalAmount.to_str()),
-              networkId: this.networkSettingSnapshot.NetworkId,
-            },
-          ],
-          {
-            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-          }
-        ),
-      }))
-      .toArray();
+              defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+              defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+            }
+          ),
+        };
+      });
+    });
   }
 
   keyDeregistrations(): Array<{|
     +rewardAddress: string,
     +refund: MultiToken,
   |}> {
-    const certs = this.unsignedTx.build().certs();
-    return iterateLenGet(certs)
-      .map(c => c.as_stake_deregistration())
-      .nonNull()
-      .map(cert => {
-        const rewardAddress = RustModule.WalletV4.RewardAddress.new(
+    return RustModule.WasmScope(Module => {
+      const certs = Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).certs();
+      if (certs == null) return [];
+      const deregistrations = [];
+      for (let index = 0; index < certs.len(); index++) {
+        const certificate = certs.get(index).as_stake_deregistration();
+        if (certificate == null) continue;
+        const rewardAddress = Module.CML.RewardAddress.new(
           this.networkSettingSnapshot.ChainNetworkId,
-          cert.stake_credential()
+          certificate.stake_credential()
         )
           .to_address()
           .to_hex();
-        const refund = new MultiToken(
-          [
+        deregistrations.push({
+          rewardAddress,
+          refund: new MultiToken(
+            [
+              {
+                identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+                amount: this.networkSettingSnapshot.KeyDeposit,
+                networkId: this.networkSettingSnapshot.NetworkId,
+              },
+            ],
             {
-              identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-              amount: this.networkSettingSnapshot.KeyDeposit,
-              networkId: this.networkSettingSnapshot.NetworkId,
-            },
-          ],
-          {
-            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-          }
-        );
-        return { rewardAddress, refund };
-      })
-      .toArray();
+              defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+              defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+            }
+          ),
+        });
+      }
+      return deregistrations;
+    });
   }
 
-  certificates(): Array<{| kind: $Values<CertificateKind>, payloadHex: string |}> {
-    return iterateLenGet(this.unsignedTx.build().certs())
-      .map(cert => ({
-        kind: cert.kind(),
-        payloadHex: cert.to_hex(),
-      }))
-      .toArray();
+  certificates(): Array<{| kind: number, payloadHex: string |}> {
+    return RustModule.WasmScope(Module => {
+      const certs = Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).certs();
+      if (certs == null) return [];
+      return Array.from({ length: certs.len() }, (_, index) => {
+        const cert = certs.get(index);
+        return { kind: cert.kind(), payloadHex: cert.to_cbor_hex() };
+      });
+    });
   }
 
   receiverWithHandle(): null | {| address: string, handle: void | {| handle: string, nameServer: string |} |} {
@@ -227,9 +280,13 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.Wall
   }
 
   receivers(includeChange: boolean): Array<string> {
-    const outputStrings = iterateLenGet(this.unsignedTx.build().outputs())
-      .map(o => toHexOrBase58(o.address()))
-      .toArray();
+    const outputStrings = RustModule.WasmScope(Module => {
+      const outputs = Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).outputs();
+      return Array.from({ length: outputs.len() }, (_, index) => {
+        const address = outputs.get(index).address();
+        return Module.CML.ByronAddress.from_address(address)?.to_base58() ?? address.to_hex();
+      });
+    });
 
     if (!includeChange) {
       const changeAddrs = this.changeAddr.map(change => change.address);
@@ -242,22 +299,16 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<RustModule.Wall
     return Array.from(new Set(this.senderUtxos.map(utxo => utxo.receiver)));
   }
 
-  isEqual(tx: ?(mixed | RustModule.WalletV4.TransactionBuilder)): boolean {
+  isEqual(tx: ?mixed): boolean {
     if (tx == null) return false;
-    if (!(tx instanceof RustModule.WalletV4.TransactionBuilder)) {
-      return false;
-    }
-    return shelleyTxEqual(this.unsignedTx, tx);
+    return tx instanceof Uint8Array && bytesToHex(this.unsignedTx) === bytesToHex(tx);
   }
 
-  self(): RustModule.WalletV4.TransactionBuilder {
+  self(): Uint8Array {
     return this.unsignedTx;
   }
-}
 
-export function shelleyTxEqual(
-  req1: RustModule.WalletV4.TransactionBuilder,
-  req2: RustModule.WalletV4.TransactionBuilder
-): boolean {
-  return req1.build().to_hex() === req2.build().to_hex();
+  setMetadata(metadata: TxMetadata): void {
+    this.metadata = metadata;
+  }
 }

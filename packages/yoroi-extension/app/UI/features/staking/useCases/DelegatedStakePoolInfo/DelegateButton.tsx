@@ -99,6 +99,7 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
         kind: 'delegate',
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 
@@ -114,9 +115,14 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
     const delegatingPoolId = isTestnet ? '7facad662e180ce45e5c504957cd1341940c72a708728f7ecfc6e349' : poolID;
     const delegatingDRepId = isTestnet ? '232285cccbf305ca26e6098be9a13b45e3911d881d84c3502f82320cca' : dRepID;
 
+    if (delegatingDRepId == null) {
+      console.error('Cannot convert DRep ID to a valid credential', delegatingDRepId);
+      return;
+    }
     const drepCredential = dRepToMaybeCredentialHex(delegatingDRepId);
     if (!drepCredential) {
       console.error('Cannot convert DRep ID to a valid credential', delegatingDRepId);
+      return;
     }
 
     const { signTxRequest } = await stores.delegation.createPoolOrDrepDelegationTransaction({
@@ -134,9 +140,9 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
               <OperationsDetails
                 avatarGenerated={avatarGenerated}
                 poolName={poolName}
-                stakeKeyDeposit={`${new BigNumber(stakeKeyDeposit)
-                  .shiftedBy(-primaryTokenInfo.decimals)
-                  .toString()} ${primaryTokenInfo.name}`}
+                stakeKeyDeposit={`${new BigNumber(stakeKeyDeposit).shiftedBy(-primaryTokenInfo.decimals).toString()} ${
+                  primaryTokenInfo.name
+                }`}
                 socialMediaInfo={socialMediaInfo}
                 drepId={delegatingDRepId}
               />
@@ -147,6 +153,7 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
         kind: 'delegate',
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 

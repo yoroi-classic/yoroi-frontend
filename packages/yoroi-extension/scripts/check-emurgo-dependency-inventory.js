@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Extension runtime imports still use EMURGO CSL, message-signing, cross-csl,
-// Bring, yoroi-eutxo-txs, and yoroi-lib APIs. E2E helpers are migrating to CML.
-// This guard fails if that active dependency surface changes outside inventory.
+// Keep the extension's remaining Emurgo package dependencies explicit. The
+// retired serialization packages are not accepted runtime or test dependencies.
 
 const fs = require('fs');
 const path = require('path');
@@ -21,43 +20,18 @@ const FORBIDDEN_SOURCE_FIXTURES = [
 const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
   'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:dependencies:@emurgo/yoroi-eutxo-txs',
-  'packages/yoroi-extension:dependencies:@emurgo/yoroi-lib',
   'packages/yoroi-extension:devDependencies:@emurgo/cardano-message-signing-nodejs',
-  'packages/yoroi-extension:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
-  'packages/yoroi-extension:devDependencies:@emurgo/cross-csl-nodejs',
 ];
 
 const EXPECTED_LOCKFILE_EMURGO_PACKAGE_ENTRIES = [
   'packages/yoroi-extension:node_modules/@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-message-signing-browser',
   'packages/yoroi-extension:node_modules/@emurgo/cardano-message-signing-nodejs',
-  'packages/yoroi-extension:node_modules/@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@emurgo/cip14-js',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs',
-  'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs',
-  'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection/node_modules/@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection/node_modules/@emurgo/cardano-serialization-lib-nodejs',
 ];
 
 const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cardano-serialization-lib-nodejs',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
-  'packages/yoroi-extension:node_modules/@yoroi/staking:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap/node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap:dependencies:@emurgo/cip14-js',
 ];

@@ -107,6 +107,32 @@ test('counts an owned chained output as an input in the transaction summary', as
 
 test('includes an owned chained input when creating the transaction summary', async () => {
   const priorOutput = { address: 'owned-address', value: value(99, 1) };
+  const registrationCertificate = {
+    kind: () => 5,
+    as_stake_registration: () => undefined,
+    as_reg_cert: () => ({ deposit: () => '2000000' }),
+  };
+  const govActionId = {
+    transaction_id: () => ({ to_hex: () => '22'.repeat(32) }),
+    // eslint-disable-next-line no-undef
+    gov_action_index: () => BigInt('0'),
+  };
+  const voter = {
+    kind: () => 1,
+    as_constitutional_committee_hot_script_hash: () => undefined,
+    as_constitutional_committee_hot_key_hash: () => undefined,
+    as_d_rep_script_hash: () => undefined,
+    as_d_rep_key_hash: () => ({ to_hex: () => '11'.repeat(28) }),
+    as_staking_pool_key_hash: () => undefined,
+  };
+  const votingProcedure = { vote: () => 1, anchor: () => undefined };
+  const votingProcedures = {
+    keys: () => lenGet([voter]),
+    get: () => ({
+      keys: () => lenGet([govActionId]),
+      get: () => votingProcedure,
+    }),
+  };
   const txBody = {
     inputs: () =>
       lenGet([
@@ -122,9 +148,9 @@ test('includes an owned chained input when creating the transaction summary', as
           amount: () => ({}),
         },
       ]),
-    fee: () => ({ to_str: () => '1' }),
-    certs: () => null,
-    voting_procedures: () => null,
+    fee: () => ({ toString: () => '1' }),
+    certs: () => lenGet([registrationCertificate]),
+    voting_procedures: () => votingProcedures,
     voting_proposals: () => null,
     current_treasury_value: () => null,
     donation: () => null,
@@ -134,9 +160,7 @@ test('includes an owned chained input when creating the transaction summary', as
   const transaction = {
     body: () => txBody,
   };
-  RustModule.WalletV4 = {
-    FixedTransaction: { from_hex: () => transaction },
-  };
+  RustModule.WasmScope = callback => callback({ CML: { Transaction: { from_cbor_hex: () => transaction } } });
 
   await store.createAdaTransaction({ tx: 'transaction', partialSign: false }, 0, batchOutputs);
 
@@ -146,6 +170,18 @@ test('includes an owned chained input when creating the transaction summary', as
   expect(store.adaTransaction.total.get('policy.asset').toString()).toBe('-1');
   expect(store.adaTransaction.amount.get('').toString()).toBe('-98');
   expect(store.adaTransaction.amount.get('policy.asset').toString()).toBe('-1');
+  expect(store.adaTransaction.cip95Info).toEqual([
+    { type: 'StakeRegistrationCert', coin: '2000000' },
+    {
+      type: 'VotingProcedure',
+      voterType: 1,
+      voterHash: '11'.repeat(28),
+      govActionTxId: '22'.repeat(32),
+      govActionIndex: 0,
+      vote: 1,
+      anchor: null,
+    },
+  ]);
 });
 
 test('labels a chained output to a foreign address as foreign', () => {
@@ -161,5 +197,4 @@ test('does not leak transaction-summary fixtures between tests', () => {
   expect(loadSubmittedTransactions).not.toHaveBeenCalled();
   expect(multiTokenFromCardanoValue).not.toHaveBeenCalled();
   expect(RustModule.WasmScope).toBeUndefined();
-  expect(RustModule.WalletV4).toBeUndefined();
 });

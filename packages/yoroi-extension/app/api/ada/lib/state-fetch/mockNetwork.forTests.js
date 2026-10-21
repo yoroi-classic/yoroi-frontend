@@ -51,24 +51,26 @@ import { getCardanoHaskellBaseConfig, networks } from '../storage/database/prepa
 import { bech32 } from 'bech32';
 import { Bech32Prefix } from '../../../../config/stringConfig';
 import { parseTokenList } from '../../transactions/utils';
-import type { UtxoApiContract } from '@emurgo/yoroi-lib/dist/utxo/api';
 import type {
   TipStatusReference,
   Utxo,
+  UtxoApiContract,
   UtxoApiResponse,
   UtxoAtPointRequest,
   UtxoDiff,
   UtxoDiffItem,
   UtxoDiffSincePointRequest,
-} from '@emurgo/yoroi-lib/dist/utxo/models';
-import { UtxoApiResult } from '@emurgo/yoroi-lib/dist/utxo/models';
-import { bytesToHex, forceNonNull, hexToBytes, iterateLenGet, last } from '../../../../coreUtils';
+} from './utxoTypes';
+import { UtxoApiResult } from './utxoTypes';
+import { bytesToHex, forceNonNull, hexToBytes, last } from '../../../../coreUtils';
 
 function byronAddressToHex(byronAddrOrHex: string): string {
-  if (RustModule.WalletV4.ByronAddress.is_valid(byronAddrOrHex)) {
-    return bytesToHex(RustModule.WalletV4.ByronAddress.from_base58(byronAddrOrHex).to_bytes());
-  }
-  return byronAddrOrHex;
+  return RustModule.WasmScope(Module => {
+    const address = Module.CML.ByronAddress.is_valid(byronAddrOrHex)
+      ? Module.CML.ByronAddress.from_base58(byronAddrOrHex).to_address()
+      : Module.CML.Address.from_hex(byronAddrOrHex);
+    return address.to_hex();
+  });
 }
 
 /** convert bech32 address to bytes */
@@ -77,12 +79,14 @@ function fixAddresses(address: string, network: $ReadOnly<NetworkRow>): string {
     const bech32Info = bech32.decode(address, 1000);
     if (bech32Info.prefix === Bech32Prefix.PAYMENT_KEY_HASH) {
       const config = getCardanoHaskellBaseConfig(network).reduce((acc, next) => Object.assign(acc, next), {});
-
-      const enterpriseAddr = RustModule.WalletV4.EnterpriseAddress.new(
-        Number.parseInt(config.ChainNetworkId, 10),
-        RustModule.WalletV4.Credential.from_keyhash(RustModule.WalletV4.Ed25519KeyHash.from_bech32(address))
-      );
-      return enterpriseAddr.to_address().to_hex();
+      return RustModule.WasmScope(Module => {
+        const cml = Module.CML;
+        const enterpriseAddr = cml.EnterpriseAddress.new(
+          Number.parseInt(config.ChainNetworkId, 10),
+          cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_bech32(address))
+        );
+        return enterpriseAddr.to_address().to_hex();
+      });
     }
     return bytesToHex(bech32.fromWords(bech32Info.words));
   } catch (_e) {
@@ -112,7 +116,7 @@ export function genCheckAddressesInUse(blockchain: Array<RemoteTransaction>, net
         } else {
           const enterpriseWasm = toEnterprise(found);
           if (enterpriseWasm != null) {
-            const enterprise = enterpriseWasm.to_address().to_hex();
+            const enterprise = enterpriseWasm;
             if (addressSet.has(enterprise)) {
               origAddr = mapToOriginal[enterprise];
             }
@@ -135,7 +139,7 @@ function isOurAddress(address: string, ownAddresses: Set<string>): boolean {
   }
   const enterpriseWasm = toEnterprise(address);
   if (enterpriseWasm != null) {
-    const enterprise = enterpriseWasm.to_address().to_hex();
+    const enterprise = enterpriseWasm;
     if (ownAddresses.has(enterprise)) {
       return true;
     }
@@ -324,31 +328,33 @@ export function genUtxoForAddresses(
 }
 
 export function getSingleAddressString(mnemonic: string, path: Array<number>, isLedger: boolean = false): string {
-  const EMPTY_PASSWORD = Buffer.from('');
-  const rootKey = isLedger
-    ? generateLedgerWalletRootKey(mnemonic)
-    : RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), EMPTY_PASSWORD);
-  const derivedKey = derivePath(rootKey, path);
-
+  const ledgerRootBytes = isLedger ? generateLedgerWalletRootKey(mnemonic).to_raw_bytes() : null;
   const baseConfig = getCardanoHaskellBaseConfig(networks.CardanoMainnet).reduce((acc, next) => Object.assign(acc, next), {});
-
-  if (path[0] === WalletTypePurpose.BIP44) {
-    const v2Key = RustModule.WalletV2.PublicKey.from_hex(bytesToHex(derivedKey.to_public().as_bytes()));
-    const settings = RustModule.WalletV2.BlockchainSettings.from_json({
-      protocol_magic: baseConfig.ByronNetworkId,
-    });
-    const addr = v2Key.bootstrap_era_address(settings);
-    const hex = addr.to_base58();
-    return hex;
-  }
-  if (path[0] === WalletTypePurpose.CIP1852) {
-    const addr = RustModule.WalletV4.EnterpriseAddress.new(
-      Number.parseInt(baseConfig.ChainNetworkId, 10),
-      RustModule.WalletV4.Credential.from_keyhash(derivedKey.to_public().to_raw_key().hash())
-    );
-    return addr.to_address().to_hex();
-  }
-  throw new Error('Unexpected purpose');
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const rootKey =
+      ledgerRootBytes == null
+        ? cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array())
+        : cml.Bip32PrivateKey.from_raw_bytes(ledgerRootBytes);
+    const derivedKey = derivePath(rootKey, path);
+    if (path[0] === WalletTypePurpose.BIP44) {
+      return cml.AddressContent.icarus_from_key(
+        derivedKey.to_public(),
+        cml.ProtocolMagic.new(Number.parseInt(baseConfig.ByronNetworkId, 10))
+      )
+        .to_address()
+        .to_base58();
+    }
+    if (path[0] === WalletTypePurpose.CIP1852) {
+      return cml.EnterpriseAddress.new(
+        Number.parseInt(baseConfig.ChainNetworkId, 10),
+        cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
+      )
+        .to_address()
+        .to_hex();
+    }
+    throw new Error('Unexpected purpose');
+  });
 }
 
 export function getMangledAddressString(
@@ -357,71 +363,72 @@ export function getMangledAddressString(
   stakingKey: Buffer,
   isLedger: boolean = false
 ): string {
-  const EMPTY_PASSWORD = Buffer.from('');
-  const rootKey = isLedger
-    ? generateLedgerWalletRootKey(mnemonic)
-    : RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), EMPTY_PASSWORD);
-  const derivedKey = derivePath(rootKey, path);
-
+  const ledgerRootBytes = isLedger ? generateLedgerWalletRootKey(mnemonic).to_raw_bytes() : null;
   const baseConfig = getCardanoHaskellBaseConfig(networks.CardanoMainnet).reduce((acc, next) => Object.assign(acc, next), {});
-
-  if (path[0] === WalletTypePurpose.CIP1852) {
-    const addr = RustModule.WalletV4.BaseAddress.new(
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const rootKey =
+      ledgerRootBytes == null
+        ? cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array())
+        : cml.Bip32PrivateKey.from_raw_bytes(ledgerRootBytes);
+    const derivedKey = derivePath(rootKey, path);
+    if (path[0] !== WalletTypePurpose.CIP1852) throw new Error('Unexpected purpose');
+    return cml.BaseAddress.new(
       Number.parseInt(baseConfig.ChainNetworkId, 10),
-      RustModule.WalletV4.Credential.from_keyhash(derivedKey.to_public().to_raw_key().hash()),
-      RustModule.WalletV4.Credential.from_keyhash(RustModule.WalletV4.Ed25519KeyHash.from_bytes(stakingKey))
-    );
-    return addr.to_address().to_hex();
-  }
-  throw new Error('Unexpected purpose');
+      cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash()),
+      cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_bytes(new Uint8Array(stakingKey)))
+    )
+      .to_address()
+      .to_hex();
+  });
 }
 
 export function getAddressForType(mnemonic: string, path: Array<number>, type: CoreAddressT): string {
-  const EMPTY_PASSWORD = Buffer.from('');
-  const rootKey = RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), EMPTY_PASSWORD);
-  const derivedKey = derivePath(rootKey, path);
-
   const baseConfig = getCardanoHaskellBaseConfig(networks.CardanoMainnet).reduce((acc, next) => Object.assign(acc, next), {});
-
-  switch (type) {
-    case CoreAddressTypes.CARDANO_BASE: {
-      const newPath = [...path];
-      // -1 because newPath here starts at PURPOSE and not at ROOT
-      const chainLevel = 4 - 1;
-      const addressLevel = 5 - 1;
-      newPath[chainLevel] = 2;
-      newPath[addressLevel] = 0;
-      const stakingKey = derivePath(rootKey, newPath);
-      const addr = RustModule.WalletV4.BaseAddress.new(
-        Number.parseInt(baseConfig.ChainNetworkId, 10),
-        RustModule.WalletV4.Credential.from_keyhash(derivedKey.to_public().to_raw_key().hash()),
-        RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_public().to_raw_key().hash())
-      );
-      return addr.to_address().to_hex();
+  return RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const rootKey = cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array());
+    const derivedKey = derivePath(rootKey, path);
+    switch (type) {
+      case CoreAddressTypes.CARDANO_BASE: {
+        const newPath = [...path];
+        // -1 because newPath here starts at PURPOSE and not at ROOT
+        const chainLevel = 4 - 1;
+        const addressLevel = 5 - 1;
+        newPath[chainLevel] = 2;
+        newPath[addressLevel] = 0;
+        const stakingKey = derivePath(rootKey, newPath);
+        const addr = cml.BaseAddress.new(
+          Number.parseInt(baseConfig.ChainNetworkId, 10),
+          cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash()),
+          cml.Credential.new_pub_key(stakingKey.to_public().to_raw_key().hash())
+        );
+        return addr.to_address().to_hex();
+      }
+      case CoreAddressTypes.CARDANO_PTR: {
+        throw new Error(`${nameof(getAddressForType)} Not implemented`);
+      }
+      case CoreAddressTypes.CARDANO_ENTERPRISE: {
+        const addr = cml.EnterpriseAddress.new(
+          Number.parseInt(baseConfig.ChainNetworkId, 10),
+          cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
+        );
+        return addr.to_address().to_hex();
+      }
+      case CoreAddressTypes.CARDANO_REWARD: {
+        const addr = cml.RewardAddress.new(
+          Number.parseInt(baseConfig.ChainNetworkId, 10),
+          cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
+        );
+        return addr.to_address().to_hex();
+      }
+      default:
+        throw new Error(`${nameof(getAddressForType)} unknown type ` + type);
     }
-    case CoreAddressTypes.CARDANO_PTR: {
-      throw new Error(`${nameof(getAddressForType)} Not implemented`);
-    }
-    case CoreAddressTypes.CARDANO_ENTERPRISE: {
-      const addr = RustModule.WalletV4.EnterpriseAddress.new(
-        Number.parseInt(baseConfig.ChainNetworkId, 10),
-        RustModule.WalletV4.Credential.from_keyhash(derivedKey.to_public().to_raw_key().hash())
-      );
-      return addr.to_address().to_hex();
-    }
-    case CoreAddressTypes.CARDANO_REWARD: {
-      const addr = RustModule.WalletV4.RewardAddress.new(
-        Number.parseInt(baseConfig.ChainNetworkId, 10),
-        RustModule.WalletV4.Credential.from_keyhash(derivedKey.to_public().to_raw_key().hash())
-      );
-      return addr.to_address().to_hex();
-    }
-    default:
-      throw new Error(`${nameof(getAddressForType)} unknown type ` + type);
-  }
+  });
 }
 
-function derivePath(startKey: RustModule.WalletV4.Bip32PrivateKey, path: Array<number>): RustModule.WalletV4.Bip32PrivateKey {
+function derivePath(startKey: any, path: Array<number>): any {
   let currKey = startKey;
   for (let i = 0; i < path.length; i++) {
     currKey = currKey.derive(path[i]);
@@ -462,25 +469,30 @@ function getByronInputs(blockchain: Array<RemoteTransaction>, inputs: Array<TxoP
 export function toRemoteByronTx(blockchain: Array<RemoteTransaction>, request: SignedRequestInternal): RemoteTransaction {
   const tx = Array.isArray(request.signedTx) ? forceNonNull(last(request.signedTx)) : request.signedTx;
   const txBytes = Buffer.from(tx, 'base64');
-  const signedTx = RustModule.WalletV4.Transaction.from_bytes(txBytes);
-
-  const body = signedTx.body();
-  const hash = RustModule.WalletV4.FixedTransaction.from_bytes(txBytes).transaction_hash().to_hex();
-
-  const outputs = iterateLenGet(body.outputs())
-    .map(output => ({
-      address: toHexOrBase58(output.address()),
-      amount: output.amount().coin().to_str(),
-      assets: parseTokenList(output.amount().multiasset()),
-    }))
-    .toArray();
-
-  const inputs = iterateLenGet(body.inputs())
-    .map(input => ({
-      id: input.transaction_id().to_hex(),
-      index: input.index(),
-    }))
-    .toArray();
+  const { hash, outputs, inputs } = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const signedTx = cml.Transaction.from_cbor_bytes(txBytes);
+    const body = signedTx.body();
+    const parsedOutputs = [];
+    const outputList = body.outputs();
+    for (let i = 0; i < outputList.len(); i++) {
+      const output = outputList.get(i);
+      if (!output) throw new Error('Missing Byron transaction output');
+      parsedOutputs.push({
+        address: toHexOrBase58(output.address().to_hex()),
+        amount: output.amount().coin().toString(),
+        assets: parseTokenList(output.amount().multi_asset()),
+      });
+    }
+    const parsedInputs = [];
+    const inputList = body.inputs();
+    for (let i = 0; i < inputList.len(); i++) {
+      const input = inputList.get(i);
+      if (!input) throw new Error('Missing Byron transaction input');
+      parsedInputs.push({ id: input.transaction_id().to_hex(), index: Number(input.index()) });
+    }
+    return { hash: cml.hash_transaction(body).to_hex(), outputs: parsedOutputs, inputs: parsedInputs };
+  });
 
   const base = {
     hash,
@@ -717,10 +729,7 @@ export class MockUtxoApi implements UtxoApiContract {
       for (let outputIndex = 0; outputIndex < tx.outputs.length; outputIndex++) {
         const output = tx.outputs[outputIndex];
         if (
-          !(
-            hexAddresses.includes(byronAddressToHex(output.address)) ||
-            hexAddresses.includes(toEnterprise(output.address)?.to_address().to_hex() ?? '')
-          )
+          !(hexAddresses.includes(byronAddressToHex(output.address)) || hexAddresses.includes(toEnterprise(output.address) ?? ''))
         ) {
           continue;
         }
@@ -793,7 +802,7 @@ export class MockUtxoApi implements UtxoApiContract {
           if (
             !(
               hexAddresses.includes(byronAddressToHex(output.address)) ||
-              hexAddresses.includes(toEnterprise(output.address)?.to_address().to_hex() ?? '')
+              hexAddresses.includes(toEnterprise(output.address) ?? '')
             )
           ) {
             return;
@@ -822,8 +831,7 @@ export class MockUtxoApi implements UtxoApiContract {
         tx.inputs
           .filter(
             input =>
-              hexAddresses.includes(byronAddressToHex(input.address)) ||
-              hexAddresses.includes(toEnterprise(input.address)?.to_address().to_hex() ?? '')
+              hexAddresses.includes(byronAddressToHex(input.address)) || hexAddresses.includes(toEnterprise(input.address) ?? '')
           )
           .forEach(input => {
             utxoDiffItems.push(

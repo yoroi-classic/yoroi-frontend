@@ -12,7 +12,7 @@ import { PRIMARY_ASSET_CONSTANTS } from '../api/ada/lib/storage/database/primiti
 import { MultiToken } from '../api/common/lib/MultiToken';
 import { parseMetadata } from '../api/ada/lib/storage/bridge/metadataUtils';
 import { CatalystLabels } from '../api/ada/lib/cardanoCrypto/catalyst';
-import { RustModule } from '../api/ada/lib/cardanoCrypto/rustLoader';
+import { StoredCertificateKind } from '../api/ada/lib/storage/database/primitives/storedCertificateKinds';
 import { isEmptyArray } from '../coreUtils';
 
 export type CardanoShelleyTransactionFeature =
@@ -151,25 +151,25 @@ export default class CardanoShelleyTransaction extends WalletTransaction {
       features.push('CatalystVotingRegistration');
     }
     for (const cert of this.certificates) {
-      if (cert.certificate.Kind === RustModule.WalletV4.CertificateKind.StakeDelegation) {
+      if (cert.certificate.Kind === StoredCertificateKind.StakeDelegation) {
         features.push('StakeDelegation');
       }
-      if (cert.certificate.Kind === RustModule.WalletV4.CertificateKind.StakeRegistration) {
+      if (cert.certificate.Kind === StoredCertificateKind.StakeRegistration) {
         features.push('StakeRegistration');
       }
-      if (cert.certificate.Kind === RustModule.WalletV4.CertificateKind.StakeDeregistration) {
+      if (cert.certificate.Kind === StoredCertificateKind.StakeDeregistration) {
         features.push('StakeDeregistration');
       }
-      if (cert.certificate.Kind === RustModule.WalletV4.CertificateKind.PoolRegistration) {
+      if (cert.certificate.Kind === StoredCertificateKind.PoolRegistration) {
         features.push('PoolRegistration');
       }
-      if (cert.certificate.Kind === RustModule.WalletV4.CertificateKind.PoolRetirement) {
+      if (cert.certificate.Kind === StoredCertificateKind.PoolRetirement) {
         features.push('PoolRetirement');
       }
-      if (cert.certificate.Kind === RustModule.WalletV4.CertificateKind.GenesisKeyDelegation) {
+      if (cert.certificate.Kind === StoredCertificateKind.GenesisKeyDelegation) {
         features.push('GenesisKeyDelegation');
       }
-      if (cert.certificate.Kind === RustModule.WalletV4.CertificateKind.MoveInstantaneousRewardsCert) {
+      if (cert.certificate.Kind === StoredCertificateKind.MoveInstantaneousRewardsCert) {
         features.push('MoveInstantaneousRewards');
       }
     }

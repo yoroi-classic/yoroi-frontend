@@ -6,7 +6,6 @@ import {
   getCardanoHaskellBaseConfig,
   getNetworkById,
 } from '../../api/ada/lib/storage/database/prepackaged/networks';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import { genFilterSmallUtxo } from '../../api/ada/transactions/shelley/transactions';
 import type { IGetAllUtxosResponse } from '../../api/ada/lib/storage/models/PublicDeriver/interfaces';
 import { BASE_MANGLED } from './addressStores';
@@ -56,10 +55,8 @@ export async function getUnmangleAmounts(request: MangledAmountsRequest): Promis
 
     const filter = genFilterSmallUtxo({
       protocolParams: {
-        linearFee: RustModule.WalletV4.LinearFee.new(
-          RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
-          RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant)
-        ),
+        linearFeeCoefficient: config.LinearFee.coefficient,
+        linearFeeConstant: config.LinearFee.constant,
       },
     });
 
@@ -112,10 +109,8 @@ export function getMangledFilter(
 
     const filter = genFilterSmallUtxo({
       protocolParams: {
-        linearFee: RustModule.WalletV4.LinearFee.new(
-          RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
-          RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant)
-        ),
+        linearFeeCoefficient: config.LinearFee.coefficient,
+        linearFeeConstant: config.LinearFee.constant,
       },
     });
 

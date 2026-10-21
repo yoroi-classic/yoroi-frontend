@@ -5,7 +5,7 @@ import type { WalletChecksum } from '@yoroi-classic/cip4-js';
 import type { WalletAuthEntry } from '../../../chrome/extension/connector/types';
 import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import { asGetSigningKey } from '../../api/ada/lib/storage/models/PublicDeriver/traits';
-import { cip8Sign } from '../../api/ada';
+import { buildCoseSign1FromSignature, cip8DataToSign } from '../../api/ada/lib/cardanoCrypto/utils';
 import { bytesToHex, hexToBytes, utfToBytes } from '../../coreUtils';
 
 type CreateAuthEntryParams = {|
@@ -34,26 +34,32 @@ export const _createAuthEntry: (
     ...signingKeyFromStorage,
     password,
   });
-  const signingKey = WasmScope.WalletV4.Bip32PrivateKey.from_hex(normalizedKey.prvKeyHex);
+  const CML = WasmScope.CML;
+  const signingKey = CML.Bip32PrivateKey.from_raw_bytes(hexToBytes(normalizedKey.prvKeyHex));
   const derivedSignKey = signingKey.derive(0).derive(0).to_raw_key();
   const stakingKey = signingKey.derive(2).derive(0).to_raw_key();
 
-  const address = WasmScope.WalletV4.BaseAddress.new(
+  const address = CML.BaseAddress.new(
     deriver.getParent().networkInfo.NetworkId,
-    WasmScope.WalletV4.Credential.from_keyhash(derivedSignKey.to_public().hash()),
-    WasmScope.WalletV4.Credential.from_keyhash(stakingKey.to_public().hash())
+    CML.Credential.new_pub_key(derivedSignKey.to_public().hash()),
+    CML.Credential.new_pub_key(stakingKey.to_public().hash())
   ).to_address();
-  const entropy = (
-    await cip8Sign(Buffer.from(address.to_bytes()), derivedSignKey, utfToBytes(`DAPP_LOGIN: ${appAuthID}`))
-  ).signature();
+  const loginPayload = utfToBytes(`DAPP_LOGIN: ${appAuthID}`);
+  const signature = derivedSignKey.sign(cip8DataToSign(Buffer.from(address.to_raw_bytes()), Buffer.from(loginPayload)));
+  const coseSign1 = await buildCoseSign1FromSignature(
+    Buffer.from(address.to_raw_bytes()),
+    Buffer.from(signature.to_raw_bytes()),
+    loginPayload
+  );
+  const entropy = coseSign1.signature();
 
-  const appPrivKey = WasmScope.WalletV4.Bip32PrivateKey.from_bip39_entropy(entropy, Buffer.from('')).to_raw_key();
+  const appPrivKey = CML.Bip32PrivateKey.from_bip39_entropy(entropy, new Uint8Array()).to_raw_key();
   const appPubKey = appPrivKey.to_public();
 
   return {
     walletId: checksum.ImagePart,
-    pubkey: bytesToHex(appPubKey.as_bytes()),
-    privkey: bytesToHex(appPrivKey.as_bytes()),
+    pubkey: bytesToHex(appPubKey.to_raw_bytes()),
+    privkey: bytesToHex(appPrivKey.to_raw_bytes()),
   };
 };
 
@@ -61,6 +67,7 @@ export const authSignHexPayload: ({| privKey: string, payloadHex: string |}) => 
   privKey,
   payloadHex,
 }) => {
-  const appPrivKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(hexToBytes(privKey));
-  return appPrivKey.sign(hexToBytes(payloadHex)).to_hex();
+  return RustModule.WasmScope(Module =>
+    Module.CML.PrivateKey.from_extended_bytes(hexToBytes(privKey)).sign(hexToBytes(payloadHex)).to_hex()
+  );
 };

@@ -2,36 +2,19 @@
 
 import '../../lib/test-config.forTests';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
-import { toTrezorSignRequest, toTrezorAddressParameters } from './trezorTx';
+import { toTrezorSignRequest, toTrezorAddressParameters, buildConnectorSignedTransaction } from './trezorTx';
 import { networks } from '../../lib/storage/database/prepackaged/networks';
-import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage/bridge/utils';
-import { CardanoCertificateType, CardanoAddressType } from 'trezor-connect-flow';
+import { normalizeToAddress } from '../../lib/storage/bridge/utils';
+import { CardanoCertificateType, CardanoAddressType, CardanoTxWitnessType, CardanoDRepType } from 'trezor-connect-flow';
 import { ChainDerivations } from '../../../../config/numbersConfig';
+import { hexToBytes } from '../../../../coreUtils';
+import { createMetadata } from '../../lib/storage/bridge/metadataUtils';
 
 beforeAll(async () => {
   await RustModule.load();
 });
 
 const network = networks.CardanoMainnet;
-
-function getProtocolParams(): {|
-  linearFee: RustModule.WalletV4.LinearFee,
-  coinsPerUtxoByte: RustModule.WalletV4.BigNum,
-  poolDeposit: RustModule.WalletV4.BigNum,
-  keyDeposit: RustModule.WalletV4.BigNum,
-  networkId: number,
-|} {
-  return {
-    linearFee: RustModule.WalletV4.LinearFee.new(
-      RustModule.WalletV4.BigNum.from_str('2'),
-      RustModule.WalletV4.BigNum.from_str('500')
-    ),
-    coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str('1'),
-    poolDeposit: RustModule.WalletV4.BigNum.from_str('500'),
-    keyDeposit: RustModule.WalletV4.BigNum.from_str('500'),
-    networkId: network.NetworkId,
-  };
-}
 
 test('Generate address parameters', async () => {
   const path = [2147483692, 2147485463, 2147483648, 1, 1];
@@ -99,6 +82,87 @@ test('Generate address parameters', async () => {
   }
 });
 
+test('address parameters preserve script stake credentials with CML', () => {
+  const addressHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
+    const stake = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
+    return cml.BaseAddress.new(0, payment, stake).to_address().to_hex();
+  });
+  expect(toTrezorAddressParameters(addressHex, [1, 2])).toEqual({
+    addressType: CardanoAddressType.BASE,
+    path: 'm/1/2',
+    stakingKeyHash: '22'.repeat(28),
+  });
+});
+
+test('Assemble Trezor witnesses and metadata with CML', () => {
+  const metadata = createMetadata([{ label: '0', data: { hardware: 'trezor' } }]);
+  const incomingPublicKeyHex = '02'.repeat(32);
+  const existingSignatureHex = '03'.repeat(64);
+  const incomingSignatureHex = '04'.repeat(64);
+  const rawTxHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const inputs = cml.TransactionInputList.new();
+    inputs.add(cml.TransactionInput.new(cml.TransactionHash.from_hex('11'.repeat(32)), BigInt('0')));
+    const outputs = cml.TransactionOutputList.new();
+    const address = cml.Address.from_bech32(
+      'addr1q8v42wjda8r6mpfj40d36znlgfdcqp7jtj03ah8skh6u8wnrqua2vw243tmjfjt0h5wsru6appuz8c0pfd75ur7myyeqsx9990'
+    );
+    outputs.add(cml.TransactionOutput.new(address, cml.Value.new(BigInt('5000000'), cml.MultiAsset.new())));
+    const body = cml.TransactionBody.new(inputs, outputs, BigInt('170000'));
+    const witnessSet = cml.TransactionWitnessSet.new();
+    const existingVkeys = cml.VkeywitnessList.new();
+    existingVkeys.add(
+      cml.Vkeywitness.new(
+        cml.PublicKey.from_bytes(new Uint8Array(32).fill(1)),
+        cml.Ed25519Signature.from_raw_bytes(new Uint8Array(64).fill(3))
+      )
+    );
+    witnessSet.set_vkeywitnesses(existingVkeys);
+    return cml.Transaction.new(body, witnessSet, true).to_cbor_hex();
+  });
+
+  const signed = buildConnectorSignedTransaction(
+    rawTxHex,
+    [
+      {
+        type: CardanoTxWitnessType.SHELLEY_WITNESS,
+        pubKey: incomingPublicKeyHex,
+        signature: incomingSignatureHex,
+      },
+    ],
+    metadata
+  );
+  const summary = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const transaction = cml.Transaction.from_cbor_hex(signed.txHex);
+    const body = transaction.body();
+    const vkeys = transaction.witness_set().vkeywitnesses();
+    return {
+      txId: cml.hash_transaction(body).to_hex(),
+      keyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
+      signatures: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).ed25519_signature().to_hex()),
+      metadataHex: transaction.auxiliary_data().to_cbor_hex(),
+      metadataHash: body.auxiliary_data_hash().to_hex(),
+      expectedMetadataHex: cml.AuxiliaryData.from_cbor_bytes(metadata).to_cbor_hex(),
+      expectedMetadataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata)).to_hex(),
+    };
+  });
+
+  expect(signed.txId).toEqual(summary.txId);
+  expect(summary.keyHashes).toHaveLength(2);
+  expect(summary.keyHashes[0]).toEqual(
+    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
+  );
+  expect(summary.keyHashes[1]).toEqual(
+    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(2)).hash().to_hex())
+  );
+  expect(summary.signatures).toEqual([existingSignatureHex, incomingSignatureHex]);
+  expect(summary.metadataHex).toEqual(summary.expectedMetadataHex);
+  expect(summary.metadataHash).toEqual(summary.expectedMetadataHash);
+});
+
 test('Create Trezor transaction', async () => {
   const senderUtxos = [
     {
@@ -153,51 +217,48 @@ test('Create Trezor transaction', async () => {
       assets: [],
     },
   ];
-  const protocolParams = getProtocolParams();
-  const txBuilder = RustModule.WalletV4TxBuilder(protocolParams);
-  for (const utxo of senderUtxos) {
-    const wasmAddr = normalizeToAddress(utxo.receiver);
-    if (wasmAddr == null) throw new Error(`Unknown address ${utxo.receiver}`);
-    const keyHash = getCardanoSpendingKeyHash(wasmAddr);
-    if (keyHash === undefined) throw new Error(`Unexpected script address ${utxo.receiver}`);
-    if (keyHash == null) {
-      txBuilder.add_bootstrap_input(
-        RustModule.WalletV4.ByronAddress.from_base58(utxo.receiver),
-        RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
-        RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount))
-      );
-    } else {
-      txBuilder.add_key_input(
-        keyHash,
-        RustModule.WalletV4.TransactionInput.new(RustModule.WalletV4.TransactionHash.from_hex(utxo.tx_hash), utxo.tx_index),
-        RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str(utxo.amount))
-      );
+  const bodyHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const inputs = cml.TransactionInputList.new();
+    // Transaction inputs are serialized as a ledger set; use canonical hash order as the old builder did.
+    for (const utxo of [...senderUtxos].sort((left, right) => left.tx_hash.localeCompare(right.tx_hash))) {
+      // eslint-disable-next-line no-undef
+      inputs.add(cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt(utxo.tx_index)));
     }
-  }
-  txBuilder.add_output(
-    RustModule.WalletV4.TransactionOutput.new(
-      RustModule.WalletV4.Address.from_bech32('addr1stvpskppsdvpezg6ex464jvekztus84rcpzskramdy7sh53jh67q7j3er7sqqxhjlalzzsk0pgc'),
-      RustModule.WalletV4.Value.new(RustModule.WalletV4.BigNum.from_str('6323634'))
-    )
-  );
-  const certs = RustModule.WalletV4.Certificates.new();
+    const multiAsset = cml.MultiAsset.new();
+    multiAsset.set(cml.ScriptHash.from_hex('11'.repeat(28)), cml.AssetName.from_raw_bytes(hexToBytes('aabb')), BigInt('4'));
+    const outputs = cml.TransactionOutputList.new();
+    outputs.add(
+      cml.TransactionOutput.new(
+        cml.Address.from_bech32('addr1stvpskppsdvpezg6ex464jvekztus84rcpzskramdy7sh53jh67q7j3er7sqqxhjlalzzsk0pgc'),
+        cml.Value.new(BigInt('6323634'), multiAsset)
+      )
+    );
 
-  // note: key doesn't belong to the account signing. Just used to test witness generation
-  const accountKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-    '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
-  );
-  const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-  const stakeCredential = RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_raw_key().to_public().hash());
-  certs.add(RustModule.WalletV4.Certificate.new_stake_registration(RustModule.WalletV4.StakeRegistration.new(stakeCredential)));
-  txBuilder.set_certs(certs);
-  txBuilder.set_fee(RustModule.WalletV4.BigNum.from_str('2000'));
-  txBuilder.set_ttl(500);
+    // note: key doesn't belong to the account signing. Just used to test certificate parsing.
+    const accountKey = cml.Bip32PrivateKey.from_raw_bytes(
+      hexToBytes(
+        '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
+      )
+    );
+    const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
+    const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_raw_key().to_public().hash());
+    const certificates = cml.CertificateList.new();
+    certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
+    certificates.add(
+      cml.Certificate.new_vote_deleg_cert(stakeCredential, cml.DRep.new_key(cml.Ed25519KeyHash.from_hex('33'.repeat(28))))
+    );
+    const body = cml.TransactionBody.new(inputs, outputs, BigInt('2000'));
+    body.set_certs(certificates);
+    body.set_ttl(BigInt('500'));
+    return body.to_cbor_hex();
+  });
 
   const baseConfig = network.BaseConfig.reduce((acc, next) => Object.assign(acc, next), {});
   const { ByronNetworkId, ChainNetworkId } = baseConfig;
 
   const response = toTrezorSignRequest(
-    txBuilder.build().to_hex(),
+    bodyHex,
     Number.parseInt(ChainNetworkId, 10),
     ByronNetworkId,
     _address => [2147483692, 2147485463, 2147483648, 2, 0],
@@ -236,12 +297,23 @@ test('Create Trezor transaction', async () => {
       {
         address: 'addr1stvpskppsdvpezg6ex464jvekztus84rcpzskramdy7sh53jh67q7j3er7sqqxhjlalzzsk0pgc',
         amount: `6323634`,
+        tokenBundle: [
+          {
+            policyId: '11'.repeat(28),
+            tokenAmounts: [{ assetNameBytes: 'aabb', amount: '4' }],
+          },
+        ],
       },
     ],
     certificates: [
       {
         path: [2147483692, 2147485463, 2147483648, 2, 0],
         type: CardanoCertificateType.STAKE_REGISTRATION,
+      },
+      {
+        dRep: { type: CardanoDRepType.KEY_HASH, keyHash: '33'.repeat(28) },
+        path: [2147483692, 2147485463, 2147483648, 2, 0],
+        type: CardanoCertificateType.VOTE_DELEGATION,
       },
     ],
     signingMode: 0,

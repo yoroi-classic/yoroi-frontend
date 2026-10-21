@@ -27,7 +27,7 @@ import ExplorableHashContainer from '../../../containers/widgets/ExplorableHashC
 import { SelectedExplorer } from '../../../domain/SelectedExplorer';
 import { calculateAndFormatValue } from '../../../utils/unit-of-account';
 import { TxStatusCodes } from '../../../api/ada/lib/storage/database/primitives/enums';
-import { RustModule } from '../../../api/ada/lib/cardanoCrypto/rustLoader';
+import { StoredCertificateKind } from '../../../api/ada/lib/storage/database/primitives/storedCertificateKinds';
 import { splitAmount, truncateAddressShort, truncateToken } from '../../../utils/formatters';
 import CopyableAddress from '../../widgets/CopyableAddress';
 import { genAddressLookup } from '../../../stores/stateless/addressStores';
@@ -816,27 +816,25 @@ export default class Transaction extends Component<Props, State> {
   shelleyCertificateToText: ($ReadOnly<CertificateRow>) => string = certificate => {
     const intl = this.context;
     const kind = certificate.Kind;
-    return RustModule.WasmScope(Scope => {
-      switch (kind) {
-        case Scope.WalletV4.CertificateKind.StakeRegistration:
-          return intl.formatMessage(shelleyCertificateKinds.StakeRegistration);
-        case Scope.WalletV4.CertificateKind.StakeDeregistration:
-          return intl.formatMessage(shelleyCertificateKinds.StakeDeregistration);
-        case Scope.WalletV4.CertificateKind.StakeDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.StakeDelegation);
-        case Scope.WalletV4.CertificateKind.PoolRegistration:
-          return intl.formatMessage(shelleyCertificateKinds.PoolRegistration);
-        case Scope.WalletV4.CertificateKind.PoolRetirement:
-          return intl.formatMessage(shelleyCertificateKinds.PoolRetirement);
-        case Scope.WalletV4.CertificateKind.GenesisKeyDelegation:
-          return intl.formatMessage(shelleyCertificateKinds.GenesisKeyDelegation);
-        case Scope.WalletV4.CertificateKind.MoveInstantaneousRewardsCert:
-          return intl.formatMessage(shelleyCertificateKinds.MoveInstantaneousRewardsCert);
-        default: {
-          throw new Error(`${nameof(this.shelleyCertificateToText)} unexpected kind ${kind}`);
-        }
+    switch (kind) {
+      case StoredCertificateKind.StakeRegistration:
+        return intl.formatMessage(shelleyCertificateKinds.StakeRegistration);
+      case StoredCertificateKind.StakeDeregistration:
+        return intl.formatMessage(shelleyCertificateKinds.StakeDeregistration);
+      case StoredCertificateKind.StakeDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.StakeDelegation);
+      case StoredCertificateKind.PoolRegistration:
+        return intl.formatMessage(shelleyCertificateKinds.PoolRegistration);
+      case StoredCertificateKind.PoolRetirement:
+        return intl.formatMessage(shelleyCertificateKinds.PoolRetirement);
+      case StoredCertificateKind.GenesisKeyDelegation:
+        return intl.formatMessage(shelleyCertificateKinds.GenesisKeyDelegation);
+      case StoredCertificateKind.MoveInstantaneousRewardsCert:
+        return intl.formatMessage(shelleyCertificateKinds.MoveInstantaneousRewardsCert);
+      default: {
+        throw new Error(`${nameof(this.shelleyCertificateToText)} unexpected kind ${kind}`);
       }
-    });
+    }
   };
 
   getWithdrawals: WalletTransaction => ?Node = data => {

@@ -21,7 +21,7 @@ import { ModifyPublicDeriver } from '../../database/walletTypes/core/api/write';
 import type { KeyDerivationRow } from '../../database/primitives/tables';
 import { GetKeyDerivation } from '../../database/primitives/api/read';
 import { addTraitsForCip1852Child } from './traits';
-import { UtxoService } from '@emurgo/yoroi-lib/dist/utxo';
+import { UtxoService } from '../../../state-fetch/utxoService';
 import { UtxoStorageApi } from '../utils';
 import UtxoApi from '../../../state-fetch/utxoApi';
 import { networks } from '../../database/prepackaged/networks';

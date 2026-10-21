@@ -7,7 +7,7 @@ import LocalStorageApi from '../../../api/localStorage/index';
 import { useStrings } from '../../common/hooks/useStrings';
 import { STAKEPOOL_MARGIN_FEE_URL } from '../../common/constants';
 import { useYoroiRemoteConfig } from '../../common/hooks/useYoroiRemoteConfig';
-import { RustModule } from '../../../api/ada/lib/cardanoCrypto/rustLoader';
+import { poolKeyHashHexToBech32 } from '../../../api/ada/lib/cardanoCrypto/cmlAddress';
 
 const MODAL_ID = 'stakingPoolFeeIncreaseModal';
 
@@ -37,7 +37,7 @@ export const StakepoolFeeIncrease = ({ stores }) => {
 
       if (!affectedPools || affectedPools.length === 0) return;
 
-      const formatedPoolID = RustModule.WalletV4.Ed25519KeyHash.from_hex(currentPool).to_bech32('pool');
+      const formatedPoolID = poolKeyHashHexToBech32(currentPool);
       const isAffectedPool = affectedPools?.includes(formatedPoolID) ?? false;
 
       if (!isAffectedPool || !currentlyDelegating) return;

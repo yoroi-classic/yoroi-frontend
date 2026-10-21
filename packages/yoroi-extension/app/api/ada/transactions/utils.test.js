@@ -1,7 +1,20 @@
 // @flow
+/* global BigInt */
 import '../lib/test-config.forTests';
 import BigNumber from 'bignumber.js';
-import { convertAdaTransactionsToExportRows, sumInputsOutputs, getFromUserPerspective } from './utils';
+import {
+  convertAdaTransactionsToExportRows,
+  sumInputsOutputs,
+  getFromUserPerspective,
+  cardanoUtxoHexFromRemoteFormat,
+  cardanoMinAdaRequiredFromAssets,
+  cardanoMinAdaRequiredFromRemoteFormat,
+  cardanoValueFromMultiToken,
+  multiTokenFromCMLValue,
+  parseTokenList,
+  parseCMLTransactionOutput,
+} from './utils';
+import { RustModule } from '../lib/cardanoCrypto/rustLoader';
 import { formatBigNumberToFloatString } from '../../../utils/formatters';
 import type { TransactionExportRow } from '../../export';
 import type { UtxoTransactionInputRow, UtxoTransactionOutputRow } from '../lib/storage/database/transactionModels/utxo/tables';
@@ -12,6 +25,163 @@ import type { CardanoByronTxIO } from '../lib/storage/database/transactionModels
 import type { DbBlock, DbTokenInfo, TokenListRow } from '../lib/storage/database/primitives/tables';
 import type { UserAnnotation } from './types';
 import { defaultAssets, networks } from '../lib/storage/database/prepackaged/networks';
+import { MultiToken } from '../../common/lib/MultiToken';
+
+beforeAll(async () => {
+  await RustModule.load();
+});
+
+test('parses CML asset names from raw bytes', () => {
+  const tokens = RustModule.WasmScope(Module => {
+    const multiAsset = Module.CML.MultiAsset.new();
+    multiAsset.set(
+      Module.CML.ScriptHash.from_hex('44'.repeat(28)),
+      Module.CML.AssetName.from_raw_bytes(Buffer.from('deadbeef', 'hex')),
+      BigInt('7')
+    );
+    return parseTokenList(multiAsset);
+  });
+
+  expect(tokens).toEqual([
+    {
+      amount: '7',
+      assetId: `${'44'.repeat(28)}.deadbeef`,
+      policyId: '44'.repeat(28),
+      name: 'deadbeef',
+    },
+  ]);
+});
+
+test('serializes remote swap UTxOs with CML', () => {
+  const utxo = {
+    utxo_id: `${'33'.repeat(32)}#7`,
+    tx_hash: '33'.repeat(32),
+    tx_index: 7,
+    receiver: RustModule.WasmScope(Module =>
+      Module.CML.Address.from_bech32(
+        'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
+      ).to_hex()
+    ),
+    amount: '2000000',
+    assets: [{ assetId: `${'44'.repeat(28)}.aabb`, policyId: '44'.repeat(28), name: 'aabb', amount: '3' }],
+  };
+  const expected = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const multiAsset = cml.MultiAsset.new();
+    multiAsset.set(
+      cml.ScriptHash.from_hex(utxo.assets[0].policyId),
+      cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')),
+      BigInt('3')
+    );
+    const value = cml.Value.new(BigInt('2000000'), multiAsset);
+    const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt('7'));
+    const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
+    return cml.TransactionUnspentOutput.new(input, output).to_cbor_hex();
+  });
+  expect(cardanoUtxoHexFromRemoteFormat(utxo)).toEqual(expected);
+});
+
+test('calculates minimum ADA for token outputs', () => {
+  const tokens = MultiToken.from({
+    defaults: { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId },
+    values: [
+      { identifier: '.', networkId: networks.CardanoMainnet.NetworkId, amount: '2000000' },
+      { identifier: `${'44'.repeat(28)}.aabb`, networkId: networks.CardanoMainnet.NetworkId, amount: '3' },
+    ],
+  });
+  const coinsPerByte = new BigNumber('4310');
+  const cmlMinimum = RustModule.WasmScope(Module => {
+    const CML = Module.CML;
+    const output = CML.TransactionOutput.new(
+      CML.Address.from_bech32(
+        'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
+      ),
+      cardanoValueFromMultiToken(tokens, Module)
+    );
+    return CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString();
+  });
+  expect(cardanoMinAdaRequiredFromAssets(tokens, coinsPerByte).toString()).toEqual(cmlMinimum);
+});
+
+test('wallet reserve min-ADA covers the maximum address, multiasset value, and datum hash', () => {
+  const utxo = {
+    utxo_id: `${'33'.repeat(32)}#0`,
+    tx_hash: '33'.repeat(32),
+    tx_index: 0,
+    receiver: '00'.repeat(57),
+    amount: '2000000',
+    assets: [{ assetId: `${'44'.repeat(28)}.aabb`, policyId: '44'.repeat(28), name: 'aabb', amount: '3' }],
+  };
+  const maxAddress = '00'.repeat(57);
+  const coinsPerByte = new BigNumber('4310');
+  const withoutDatum = cardanoMinAdaRequiredFromRemoteFormat(utxo, coinsPerByte, maxAddress);
+  const withDatum = cardanoMinAdaRequiredFromRemoteFormat(utxo, coinsPerByte, maxAddress, '66'.repeat(32));
+
+  expect(withoutDatum.toString()).toBe('1129220');
+  expect(withDatum.toString()).toBe('1275760');
+});
+
+test('parses CML transaction output values into wallet token entries', () => {
+  const defaults = { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId };
+  const outputBytes = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const multiAsset = cml.MultiAsset.new();
+    multiAsset.set(
+      cml.ScriptHash.from_hex('44'.repeat(28)),
+      cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')),
+      BigInt('3')
+    );
+    const value = cml.Value.new(BigInt('2000000'), multiAsset);
+    const output = cml.TransactionOutput.new(
+      cml.Address.from_bech32(
+        'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
+      ),
+      value
+    );
+    return output.to_cbor_bytes();
+  });
+  const actual = RustModule.WasmScope(Module => {
+    const output = Module.CML.TransactionOutput.from_cbor_bytes(outputBytes);
+    return multiTokenFromCMLValue(output.amount(), defaults)
+      .entries()
+      .map(entry => ({
+        identifier: entry.identifier,
+        networkId: entry.networkId,
+        amount: entry.amount.toString(),
+      }));
+  });
+  expect(actual).toEqual([
+    { identifier: '.', networkId: defaults.defaultNetworkId, amount: '2000000' },
+    { identifier: `${'44'.repeat(28)}.aabb`, networkId: defaults.defaultNetworkId, amount: '3' },
+  ]);
+});
+
+test('parses Byron outputs, datum hashes, and unknown assets for connector display', () => {
+  const defaults = { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId };
+  const fixture = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const address = cml.ByronAddress.from_base58('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4').to_address();
+    const multiAsset = cml.MultiAsset.new();
+    multiAsset.set(
+      cml.ScriptHash.from_hex('55'.repeat(28)),
+      cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')),
+      BigInt('5')
+    );
+    const output = cml.TransactionOutput.new(
+      address,
+      cml.Value.new(BigInt('3000000'), multiAsset),
+      cml.DatumOption.new_hash(cml.DatumHash.from_hex('66'.repeat(32)))
+    );
+    return { hex: output.to_cbor_hex(), address: address.to_hex(), dataHash: '66'.repeat(32) };
+  });
+  const parsed = parseCMLTransactionOutput(fixture.hex, defaults);
+  expect(parsed.address).toEqual(fixture.address);
+  expect(parsed.dataHash).toEqual(fixture.dataHash);
+  expect(parsed.amount.entries().map(entry => [entry.identifier, entry.amount.toString()])).toEqual([
+    ['.', '3000000'],
+    [`${'55'.repeat(28)}.aabb`, '5'],
+  ]);
+});
 
 const cardanoToken = {
   TokenId: 0,

@@ -64,7 +64,7 @@ import type { RemoveAllTransactionsRequest, RemoveAllTransactionsResponse } from
 import { Logger, stringifyError } from '../utils/logging';
 import LocalizableError from '../i18n/LocalizableError';
 import { WrongPassphraseError } from './ada/lib/cardanoCrypto/cryptoErrors';
-import { sanitizeForLog } from '../coreUtils';
+import { bytesToHex, sanitizeForLog } from '../coreUtils';
 import { OVERSIZE_RESPONSE_MESSAGE_PLACEHOLDER } from '../../chrome/extension/background/constants';
 
 export type { CreateHardwareWalletRequest } from '../../chrome/extension/background/handlers/yoroi/wallet';
@@ -106,7 +106,9 @@ export function callBackground<R>(message: {| type: string, request?: Object |})
       if (window.chrome.runtime.lastError) {
         // eslint-disable-next-line prefer-promise-reject-errors
         reject(
-          `Error ${window.chrome.runtime.lastError} when calling the background with: ${JSON.stringify(sanitizeForLog(message)) ?? 'undefined'}`
+          `Error ${window.chrome.runtime.lastError} when calling the background with: ${
+            JSON.stringify(sanitizeForLog(message)) ?? 'undefined'
+          }`
         );
         return;
       }
@@ -218,18 +220,13 @@ export async function signAndBroadcastTransaction(request: {|
   password: string,
   publicDeriverId: number,
 |}): Promise<{| txId: string |}> {
-  const tx = request.signRequest.unsignedTx.build_tx();
-  const txBody = tx.body();
-
   const serializableRequest: SignAndBroadcastTransactionRequestType = {
     senderUtxos: request.signRequest.senderUtxos,
-    unsignedTx: tx.to_hex(),
-    metadata: request.signRequest.metadata?.to_hex(),
+    unsignedTx: request.signRequest.serializedUnsignedTxHex(),
+    metadata: request.signRequest.metadata == null ? undefined : bytesToHex(request.signRequest.metadata),
     password: request.password,
     publicDeriverId: request.publicDeriverId,
   };
-  txBody.free();
-  tx.free();
   const result = await callBackground({
     type: SignAndBroadcastTransaction.typeTag,
     request: serializableRequest,

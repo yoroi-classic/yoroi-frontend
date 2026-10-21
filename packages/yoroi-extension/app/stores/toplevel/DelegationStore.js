@@ -4,18 +4,17 @@ import { action, observable, runInAction } from 'mobx';
 import { find } from 'lodash';
 import LocalizedRequest from '../lib/LocalizedRequest';
 import Store from '../base/Store';
-import { GovernanceApi } from '@emurgo/yoroi-lib/dist/governance/emurgo-api';
+import CmlGovernanceApi from '../../api/ada/lib/cardanoCrypto/cmlGovernanceApi';
 import CachedRequest from '../lib/LocalizedCachedRequest';
 import LocalizableError from '../../i18n/LocalizableError';
 import { PoolMissingApiError, GetPoolInfoApiError } from '../../api/common/errors';
 import type { MangledAmountFunc, MangledAmountsResponse } from '../stateless/mangledAddresses';
 import type { StoresMap } from '../index';
-import type { ExplorerPoolInfo as PoolInfo } from '@emurgo/yoroi-lib';
-import type { RemotePoolDisplayInfo } from '../../api/ada/lib/state-fetch/types';
-import { PoolInfoApi } from '@emurgo/yoroi-lib';
+import type { ExplorerPoolInfo as PoolInfo, RemotePoolDisplayInfo } from '../../api/ada/lib/state-fetch/types';
 import { MultiToken } from '../../api/common/lib/MultiToken';
 import { forceNonNull, maybe } from '../../coreUtils';
-import { unwrapStakingKey } from '../../api/ada/lib/storage/bridge/utils';
+import { stakingKeyHashFromRewardAddress } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
+import { getPoolTransition } from '../../api/ada/poolTransition';
 
 import type {
   GetDelegatedBalanceFunc,
@@ -23,7 +22,6 @@ import type {
   RewardHistoryFunc,
 } from '../../api/ada/lib/storage/bridge/delegationUtils';
 import { getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import { Logger, stringifyError } from '../../utils/logging';
 
 export type DelegationRequests = {|
@@ -257,10 +255,9 @@ export default class DelegationStore extends Store<StoresMap> {
 
     try {
       const { BackendService } = getNetworkById(publicDeriver.networkId).Backend;
+      const network = getNetworkById(publicDeriver.networkId);
       const transitionResult = await maybe(currentPool, p =>
-        new PoolInfoApi(forceNonNull(BackendService) + '/api')
-          // $FlowIgnore
-          .getTransition(p, RustModule.CrossCsl.init)
+        getPoolTransition(forceNonNull(BackendService) + '/api', p, network.NetworkFeatureName)
       );
 
       const response = {
@@ -317,7 +314,7 @@ export default class DelegationStore extends Store<StoresMap> {
 
   checkGovernanceStatus: ({ stakingAddress: string, networkId: number, ... }) => Promise<void> = async publicDeriver => {
     try {
-      const skey = unwrapStakingKey(publicDeriver.stakingAddress).to_keyhash()?.to_hex();
+      const skey = stakingKeyHashFromRewardAddress(publicDeriver.stakingAddress);
       if (skey == null) {
         throw new Error('Cannot get staking key from the wallet!');
       }
@@ -326,12 +323,10 @@ export default class DelegationStore extends Store<StoresMap> {
       if (!BackendService || !BackendServiceZero) {
         throw new Error('unexpectedly missing backend');
       }
-      const govApi = new GovernanceApi({
+      const govApi = new CmlGovernanceApi({
         oldBackendUrl: BackendService,
         newBackendUrl: BackendServiceZero,
         networkId: publicDeriver.networkId,
-        // $FlowIgnore
-        wasmFactory: RustModule.CrossCsl.init,
       });
 
       const governanceStatus = await govApi.getAccountState(skey, skey);

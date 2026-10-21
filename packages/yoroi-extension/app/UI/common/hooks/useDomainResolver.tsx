@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { isResolvableDomain, resolverApiMaker } from '@yoroi/resolver';
+import { isResolvableDomain, resolverApiMaker } from '../../../api/ada/domainResolver';
 import { Api, Resolver } from '@yoroi/types';
 import { useStrings } from './useStrings';
-import { RustModule } from '../../../api/ada/lib/cardanoCrypto/rustLoader';
 
 let resolverApiPromise: Promise<ReturnType<typeof resolverApiMaker>> | null = null;
 
@@ -15,10 +14,6 @@ const getInitializedResolverApi = async () => {
         [Resolver.NameServer.Unstoppable]: {
           apiKey: 'czsajliz-wxgu6tujd1zqq7hey_pclfqhdjsqolsxjfsurgh',
         },
-      },
-      cslFactory: ctx => {
-        RustModule.CrossCsl.init(ctx);
-        return RustModule.CrossCsl;
       },
     })
   );

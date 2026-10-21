@@ -10,18 +10,17 @@ import type { CreateVotingRegTxFunc } from '../../api/ada';
 import { getCardanoHaskellBaseConfig, getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import TimeUtils from '../../api/ada/lib/storage/bridge/timeUtils';
 import { generatePrivateKeyForCatalyst } from '../../api/ada/lib/cardanoCrypto/cryptoWallet';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import type { StepStateEnum } from '../../components/widgets/ProgressSteps';
 import { StepState } from '../../components/widgets/ProgressSteps';
 import { ROUTES } from '../../routes-config';
 import LocalizableError, { UnexpectedError } from '../../i18n/LocalizableError';
 import cryptoRandomString from 'crypto-random-string';
 import type { StoresMap } from '../index';
-import { generateRegistration } from '../../api/ada/lib/cardanoCrypto/catalyst';
+import { generateRegistration, privateKeyPublicKeyHex } from '../../api/ada/lib/cardanoCrypto/catalyst';
 import type { CatalystRoundInfoResponse } from '../../api/ada/lib/state-fetch/types';
 import { loadCatalystRoundInfo, saveCatalystRoundInfo } from '../../api/localStorage';
 import { CoreAddressTypes } from '../../api/ada/lib/storage/database/primitives/enums';
-import { derivePublicByAddressing } from '../../api/ada/lib/cardanoCrypto/deriveByAddressing';
+import { deriveBip32PublicKeyRawHex } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
 import type { WalletState } from '../../../chrome/extension/background/types';
 import { getPrivateStakingKey, getProtocolParameters } from '../../api/thunk';
 import { bytesToHex, noop } from '../../coreUtils';
@@ -44,7 +43,7 @@ export interface ProgressInfo {
 export default class VotingStore extends Store<StoresMap> {
   @observable progressInfo: ProgressInfo;
   @observable encryptedKey: string | null = null;
-  @observable catalystPrivateKey: RustModule.WalletV4.PrivateKey | void;
+  @observable catalystPrivateKey: string | void;
   @observable pin: Array<number>;
   @observable error: ?LocalizableError;
   @observable catalystRoundInfo: ?CatalystRoundInfoResponse;
@@ -215,17 +214,12 @@ export default class VotingStore extends Store<StoresMap> {
     let votingRegTxPromise;
 
     if (publicDeriver.type !== 'mnemonic') {
-      const votingPublicKey = `0x${bytesToHex(catalystPrivateKey.to_public().as_bytes())}`;
+      const votingPublicKey = `0x${privateKeyPublicKeyHex(catalystPrivateKey, true)}`;
 
-      const publicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(publicDeriver.publicKey);
-
-      const stakingKey = derivePublicByAddressing({
-        addressing: publicDeriver.stakingAddressing.addressing,
-        startingFrom: {
-          level: publicDeriver.publicDeriverLevel,
-          key: publicKey,
-        },
-      }).to_raw_key();
+      const addressing = publicDeriver.stakingAddressing.addressing;
+      const firstPathIndex = publicDeriver.publicDeriverLevel - addressing.startLevel + 1;
+      if (firstPathIndex < 0) throw new Error('Public key derivation level is before the addressing start level');
+      const stakingKey = deriveBip32PublicKeyRawHex(publicDeriver.publicKey, addressing.path, firstPathIndex);
 
       if (publicDeriver.type === 'trezor') {
         votingRegTxPromise = this.createVotingRegTx.execute({
@@ -234,7 +228,7 @@ export default class VotingStore extends Store<StoresMap> {
           trezorTWallet: {
             votingPublicKey,
             stakingKeyPath: publicDeriver.stakingAddressing.addressing.path,
-            stakingKey: bytesToHex(stakingKey.as_bytes()),
+            stakingKey,
             paymentKeyPath: firstAddress.addressing.path,
             paymentAddress: firstAddress.address,
             nonce: currentAbsoluteSlot,
@@ -248,7 +242,7 @@ export default class VotingStore extends Store<StoresMap> {
           ledgerNanoWallet: {
             votingPublicKey,
             stakingKeyPath: publicDeriver.stakingAddressing.addressing.path,
-            stakingKey: bytesToHex(stakingKey.as_bytes()),
+            stakingKey,
             paymentKeyPath: firstAddress.addressing.path,
             paymentAddress: firstAddress.address,
             nonce: currentAbsoluteSlot,
@@ -271,8 +265,8 @@ export default class VotingStore extends Store<StoresMap> {
         throw new Error('expect mnemonic wallet to have private staking key');
       }
       const trxMeta = generateRegistration({
-        stakePrivateKey: RustModule.WalletV4.PrivateKey.from_hex(stakingKey),
-        catalystPrivateKey,
+        stakePrivateKeyHex: stakingKey,
+        catalystPrivateKeyHex: catalystPrivateKey,
         receiverAddress: firstAddress.address,
         slotNumber: currentAbsoluteSlot,
       });
@@ -314,11 +308,12 @@ export default class VotingStore extends Store<StoresMap> {
 
     const passBuff = Buffer.from(pinArray);
     const rootKey = generatePrivateKeyForCatalyst();
-    const key = await encryptWithPassword(passBuff, rootKey.to_raw_key().as_bytes());
+    const extendedKeyBytes = rootKey.to_raw_key().to_raw_bytes();
+    const key = await encryptWithPassword(passBuff, extendedKeyBytes);
     runInAction(() => {
       this.encryptedKey = key;
       this.pin = pinArray;
-      this.catalystPrivateKey = RustModule.WalletV4.PrivateKey.from_extended_bytes(rootKey.to_raw_key().as_bytes());
+      this.catalystPrivateKey = bytesToHex(extendedKeyBytes);
     });
   };
 

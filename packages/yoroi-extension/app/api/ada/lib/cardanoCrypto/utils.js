@@ -1,66 +1,79 @@
 // @flow
 
 import { RustModule } from './rustLoader';
-import { bytesToHex, fail, forceNonNull, hexToBytes, iterateLenGet, maybe } from '../../../../coreUtils';
+import {
+  addressBech32ToHex as cmlAddressBech32ToHex,
+  addressHexToBech32 as cmlAddressHexToBech32,
+  poolKeyHashHexToBech32,
+  rewardAddressFromKeyHash,
+} from './cmlAddress';
+import { fail, forceNonNull, iterateLenGet, maybe } from '../../../../coreUtils';
 import { base32ToHex, hexToBase32 } from '../storage/bridge/utils';
 
-export function v4PublicToV2(v4Key: RustModule.WalletV4.Bip32PublicKey): RustModule.WalletV2.PublicKey {
-  return RustModule.WalletV2.PublicKey.from_hex(bytesToHex(v4Key.as_bytes()));
-}
-
 export function poolIdHexToBech32(hex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Ed25519KeyHash.from_hex(hex).to_bech32('pool'));
+  return poolKeyHashHexToBech32(hex);
 }
 
 export function addressHexToBech32(hex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Address.from_hex(hex).to_bech32());
+  return cmlAddressHexToBech32(hex);
 }
 
 export function addressBech32ToHex(bech32: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.Address.from_bech32(bech32).to_hex());
+  return cmlAddressBech32ToHex(bech32);
 }
 
 export function transactionHexToWitnessSet(txHex: string): string {
-  return RustModule.WasmScope(Module => bytesToHex(Module.WalletV4.FixedTransaction.from_hex(txHex).raw_witness_set()));
+  return RustModule.WasmScope(Module => Module.CML.Transaction.from_cbor_hex(txHex).witness_set().to_cbor_hex());
 }
 
 export function transactionBodyHexToTransaction(txBodyHex: string): string {
-  return RustModule.WasmScope(Module =>
-    Module.WalletV4.FixedTransaction.new(
-      hexToBytes(txBodyHex),
-      Module.WalletV4.TransactionWitnessSet.new().to_bytes(),
-      true
-    ).to_hex()
-  );
+  return RustModule.WasmScope(Module => {
+    const body = Module.CML.TransactionBody.from_cbor_hex(txBodyHex);
+    const witnessSet = Module.CML.TransactionWitnessSet.new();
+    return Module.CML.Transaction.new(body, witnessSet, true).to_cbor_hex();
+  });
 }
 
 export function transactionHexToBodyHex(txHex: string): string {
-  return RustModule.WasmScope(Module => bytesToHex(Module.WalletV4.FixedTransaction.from_hex(txHex).raw_body()));
+  return RustModule.WasmScope(Module => Module.CML.Transaction.from_cbor_hex(txHex).body().to_cbor_hex());
 }
 
 export function transactionHexToHash(txHex: string): string {
-  return RustModule.WasmScope(Module => Module.WalletV4.FixedTransaction.from_hex(txHex).transaction_hash().to_hex());
+  return RustModule.WasmScope(Module => Module.CML.hash_transaction(Module.CML.Transaction.from_cbor_hex(txHex).body()).to_hex());
 }
 
 export function transactionHexReplaceWitnessSet(txHex: string, witnessSetHex: string): string {
   return RustModule.WasmScope(Module => {
-    const fixedTransaction = Module.WalletV4.FixedTransaction.from_hex(txHex);
-    fixedTransaction.set_witness_set(hexToBytes(witnessSetHex));
-    return fixedTransaction.to_hex();
+    const tx = Module.CML.Transaction.from_cbor_hex(txHex);
+    const witnessSet = Module.CML.TransactionWitnessSet.from_cbor_hex(witnessSetHex);
+    const auxiliaryData = tx.auxiliary_data();
+    return Module.CML.Transaction.new(tx.body(), witnessSet, tx.is_valid(), auxiliaryData).to_cbor_hex();
   });
 }
 
 export function transactionHexAddSignaturesFromWitnessSetHex(txHex: string, witnessSetHex: string): string {
   return RustModule.WasmScope(Module => {
-    const fixedTransaction = Module.WalletV4.FixedTransaction.from_hex(txHex);
-    const witnessSet = Module.WalletV4.TransactionWitnessSet.from_hex(witnessSetHex);
-    for (const vkeyWitness of iterateLenGet(witnessSet.vkeys())) {
-      fixedTransaction.add_vkey_witness(vkeyWitness);
+    const tx = Module.CML.Transaction.from_cbor_hex(txHex);
+    const witnessSet = tx.witness_set();
+    const incomingWitnessSet = Module.CML.TransactionWitnessSet.from_cbor_hex(witnessSetHex);
+
+    const vkeyWitnesses = witnessSet.vkeywitnesses() ?? Module.CML.VkeywitnessList.new();
+    for (const vkeyWitness of iterateLenGet(incomingWitnessSet.vkeywitnesses())) {
+      vkeyWitnesses.add(vkeyWitness);
     }
-    for (const bootstrapWitness of iterateLenGet(witnessSet.bootstraps())) {
-      fixedTransaction.add_bootstrap_witness(bootstrapWitness);
+    if (incomingWitnessSet.vkeywitnesses() != null) {
+      witnessSet.set_vkeywitnesses(vkeyWitnesses);
     }
-    return fixedTransaction.to_hex();
+
+    const bootstrapWitnesses = witnessSet.bootstrap_witnesses() ?? Module.CML.BootstrapWitnessList.new();
+    for (const bootstrapWitness of iterateLenGet(incomingWitnessSet.bootstrap_witnesses())) {
+      bootstrapWitnesses.add(bootstrapWitness);
+    }
+    if (incomingWitnessSet.bootstrap_witnesses() != null) {
+      witnessSet.set_bootstrap_witnesses(bootstrapWitnesses);
+    }
+
+    return Module.CML.Transaction.new(tx.body(), witnessSet, tx.is_valid(), tx.auxiliary_data()).to_cbor_hex();
   });
 }
 
@@ -74,19 +87,19 @@ export function dRepToMaybeCredentialHex(s: string): ?string {
           return maybe(base32ToHex(s), dRepToMaybeCredentialHex);
         }
         // Pre CIP129 drep1 encoding means same as drep_vkh1 now
-        return Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_bech32(s)).to_hex();
+        return Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_bech32(s)).to_cbor_hex();
       }
       if (s.startsWith('drep_vkh1')) {
-        return Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_bech32(s)).to_hex();
+        return Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_bech32(s)).to_cbor_hex();
       }
       if (s.startsWith('drep_script1')) {
-        return Module.WalletV4.Credential.from_scripthash(Module.WalletV4.ScriptHash.from_bech32(s)).to_hex();
+        return Module.CML.Credential.new_script(Module.CML.ScriptHash.from_bech32(s)).to_cbor_hex();
       }
       if (isPotentiallyValidHex && s.startsWith('22')) {
-        return Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(s.substr(2))).to_hex();
+        return Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(s.substr(2))).to_cbor_hex();
       }
       if (isPotentiallyValidHex && s.startsWith('23')) {
-        return Module.WalletV4.Credential.from_scripthash(Module.WalletV4.ScriptHash.from_hex(s.substr(2))).to_hex();
+        return Module.CML.Credential.new_script(Module.CML.ScriptHash.from_hex(s.substr(2))).to_cbor_hex();
       }
     } catch {} // eslint-disable-line no-empty
     return null;
@@ -99,9 +112,9 @@ function parseDrep(drep: string): ?{| hash: string, isScript: boolean |} {
     return null;
   }
   return RustModule.WasmScope(Module => {
-    const cred = Module.WalletV4.Credential.from_hex(credentialHex);
-    const isScript = cred.kind() === Module.WalletV4.CredKind.Script;
-    const hash = isScript ? forceNonNull(cred.to_scripthash()).to_hex() : forceNonNull(cred.to_keyhash()).to_hex();
+    const cred = Module.CML.Credential.from_cbor_hex(credentialHex);
+    const isScript = cred.as_script() != null;
+    const hash = isScript ? forceNonNull(cred.as_script()).to_hex() : forceNonNull(cred.as_pub_key()).to_hex();
     return { hash, isScript };
   });
 }
@@ -138,21 +151,10 @@ export function dRepToPreCip129(drep: string): string {
 }
 
 export function pubKeyHashToRewardAddress(hex: string, network: number): string {
-  return RustModule.WasmScope(Module =>
-    Module.WalletV4.RewardAddress.new(
-      network,
-      Module.WalletV4.Credential.from_keyhash(Module.WalletV4.Ed25519KeyHash.from_hex(hex))
-    )
-      .to_address()
-      .to_hex()
-  );
+  return rewardAddressFromKeyHash(network, hex);
 }
 
-export const cip8Sign = async (
-  address: Buffer,
-  signKey: RustModule.WalletV4.PrivateKey,
-  payload: Buffer
-): Promise<RustModule.MessageSigning.COSESign1> => {
+export const cip8DataToSign = (address: Buffer, payload: Buffer): Buffer => {
   const protectedHeader = RustModule.MessageSigning.HeaderMap.new();
   protectedHeader.set_algorithm_id(
     RustModule.MessageSigning.Label.from_algorithm_id(RustModule.MessageSigning.AlgorithmId.EdDSA)
@@ -165,9 +167,7 @@ export const cip8Sign = async (
   const unprotected = RustModule.MessageSigning.HeaderMap.new();
   const headers = RustModule.MessageSigning.Headers.new(protectedSerialized, unprotected);
   const builder = RustModule.MessageSigning.COSESign1Builder.new(headers, payload, false);
-  const toSign = builder.make_data_to_sign().to_bytes();
-  const signedSigStruct = signKey.sign(toSign).to_bytes();
-  return builder.build(signedSigStruct);
+  return Buffer.from(builder.make_data_to_sign().to_bytes());
 };
 
 export const buildCoseSign1FromSignature = async (
@@ -221,58 +221,62 @@ export const makeCip8Key: Uint8Array => RustModule.MessageSigning.COSEKey = publ
   return key;
 };
 
-function getWithdrawalKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.TransactionBody): Set<string> {
+function getWithdrawalKeyHashesFromTransactionBody(txBody: any): Set<string> {
   const result = new Set<string>();
   const withdrawals = txBody.withdrawals?.();
   if (withdrawals != null) {
     for (const rewardAddress of iterateLenGet(withdrawals.keys())) {
-      maybe(rewardAddress.payment_cred().to_keyhash()?.to_hex(), x => result.add(x));
+      maybe(rewardAddress.payment().as_pub_key()?.to_hex(), x => result.add(x));
     }
   }
   return result;
 }
 
-function resolveCredential(cred: RustModule.WalletV4.Credential): {| keyHash: ?string, scriptHash: ?string |} {
-  return {
-    keyHash: cred.to_keyhash()?.to_hex(),
-    scriptHash: cred.to_scripthash()?.to_hex(),
-  };
+function getCertificateKeyHash(credential: any): string | null {
+  return credential.as_pub_key()?.to_hex() ?? null;
 }
 
-function getCertificateStakeCredential(cert: RustModule.WalletV4.Certificate): ?{| keyHash: ?string, scriptHash: ?string |} {
-  switch (cert.kind()) {
-    case RustModule.WalletV4.CertificateKind.StakeRegistration: {
-      const stakeRegCert = forceNonNull(cert.as_stake_registration());
-      if (!stakeRegCert.coin()) {
-        return null;
-      }
-      return resolveCredential(stakeRegCert.stake_credential());
-    }
-    case RustModule.WalletV4.CertificateKind.StakeDeregistration:
-      return resolveCredential(forceNonNull(cert.as_stake_deregistration()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeAndVoteDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_and_vote_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeRegistrationAndDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_registration_and_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.StakeVoteRegistrationAndDelegation:
-      return resolveCredential(forceNonNull(cert.as_stake_vote_registration_and_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.VoteDelegation:
-      return resolveCredential(forceNonNull(cert.as_vote_delegation()).stake_credential());
-    case RustModule.WalletV4.CertificateKind.VoteRegistrationAndDelegation:
-      return resolveCredential(forceNonNull(cert.as_vote_registration_and_delegation()).stake_credential());
-    default:
-      return null;
-  }
-}
-
-function getCertificateKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.TransactionBody): Set<string> {
+function getCertificateKeyHashesFromTransactionBody(txBody: any): Set<string> {
   const result = new Set<string>();
   const certificates = txBody.certs?.();
   if (certificates != null) {
-    for (const cert of iterateLenGet(certificates)) {
-      maybe(getCertificateStakeCredential(cert)?.keyHash, x => result.add(x));
+    for (const certificate of iterateLenGet(certificates)) {
+      const kind = certificate.kind();
+      let credential;
+      switch (kind) {
+        case RustModule.CML.CertificateKind.StakeDeregistration:
+          credential = certificate.as_stake_deregistration()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeDelegation:
+          credential = certificate.as_stake_delegation()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.RegCert:
+          credential = certificate.as_reg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.UnregCert:
+          credential = certificate.as_unreg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.VoteDelegCert:
+          credential = certificate.as_vote_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeVoteDelegCert:
+          credential = certificate.as_stake_vote_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeRegDelegCert:
+          credential = certificate.as_stake_reg_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.VoteRegDelegCert:
+          credential = certificate.as_vote_reg_deleg_cert()?.stake_credential();
+          break;
+        case RustModule.CML.CertificateKind.StakeVoteRegDelegCert:
+          credential = certificate.as_stake_vote_reg_deleg_cert()?.stake_credential();
+          break;
+        // The legacy registration variant has no explicit deposit and was
+        // deliberately excluded by the previous certificate parser.
+        default:
+          break;
+      }
+      maybe(credential == null ? null : getCertificateKeyHash(credential), x => result.add(x));
     }
   }
   return result;
@@ -280,7 +284,7 @@ function getCertificateKeyHashesFromTransactionBody(txBody: RustModule.WalletV4.
 
 export function getStakingKeyHashesInTransactionBody(txBodyHex: string): Set<string> {
   return RustModule.WasmScope(Module => {
-    const txBody = Module.WalletV4.TransactionBody.from_hex(txBodyHex);
+    const txBody = Module.CML.TransactionBody.from_cbor_hex(txBodyHex);
     const withdrawalKeys = getWithdrawalKeyHashesFromTransactionBody(txBody);
     const certificateKeys = getCertificateKeyHashesFromTransactionBody(txBody);
     return new Set([...withdrawalKeys, ...certificateKeys]);

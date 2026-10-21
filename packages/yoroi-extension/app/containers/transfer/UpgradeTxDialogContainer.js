@@ -13,8 +13,8 @@ import Dialog from '../../components/widgets/Dialog';
 import LegacyTransferLayout from '../../components/transfer/LegacyTransferLayout';
 import VerticallyCenteredLayout from '../../components/layout/VerticallyCenteredLayout';
 import LoadingSpinner from '../../components/widgets/LoadingSpinner';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import type { Addressing } from '../../api/ada/lib/storage/models/PublicDeriver/interfaces';
+import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import { getTokenName, genLookupOrFail } from '../../stores/stateless/tokenHelpers';
 import { truncateToken } from '../../utils/formatters';
 import { getNetworkById, networks } from '../../api/ada/lib/storage/database/prepackaged/networks';
@@ -92,7 +92,7 @@ export default class UpgradeTxDialogContainer extends Component<{| ...StoresProp
   getContent: ({|
     signRequest: HaskellShelleyTxSignRequest,
     publicKey: {|
-      key: RustModule.WalletV4.Bip32PublicKey,
+      key: RustModule.CML.Bip32PublicKey,
       ...Addressing,
     |},
   |}) => Node = tentativeTx => {

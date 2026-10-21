@@ -3,18 +3,24 @@ import { useQuery } from '@tanstack/react-query';
 import { TransactionBody } from '../types';
 import { RustModule } from '../../../../../api/ada/lib/cardanoCrypto/rustLoader';
 
-export const formatUnsignedTxMetadata = async (unsignedTx: any, txBody: TransactionBody): Promise<any> => {
+export const formatUnsignedTxMetadata = (metadataBytes: Uint8Array, txBody: TransactionBody): FormattedMetadata => {
   try {
     const hash = txBody.auxiliary_data_hash ?? null;
-    const decodedMetadata = await unsignedTx.auxiliary_data.metadata;
-    const parsedMetadata = parseMetadata(decodedMetadata);
-
-    return {
-      hash,
-      metadata: parsedMetadata,
-    };
+    const metadataJson = RustModule.WasmScope(Module => {
+      const auxiliaryData = Module.CML.AuxiliaryData.from_cbor_bytes(metadataBytes);
+      const metadata = auxiliaryData.metadata();
+      if (metadata == null) return undefined;
+      const labels = metadata.labels();
+      for (let index = 0; index < labels.len(); index++) {
+        const label = labels.get(index);
+        if (Number(label) === 674) return metadata.get(label)?.to_json();
+      }
+      return undefined;
+    });
+    return { hash, metadata: format674(metadataJson) };
   } catch {
     console.error('Error parsing metadata');
+    return { hash: txBody.auxiliary_data_hash ?? null, metadata: null };
   }
 };
 
@@ -23,8 +29,18 @@ type FormattedMetadata = { hash: string | null; metadata: unknown | null };
 export const formatCborMetadata = (cbor: string, txBody: TransactionBody): FormattedMetadata => {
   const hash = txBody?.auxiliary_data_hash ?? null;
   try {
-    const tx = RustModule.WalletV4.Transaction.from_hex(cbor);
-    const aux = tx?.auxiliary_data()?.to_json();
+    const aux = RustModule.WasmScope(Module => {
+      const auxiliaryData = Module.CML.Transaction.from_cbor_hex(cbor).auxiliary_data();
+      const metadata = auxiliaryData?.metadata();
+      if (metadata == null) return undefined;
+
+      const labels = metadata.labels();
+      for (let index = 0; index < labels.len(); index++) {
+        const label = labels.get(index);
+        if (Number(label) === 674) return metadata.get(label)?.to_json();
+      }
+      return undefined;
+    });
     return { hash, metadata: format674(aux) };
   } catch (e) {
     console.error('Error parsing metadata', e);
@@ -77,22 +93,22 @@ export const parseMetadata = (metadata: Record<string, string>) => {
 };
 
 export const useFormattedMetadata = ({
-  unsignedTx,
+  metadata,
   cbor,
   txBody,
 }: {
-  unsignedTx: any;
+  metadata: Uint8Array | null;
   cbor: string | null;
   txBody: TransactionBody;
 }) => {
   const hasCbor = typeof cbor === 'string' && cbor.length > 0;
-  const canUnsigned = Boolean(unsignedTx?.auxiliary_data?.metadata);
+  const canUnsigned = metadata != null;
 
   const { data } = useQuery({
-    queryKey: ['useFormattedMetadata', hasCbor ? cbor : unsignedTx, txBody?.auxiliary_data_hash],
+    queryKey: ['useFormattedMetadata', hasCbor ? cbor : metadata, txBody?.auxiliary_data_hash],
     enabled: hasCbor || canUnsigned,
     throwOnError: true,
-    queryFn: () => (hasCbor && cbor ? formatCborMetadata(cbor, txBody) : formatUnsignedTxMetadata(unsignedTx, txBody)),
+    queryFn: () => (hasCbor && cbor ? formatCborMetadata(cbor, txBody) : formatUnsignedTxMetadata(metadata!, txBody)),
   });
 
   return data;
@@ -130,6 +146,7 @@ const format674 = (raw: any) => {
   const label =
     data?.metadata?.['674'] ??
     data?.['674'] ?? // sometimes it’s already at root
+    (Array.isArray(data?.map) ? data : null) ??
     null;
 
   if (!label || typeof label !== 'object' || !Array.isArray(label.map)) return null;
