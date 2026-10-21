@@ -2,13 +2,13 @@
 // Handles Connect to Trezor Hardware Wallet dialog
 
 import { action, observable } from 'mobx';
-import type { CardanoPublicKey, DeviceEvent, Success, UiEvent, Unsuccessful } from 'trezor-connect-flow';
+import type { CardanoPublicKey, Success, TrezorFeatures, Unsuccessful } from 'trezor-connect-flow';
 import TrezorConnect from 'trezor-connect-flow';
 import Store from '../base/Store';
 import globalMessages from '../../i18n/global-messages';
 import LocalizableError, { UnexpectedError } from '../../i18n/LocalizableError';
 import { CheckAddressesInUseApiError } from '../../api/common/errors';
-import { getTrezorManifest, wrapWithFrame, wrapWithoutFrame } from '../lib/TrezorWrapper';
+import { wrapWithFrame } from '../lib/TrezorWrapper';
 import { ROUTES } from '../../routes-config';
 import Config from '../../config';
 // This is actually just an interface
@@ -26,7 +26,7 @@ import { captureEvent } from '../../../posthog';
 
 type TrezorConnectionResponse = {|
   trezorResp: Success<CardanoPublicKey> | Unsuccessful,
-  trezorEventDevice: DeviceEvent,
+  trezorFeatures: ?TrezorFeatures,
 |};
 
 export default class TrezorConnectStore extends Store<StoresMap> implements HWConnectStoreTypes<TrezorConnectionResponse> {
@@ -56,9 +56,6 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
    * final wallet name will be fetched from the user */
   hwDeviceInfo: ?HWDeviceInfo;
 
-  /** holds Trezor device DeviceMessage event object, device features will be fetched
-   * from this object and will be converted to TrezorDeviceInfo object */
-  trezorEventDevice: ?DeviceEvent;
   // =================== VIEW RELATED =================== //
 
   /** While trezor wallet creation is taking place, we need to block users from starting a
@@ -69,12 +66,6 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
   setup(): void {
     super.setup();
     this._reset();
-    try {
-      const trezorManifest = getTrezorManifest();
-      wrapWithoutFrame(trezor => trezor.manifest(trezorManifest));
-    } catch (error) {
-      Logger.error(`${nameof(TrezorConnectStore)}::${nameof(this.setup)} error: ${stringifyError(error)}`);
-    }
   }
 
   /** setup() is called when stores are being created
@@ -95,7 +86,6 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     };
     this.error = undefined;
     this.hwDeviceInfo = undefined;
-    this.trezorEventDevice = undefined;
   };
 
   @action cancel: void => void = () => {
@@ -106,7 +96,6 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
   /** CHECK dialog submit(Next button) */
   @action submitCheck: void => void = () => {
     this.error = undefined;
-    this.trezorEventDevice = undefined;
     this.progressInfo.currentStep = ProgressStep.CONNECT;
     this.progressInfo.stepState = StepState.LOAD;
   };
@@ -137,21 +126,22 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     try {
       this.hwDeviceInfo = undefined;
 
-      const trezorResp = await wrapWithFrame(
-        trezor =>
-          trezor.cardanoGetPublicKey({
-            path: this.getPath(),
-            showOnTrezor: false,
-          }),
-        this._onTrezorDeviceEvent,
-        this._onTrezorUIEvent
-      );
-
-      const trezorEventDevice = this.trezorEventDevice;
+      const trezorConnection = await wrapWithFrame(async trezor => {
+        const trezorResp = await trezor.cardanoGetPublicKey({
+          path: this.getPath(),
+          showOnTrezor: false,
+        });
+        const featuresResp = trezorResp.success ? await trezor.getFeatures() : undefined;
+        return {
+          trezorResp,
+          trezorFeatures: featuresResp?.success ? featuresResp.payload : undefined,
+        };
+      });
+      const { trezorResp, trezorFeatures } = trezorConnection;
 
       /** Converts a valid hardware wallet response to a common storable format
        * later the same format will be used to create wallet */
-      this.hwDeviceInfo = this._normalizeHWResponse({ trezorResp, trezorEventDevice });
+      this.hwDeviceInfo = this._normalizeHWResponse({ trezorResp, trezorFeatures });
 
       // It's a valid trezor device, go to Save Load state
       this._goToSaveLoad();
@@ -170,19 +160,16 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
       throw new Error(`${nameof(TrezorConnectStore)}::${nameof(this._normalizeHWResponse)} should never happen`);
     }
 
-    const { trezorResp, trezorEventDevice } = resp;
-
-    const device = trezorEventDevice?.payload;
-    const features = device?.features;
+    const { trezorResp, trezorFeatures } = resp;
 
     return {
       publicMasterKey: trezorResp.payload.publicKey,
       hwFeatures: {
-        Vendor: features?.vendor ?? Config.wallets.hardwareWallet.trezorT.VENDOR,
-        Model: features?.model ?? Config.wallets.hardwareWallet.trezorT.MODEL,
-        DeviceId: features?.device_id || '',
+        Vendor: trezorFeatures?.vendor ?? Config.wallets.hardwareWallet.trezorT.VENDOR,
+        Model: trezorFeatures?.model ?? Config.wallets.hardwareWallet.trezorT.MODEL,
+        DeviceId: trezorFeatures?.device_id || '',
       },
-      defaultName: device?.label || '',
+      defaultName: trezorFeatures?.label || '',
     };
   };
 
@@ -230,22 +217,6 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     this._goToConnectError();
   };
 
-  _onTrezorDeviceEvent: DeviceEvent => void = event => {
-    Logger.debug(`TrezorConnectStore:: DEVICE_EVENT: ${event.type}`);
-    this.trezorEventDevice = event;
-  };
-
-  _onTrezorUIEvent: UiEvent => void = event => {
-    Logger.debug(`TrezorConnectStore:: UI_EVENT: ${event.type}`);
-    // TODO: [TREZOR] https://github.com/Emurgo/yoroi-frontend/issues/126
-    // if(event.type === CLOSE_UI_WINDOW &&
-    //   this.progressState === ProgressStateOption.CONNECT_START &&
-    //   this.publicKeyInfo.valid === false) {
-    //   this.progressState = ProgressStateOption.CONNECT_ERROR;
-    //   this.publicKeyInfo.errorId = 'trezor forcefully stopped';
-    //   this._updateState();
-    // }
-  };
   // =================== CONNECT =================== //
 
   // =================== SAVE =================== //
