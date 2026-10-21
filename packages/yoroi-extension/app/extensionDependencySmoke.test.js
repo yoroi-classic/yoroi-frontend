@@ -1456,10 +1456,13 @@ describe('extension dependency smoke', () => {
     );
     const accountPrivateKey = RustModule.WasmScope(Module =>
       Module.CML.Bip32PrivateKey.from_raw_bytes(
-        hexToBytes('70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d')
+        hexToBytes(
+          '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
+        )
       ).to_raw_bytes()
     );
-    const unsignedBytes = unsignedTx.txBuilder instanceof Uint8Array ? unsignedTx.txBuilder : unsignedTx.txBuilder.build().to_bytes();
+    const unsignedBytes =
+      unsignedTx.txBuilder instanceof Uint8Array ? unsignedTx.txBuilder : unsignedTx.txBuilder.build().to_bytes();
     const signedTx = signTransaction(
       unsignedTx.senderUtxos,
       unsignedBytes,
@@ -1473,7 +1476,10 @@ describe('extension dependency smoke', () => {
       const bootstrapWitnesses = transaction.witness_set().bootstrap_witnesses();
       return {
         bootstrapCount: bootstrapWitnesses?.len() ?? 0,
-        fee: transaction.body().fee().toString(),
+        fee: transaction
+          .body()
+          .fee()
+          .toString(),
       };
     });
 

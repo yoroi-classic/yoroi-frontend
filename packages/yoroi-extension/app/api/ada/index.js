@@ -794,7 +794,7 @@ export default class AdaApi {
             poolDeposit: protocolParameters.poolDeposit,
             networkId: Number(request.network.BaseConfig[0].ChainNetworkId),
           },
-          trxMetadata?.to_bytes(),
+          trxMetadata,
           request.network.NetworkId
         );
       } else {
@@ -1063,7 +1063,7 @@ export default class AdaApi {
         return bytesToHex(
           Scope.CML.NativeScript.from_cbor_bytes(hexToBytes(script))
             .hash()
-            .to_bytes()
+            .to_raw_bytes()
         );
       });
 
@@ -1344,38 +1344,35 @@ export default class AdaApi {
         network,
         addresses: request.withdrawals.map(withdrawal => withdrawal.rewardAddress),
       });
-      const finalWithdrawals = Object.keys(accountStates).reduce(
-        (list, address) => {
-          const rewardForAddress = accountStates[address];
-          // if key is not registered, we just skip this withdrawal
-          if (rewardForAddress == null) {
-            return list;
-          }
-
-          const rewardBalance = new BigNumber(rewardForAddress.remainingAmount);
-
-          // if the reward address is empty, we filter it out of the withdrawal list
-          // although the protocol allows withdrawals of 0 ADA, it's pointless to do
-          // recall: you may want to undelegate the ADA even if there is 0 ADA in the reward address
-          // since you may want to get back your deposit
-          if (rewardBalance.eq(0)) {
-            return list;
-          }
-
-          const isRewardAddress = RustModule.WasmScope(Module =>
-            Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(address)) != null
-          );
-          if (!isRewardAddress) {
-            throw new Error(`${nameof(AdaApi)}::${nameof(this.createUnsignedTx)} withdrawal not a reward address`);
-          }
-          list.push({
-            address,
-            amount: rewardForAddress.remainingAmount,
-          });
+      const finalWithdrawals = Object.keys(accountStates).reduce((list, address) => {
+        const rewardForAddress = accountStates[address];
+        // if key is not registered, we just skip this withdrawal
+        if (rewardForAddress == null) {
           return list;
-        },
-        ([]: Array<{| address: string, amount: string |}>)
-      );
+        }
+
+        const rewardBalance = new BigNumber(rewardForAddress.remainingAmount);
+
+        // if the reward address is empty, we filter it out of the withdrawal list
+        // although the protocol allows withdrawals of 0 ADA, it's pointless to do
+        // recall: you may want to undelegate the ADA even if there is 0 ADA in the reward address
+        // since you may want to get back your deposit
+        if (rewardBalance.eq(0)) {
+          return list;
+        }
+
+        const isRewardAddress = RustModule.WasmScope(
+          Module => Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(address)) != null
+        );
+        if (!isRewardAddress) {
+          throw new Error(`${nameof(AdaApi)}::${nameof(this.createUnsignedTx)} withdrawal not a reward address`);
+        }
+        list.push({
+          address,
+          amount: rewardForAddress.remainingAmount,
+        });
+        return list;
+      }, ([]: Array<{| address: string, amount: string |}>));
       // if the end result is no withdrawals and no deregistrations, throw an error
       if (finalWithdrawals.length === 0 && certificates.length === 0) {
         throw new RewardAddressEmptyError();
@@ -2306,11 +2303,13 @@ function getDifferenceAfterTx(
         const output = outputs.get(index);
         if (!addrContainsAccountKey(output.address().to_hex(), accountKeyString, true)) continue;
         const value = output.amount();
-        const entries = [{
-          identifier: defaultToken.defaultIdentifier,
-          amount: new BigNumber(value.coin().toString()),
-          networkId: defaultToken.defaultNetworkId,
-        }];
+        const entries = [
+          {
+            identifier: defaultToken.defaultIdentifier,
+            amount: new BigNumber(value.coin().toString()),
+            networkId: defaultToken.defaultNetworkId,
+          },
+        ];
         const assets = value.multi_asset();
         if (assets != null) {
           const policies = assets.keys();
@@ -2340,7 +2339,6 @@ function getDifferenceAfterTx(
 
   return sumOutForKey.joinSubtractCopy(sumInForKey);
 }
-
 
 /**
  * // <TODO:WALLET_API>
@@ -2469,11 +2467,7 @@ export async function walletSignData(
       publicKeyHex: bytesToHex(rawKey.to_public().to_raw_bytes()),
     };
   });
-  const coseSign1 = await buildCoseSign1FromSignature(
-    addressBytes,
-    Buffer.from(signatureBytes),
-    payloadBytes
-  );
+  const coseSign1 = await buildCoseSign1FromSignature(addressBytes, Buffer.from(signatureBytes), payloadBytes);
 
   const key = makeCip8Key(publicKeyBytes);
 

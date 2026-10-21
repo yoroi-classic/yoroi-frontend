@@ -5,6 +5,7 @@ import { ConstraintAction, ConstraintTiming, Type } from 'lovefield';
 import type { CertificateRelationType, CoreAddressT, TxStatusCodesType } from './enums';
 import type { KeyKindType } from '../../../cardanoCrypto/keys/types';
 import type { CoinTypesT } from '../../../../../../config/numbersConfig';
+import { StoredCertificateKind } from './storedCertificateKinds';
 
 export type CommonBaseConfig = {|
   /**
@@ -52,7 +53,7 @@ export type CardanoHaskellConwayBaseConfig = {|
 export type CardanoHaskellBaseConfig = [
   $ReadOnly<CardanoHaskellByronBaseConfig>,
   $ReadOnly<CardanoHaskellShelleyBaseConfig>,
-  $ReadOnly<CardanoHaskellConwayBaseConfig>,
+  $ReadOnly<CardanoHaskellConwayBaseConfig>
 ];
 
 // unfortunate hack to get around the fact tuple spreading is broken in Flow
@@ -61,7 +62,7 @@ export type CardanoHaskellConfig = $ReadOnly<
     ...$ElementType<CardanoHaskellBaseConfig, 0>,
     ...$ElementType<CardanoHaskellBaseConfig, 1>,
     ...$ElementType<CardanoHaskellBaseConfig, 2>,
-  |}>,
+  |}>
 >;
 
 export type NetworkRow = {|
@@ -318,7 +319,7 @@ export type CertificatePart = {|
 export type CertificateInsert = {|
   TransactionId: number,
   Ordinal: number, // transactions can contain multiple certificates in some blockchains
-  Kind: number,
+  Kind: $Values<typeof StoredCertificateKind>,
   // <TODO:PENDING_REMOVAL> Needs redesign
   Payload: string,
 |};

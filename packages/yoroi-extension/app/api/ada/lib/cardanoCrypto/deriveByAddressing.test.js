@@ -8,7 +8,7 @@ beforeAll(async () => {
   await RustModule.load();
 });
 
-test('derives private key bytes with CML matching the legacy Shelley path', () => {
+test('derives private key bytes consistently through the CML paths', () => {
   const privateKeyHex =
     '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d';
   const addressing = {

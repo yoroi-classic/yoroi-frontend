@@ -43,7 +43,9 @@ export function identifierSplit(identifier: string): {| policyId: string, name: 
   };
 }
 
-export function parseTokenList(assets: void | RustModule.CML.MultiAsset): Array<{|
+export function parseTokenList(
+  assets: void | RustModule.CML.MultiAsset
+): Array<{|
   assetId: string,
   policyId: string,
   name: string,
@@ -63,16 +65,18 @@ export function parseTokenList(assets: void | RustModule.CML.MultiAsset): Array<
       if (assetName == null) continue;
       const amount = assetsForPolicy.get(assetName);
       if (amount == null) continue;
-      result.push({ amount: amount.toString(), assetId: cardanoAssetToIdentifier(policyId, assetName), policyId: policyId.to_hex(), name: bytesToHex(assetName.name()) });
+      result.push({
+        amount: amount.toString(),
+        assetId: cardanoAssetToIdentifier(policyId, assetName),
+        policyId: policyId.to_hex(),
+        name: bytesToHex(assetName.name()),
+      });
     }
   }
   return result;
 }
 
-export function cardanoValueFromMultiToken(
-  tokens: MultiToken,
-  Module: typeof RustModule = RustModule
-): RustModule.CML.Value {
+export function cardanoValueFromMultiToken(tokens: MultiToken, Module: typeof RustModule = RustModule): RustModule.CML.Value {
   const CML = Module.CML;
   const assets = CML.MultiAsset.new();
   for (const entry of tokens.nonDefaultEntries()) {
@@ -110,6 +114,7 @@ export function multiTokenFromCMLValue(value: RustModule.CML.Value, defaults: De
     networkId: defaults.defaultNetworkId,
   });
   const multiAsset = value.multi_asset();
+  if (multiAsset == null) return multiToken;
   const policies = multiAsset.keys();
   for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
     const policy = policies.get(policyIndex);
@@ -130,14 +135,17 @@ export function multiTokenFromCMLValue(value: RustModule.CML.Value, defaults: De
   return multiToken;
 }
 
-export function parseCMLTransactionOutput(outputCborHex: string, defaults: DefaultTokenEntry): {|
+export function parseCMLTransactionOutput(
+  outputCborHex: string,
+  defaults: DefaultTokenEntry
+): {|
   address: string,
   amount: MultiToken,
   dataHash?: string,
 |} {
   return RustModule.WasmScope(Module => {
     const output = Module.CML.TransactionOutput.from_cbor_hex(outputCborHex);
-    const parsed = {
+    const parsed: {| address: string, amount: MultiToken, dataHash?: string |} = {
       address: output.address().to_hex(),
       amount: multiTokenFromCMLValue(output.amount(), defaults),
     };
@@ -195,7 +203,7 @@ export function multiTokenFromRemote(
         +name: string,
         +amount: string,
         ...
-      }>,
+      }>
     >,
     ...
   }>,
@@ -277,7 +285,7 @@ export function convertAdaTransactionsToExportRows(
       ...WithNullableFields<DbBlock>,
       ...UserAnnotation,
       ...
-    }>,
+    }>
   >,
   defaultAssetRow: $ReadOnly<TokenRow>
 ): Array<TransactionExportRow> {
@@ -288,11 +296,16 @@ export function convertAdaTransactionsToExportRows(
         date: tx.block.BlockTime,
         type: tx.type === transactionTypes.INCOME ? 'in' : 'out',
         amount: formatBigNumberToFloatString(
-          tx.amount.get(defaultAssetRow.Identifier)?.abs().shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ??
-            new BigNumber(0)
+          tx.amount
+            .get(defaultAssetRow.Identifier)
+            ?.abs()
+            .shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ?? new BigNumber(0)
         ),
         fee: formatBigNumberToFloatString(
-          tx.fee.get(defaultAssetRow.Identifier)?.abs().shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ?? new BigNumber(0)
+          tx.fee
+            .get(defaultAssetRow.Identifier)
+            ?.abs()
+            .shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ?? new BigNumber(0)
         ),
         id: tx.transaction.Hash,
       });
@@ -303,9 +316,7 @@ export function convertAdaTransactionsToExportRows(
 
 export function sumInputsOutputs(
   ios: $ReadOnlyArray<
-    $ReadOnly<
-      UtxoTransactionInputRow | UtxoTransactionOutputRow | AccountingTransactionInputRow | AccountingTransactionOutputRow,
-    >,
+    $ReadOnly<UtxoTransactionInputRow | UtxoTransactionOutputRow | AccountingTransactionInputRow | AccountingTransactionOutputRow>
   >,
   tokens: $PropertyType<DbTokenInfo, 'tokens'>,
   defaultToken: DefaultTokenEntry
@@ -385,11 +396,12 @@ export function cardanoUtxoHexFromRemoteFormat(u: RemoteUnspentOutput | CardanoA
       // eslint-disable-next-line no-undef
       multiAsset.set(CML.ScriptHash.from_hex(asset.policyId), CML.AssetName.from_hex(asset.name), BigInt(asset.amount));
     }
-    const value = multiAsset.policy_count() > 0
-      // eslint-disable-next-line no-undef
-      ? CML.Value.new(BigInt(u.amount), multiAsset)
-      // eslint-disable-next-line no-undef
-      : CML.Value.from_coin(BigInt(u.amount));
+    const value =
+      multiAsset.policy_count() > 0
+        ? // eslint-disable-next-line no-undef
+          CML.Value.new(BigInt(u.amount), multiAsset)
+        : // eslint-disable-next-line no-undef
+          CML.Value.from_coin(BigInt(u.amount));
     // eslint-disable-next-line no-undef
     const input = CML.TransactionInput.new(CML.TransactionHash.from_hex(u.tx_hash), BigInt(u.tx_index));
     const output = CML.TransactionOutput.new(CML.Address.from_hex(u.receiver), value);
@@ -424,11 +436,7 @@ export function cardanoMinAdaRequiredFromRemoteFormat(
   return RustModule.WasmScope(Module => {
     const CML = Module.CML;
     const datumOption = datumHash == null ? undefined : CML.DatumOption.new_hash(CML.DatumHash.from_hex(datumHash));
-    const output = CML.TransactionOutput.new(
-      CML.Address.from_hex(addressHex),
-      cardanoValueFromRemoteFormat(utxo),
-      datumOption
-    );
+    const output = CML.TransactionOutput.new(CML.Address.from_hex(addressHex), cardanoValueFromRemoteFormat(utxo), datumOption);
     // eslint-disable-next-line no-undef
     return new BigNumber(CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString());
   });
@@ -440,7 +448,10 @@ export function cardanoMinAdaRequiredFromRemoteFormat(
 export function getTransactionFeeFromCbor(txHex: string): BigNumber {
   try {
     return RustModule.WasmScope(Module => {
-      const feeStr = Module.CML.Transaction.from_cbor_hex(txHex).body().fee().toString();
+      const feeStr = Module.CML.Transaction.from_cbor_hex(txHex)
+        .body()
+        .fee()
+        .toString();
       return new BigNumber(feeStr);
     });
   } catch (e) {
@@ -455,7 +466,9 @@ export function getTransactionFeeFromCbor(txHex: string): BigNumber {
 export function getTransactionTotalOutputFromCbor(txHex: string, defaults: DefaultTokenEntry): MultiToken {
   try {
     return RustModule.WasmScope(Module => {
-      const outputs = Module.CML.Transaction.from_cbor_hex(txHex).body().outputs();
+      const outputs = Module.CML.Transaction.from_cbor_hex(txHex)
+        .body()
+        .outputs();
       const sum = new MultiToken([], defaults);
       for (let index = 0; index < outputs.len(); index++) {
         const value = outputs.get(index).amount();

@@ -28,13 +28,15 @@ test('preserves fees and output coin amounts above Number.MAX_SAFE_INTEGER', asy
 
   await expect(getCborTxBody(transaction)).resolves.toMatchObject({
     fee: '9007199254740993',
-    outputs: [{
-      address,
-      amount: {
-        coin: '9007199254740993',
-        multiasset: { [policyId]: { [assetName]: '9007199254740993' } },
+    outputs: [
+      {
+        address,
+        amount: {
+          coin: '9007199254740993',
+          multiasset: { [policyId]: { [assetName]: '9007199254740993' } },
+        },
       },
-    }],
+    ],
   });
 });
 

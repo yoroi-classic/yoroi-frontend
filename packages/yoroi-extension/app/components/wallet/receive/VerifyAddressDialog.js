@@ -13,14 +13,8 @@ import { toDerivationPathString } from '../../../api/ada/lib/cardanoCrypto/keys/
 import { SelectedExplorer } from '../../../domain/SelectedExplorer';
 import { truncateAddress } from '../../../utils/formatters';
 import { CoreAddressTypes } from '../../../api/ada/lib/storage/database/primitives/enums';
-import {
-  stakeCredentialHashFromAddress,
-  stakePointerFromAddressBech32,
-} from '../../../api/ada/lib/cardanoCrypto/cmlAddress';
-import {
-  isCardanoHaskellAddress,
-  getCardanoSpendingKeyHash,
-} from '../../../api/ada/lib/storage/bridge/utils';
+import { stakeCredentialHashFromAddress, stakePointerFromAddressBech32 } from '../../../api/ada/lib/cardanoCrypto/cmlAddress';
+import { isCardanoHaskellAddress, getCardanoSpendingKeyHash } from '../../../api/ada/lib/storage/bridge/utils';
 import classnames from 'classnames';
 import QrCodeWrapper from '../../widgets/QrCodeWrapper';
 import Dialog from '../../widgets/Dialog';

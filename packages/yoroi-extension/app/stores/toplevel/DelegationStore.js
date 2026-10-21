@@ -255,7 +255,10 @@ export default class DelegationStore extends Store<StoresMap> {
 
     try {
       const { BackendService } = getNetworkById(publicDeriver.networkId).Backend;
-      const transitionResult = await maybe(currentPool, p => getPoolTransition(forceNonNull(BackendService) + '/api', p));
+      const network = getNetworkById(publicDeriver.networkId);
+      const transitionResult = await maybe(currentPool, p =>
+        getPoolTransition(forceNonNull(BackendService) + '/api', p, network.NetworkFeatureName)
+      );
 
       const response = {
         currentPool: transitionResult?.current,

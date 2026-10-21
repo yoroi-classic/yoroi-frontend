@@ -10,20 +10,7 @@ describe('transaction metadata CML migration', () => {
 
   it('encodes auxiliary metadata with CML basic conversions', () => {
     const metadata = [{ label: '674', data: { msg: 'hello', count: 42 } }];
-    const expected = RustModule.WasmScope(Module => {
-      const cml = Module.CML;
-      const values = cml.Metadata.new();
-      const metadatum = cml.encode_json_str_to_metadatum(
-        JSON.stringify(metadata[0].data),
-        cml.MetadataJsonSchema.BasicConversions
-      );
-      // eslint-disable-next-line no-undef
-      values.set(BigInt(metadata[0].label), metadatum);
-      const auxiliaryData = cml.AuxiliaryData.new_shelley(values);
-      return Buffer.from(auxiliaryData.to_cbor_bytes());
-    });
-
-    expect(createMetadata(metadata)).toEqual(expected);
+    expect(createMetadata(metadata)).toEqual(Buffer.from('a11902a2a265636f756e74182a636d73676568656c6c6f', 'hex'));
   });
 
   it('decodes metadatum with CML basic and detailed schemas', () => {

@@ -578,8 +578,9 @@ const AddBip44FromPublicMixin = (superclass: Class<AddBip44FromPublicDependencie
         derivationTables,
         this.getParent().getPublicDeriverLevel()
       );
-      const asDisplayCutoffInstance: void | (IDisplayCutoff & DisplayCutoffDependencies & AddBip44FromPublic) =
-        asDisplayCutoff(this);
+      const asDisplayCutoffInstance: void | (IDisplayCutoff & DisplayCutoffDependencies & AddBip44FromPublic) = asDisplayCutoff(
+        this
+      );
       if (asDisplayCutoffInstance != null) {
         await updateCutoffFromInsert(
           tx,
@@ -888,11 +889,7 @@ const Cip1852PickReceiveMixin = (superclass: Class<Cip1852PickReceiveMixinDepend
     ) => Promise<IPickReceiveResponse> = async (tx, deps, body, derivationTables) => {
       const stakingAddressDbRow = await this.rawGetStakingKey(tx, deps, undefined, derivationTables);
 
-      const keyHash = unwrapCardanoStakingKey(stakingAddressDbRow.addr.Hash).to_keyhash();
-      if (keyHash == null) {
-        throw new Error(`${nameof(Cip1852PickReceive)}::${nameof(this.rawPickReceive)} internal address is a script`);
-      }
-      const stakingKey = keyHash.to_hex();
+      const stakingKey = unwrapCardanoStakingKey(stakingAddressDbRow.addr.Hash);
       const ourBaseAddress = body.addrs
         .filter(addr => addr.Type === CoreAddressTypes.CARDANO_BASE)
         .filter(addr => addr.Hash.includes(stakingKey));
@@ -1308,7 +1305,7 @@ const ScanLegacyCardanoAccountUtxo: * = Mixin<ScanLegacyCardanoAccountUtxoDepend
   ScanLegacyCardanoAccountUtxoMixin
 );
 const ScanLegacyCardanoAccountUtxoInstance = ((ScanLegacyCardanoAccountUtxo: any): ReturnType<
-  typeof ScanLegacyCardanoAccountUtxoMixin,
+  typeof ScanLegacyCardanoAccountUtxoMixin
 >);
 export function asScanLegacyCardanoAccountUtxoInstance<T: IPublicDeriver<any>>(
   obj: T

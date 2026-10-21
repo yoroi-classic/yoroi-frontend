@@ -17,14 +17,17 @@ const cborTextHex = (text: string): string => {
 };
 
 const cborInteger = (value: bigint): Array<number> => {
-  const major = value < 0n ? 1 : 0;
-  const remaining = value < 0n ? -value - 1n : value;
-  if (remaining < 24n) return [(major << 5) | Number(remaining)];
-  const width = remaining <= 0xffn ? 1 : remaining <= 0xffffn ? 2 : remaining <= 0xffffffffn ? 4 : 8;
+  const major = value < BigInt('0') ? 1 : 0;
+  const remaining = value < BigInt('0') ? -value - BigInt('1') : value;
+  // CBOR's 8-byte integer representation is limited to an unsigned 64-bit
+  // magnitude. Never truncate a larger MIR reward while writing the payload.
+  if (remaining > BigInt('18446744073709551615')) throw new Error('MIR reward amount exceeds the CBOR integer range');
+  if (remaining < BigInt('24')) return [(major << 5) | Number(remaining)];
+  const width = remaining <= BigInt('0xff') ? 1 : remaining <= BigInt('0xffff') ? 2 : remaining <= BigInt('0xffffffff') ? 4 : 8;
   const bytes = [];
   for (let index = width - 1; index >= 0; index--) {
     // eslint-disable-next-line no-undef
-    bytes.push(Number((remaining >> BigInt(index * 8)) & 0xffn));
+    bytes.push(Number((remaining >> BigInt(index * 8)) & BigInt('0xff')));
   }
   const additional = width === 1 ? 24 : width === 2 ? 25 : width === 4 ? 26 : 27;
   return [(major << 5) | additional, ...bytes];
@@ -55,12 +58,12 @@ const readMirAmount = (bytes: Uint8Array, offset: number): {| amount: string, ne
   if (additional < 24) return { amount: (major === 0 ? additional : -additional - 1).toString(), next: offset + 1 };
   const width = additional === 24 ? 1 : additional === 25 ? 2 : additional === 26 ? 4 : additional === 27 ? 8 : 0;
   if (width === 0 || offset + 1 + width > bytes.length) throw new Error('Invalid MIR reward amount');
-  let magnitude = 0n;
+  let magnitude = BigInt('0');
   for (let index = offset + 1; index < offset + 1 + width; index++) {
     // eslint-disable-next-line no-undef
-    magnitude = (magnitude << 8n) | BigInt(bytes[index] ?? 0);
+    magnitude = (magnitude << BigInt('8')) | BigInt(bytes[index] ?? 0);
   }
-  const amount = major === 0 ? magnitude : -magnitude - 1n;
+  const amount = major === 0 ? magnitude : -magnitude - BigInt('1');
   return { amount: amount.toString(), next: offset + 1 + width };
 };
 
@@ -184,7 +187,11 @@ export const poolRegistrationPayloads = (poolParams: {|
     };
   });
 
-export const genesisKeyDelegationCertificateHex = (genesisHash: string, genesisDelegateHash: string, vrfKeyHash: string): string =>
+export const genesisKeyDelegationCertificateHex = (
+  genesisHash: string,
+  genesisDelegateHash: string,
+  vrfKeyHash: string
+): string =>
   RustModule.WasmScope(Module => {
     const fields = [
       Module.CML.GenesisHash.from_hex(genesisHash).to_raw_bytes(),

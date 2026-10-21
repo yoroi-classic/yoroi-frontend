@@ -36,7 +36,7 @@ const unwrapScriptRef = (bytes: Uint8Array): Uint8Array => {
   // ScriptRef is CBOR tag 24 wrapping a byte string containing the script CBOR.
   if (bytes[0] !== 0xd8 || bytes[1] !== 0x18) throw new Error('Invalid script reference CBOR');
   const header = bytes[2];
-  if (header == null || (header >> 5) !== 2) throw new Error('Invalid script reference byte string');
+  if (header == null || header >> 5 !== 2) throw new Error('Invalid script reference byte string');
   const additional = header & 0x1f;
   let length: number;
   let offset: number;
@@ -162,7 +162,12 @@ export const toBaseUnits = (val?: string | null, decimals = 0): bigint | null =>
   const dp = bn.decimalPlaces();
   if ((dp ?? 0) > decimals) return null; // too many fraction digits
   // shift to base units and floor (no rounding up), then to bigint
-  return BigInt(bn.shiftedBy(decimals).integerValue(BigNumber.ROUND_DOWN).toFixed());
+  return BigInt(
+    bn
+      .shiftedBy(decimals)
+      .integerValue(BigNumber.ROUND_DOWN)
+      .toFixed()
+  );
 };
 
 export const getPriceImpactRisk = (priceImpact: number) => {

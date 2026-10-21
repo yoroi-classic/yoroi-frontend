@@ -34,7 +34,9 @@ test('parses Handle provider response at the mocked HTTP boundary', async () => 
 
 test('parses Unstoppable response and sends its API token', async () => {
   const request = jest.fn().mockResolvedValue(success({ records: { 'crypto.ADA.address': MAINNET_ADDRESS } }));
-  await expect(unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request })('alice.crypto')).resolves.toBe(MAINNET_ADDRESS);
+  await expect(unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request })('alice.crypto')).resolves.toBe(
+    MAINNET_ADDRESS
+  );
   expect(request).toHaveBeenCalledWith(
     {
       url: 'https://api.unstoppabledomains.com/resolve/domains/alice.crypto',
@@ -50,16 +52,28 @@ test('resolves a CNS virtual address with CML credentials', async () => {
   const record = {
     constructor: 0,
     fields: [
-      { map: [{ k: { bytes: Buffer.from('www').toString('hex') }, v: { constructor: 0, fields: [
-        { constructor: 0, fields: [{ bytes: paymentHash }] },
-        { constructor: 0, fields: [{ constructor: 0, fields: [{ constructor: 0, fields: [{ bytes: stakeHash }] }] }] },
-      ] } }] },
+      {
+        map: [
+          {
+            k: { bytes: Buffer.from('www').toString('hex') },
+            v: {
+              constructor: 0,
+              fields: [
+                { constructor: 0, fields: [{ bytes: paymentHash }] },
+                { constructor: 0, fields: [{ constructor: 0, fields: [{ constructor: 0, fields: [{ bytes: stakeHash }] }] }] },
+              ],
+            },
+          },
+        ],
+      },
       { map: [] },
       { map: [] },
     ],
   };
   const request = jest.fn().mockResolvedValue(success([{ inline_datum: { plutus_data: record } }]));
-  const metadataFetcher = jest.fn(async (_baseUrl, [id]) => ({ [id]: { mintNftRecordSelected: { expiry: Date.now() + 60_000, virtualSubdomainEnabled: 'Enabled' } } }));
+  const metadataFetcher = jest.fn(async (_baseUrl, [id]) => ({
+    [id]: { mintNftRecordSelected: { expiry: Date.now() + 60_000, virtualSubdomainEnabled: 'Enabled' } },
+  }));
   const address = await cnsCryptoAddress(request, metadataFetcher)('www.alice.ada');
   const expected = RustModule.WasmScope(Module => {
     const cml = Module.CML;
@@ -67,7 +81,9 @@ test('resolves a CNS virtual address with CML credentials', async () => {
       1,
       cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(paymentHash)),
       cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(stakeHash))
-    ).to_address().to_bech32();
+    )
+      .to_address()
+      .to_bech32();
   });
 
   expect(address).toBe(expected);
@@ -82,4 +98,19 @@ test('maps not-found errors and validates returned network addresses', async () 
   expect(isValidMainnetPaymentAddress(MAINNET_ADDRESS)).toBe(true);
   expect(isValidMainnetPaymentAddress(PREPROD_ADDRESS)).toBe(false);
   expect(isValidMainnetPaymentAddress('not-an-address')).toBe(false);
+});
+
+test('rejects malformed and server-error responses from domain providers', async () => {
+  const malformedHandle = jest.fn().mockResolvedValue(success({ resolved_addresses: {} }));
+  await expect(handleApiGetCryptoAddress({ request: malformedHandle })('$alice')).rejects.toThrow(
+    Resolver.Errors.InvalidResponse
+  );
+
+  const malformedUnstoppable = jest.fn().mockResolvedValue(success({ records: {} }));
+  await expect(
+    unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request: malformedUnstoppable })('alice.crypto')
+  ).rejects.toThrow(Resolver.Errors.InvalidResponse);
+
+  const serverFailure = jest.fn().mockResolvedValue(failure(500));
+  await expect(handleApiGetCryptoAddress({ request: serverFailure })('$alice')).rejects.toThrow();
 });

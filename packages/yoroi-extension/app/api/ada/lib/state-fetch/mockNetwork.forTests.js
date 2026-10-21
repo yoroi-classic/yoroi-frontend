@@ -332,21 +332,31 @@ export function getSingleAddressString(mnemonic: string, path: Array<number>, is
   const baseConfig = getCardanoHaskellBaseConfig(networks.CardanoMainnet).reduce((acc, next) => Object.assign(acc, next), {});
   return RustModule.WasmScope(Module => {
     const cml = Module.CML;
-    const rootKey = ledgerRootBytes == null
-      ? cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array())
-      : cml.Bip32PrivateKey.from_raw_bytes(ledgerRootBytes);
+    const rootKey =
+      ledgerRootBytes == null
+        ? cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array())
+        : cml.Bip32PrivateKey.from_raw_bytes(ledgerRootBytes);
     const derivedKey = derivePath(rootKey, path);
     if (path[0] === WalletTypePurpose.BIP44) {
       return cml.AddressContent.icarus_from_key(
         derivedKey.to_public(),
         cml.ProtocolMagic.new(Number.parseInt(baseConfig.ByronNetworkId, 10))
-      ).to_address().to_base58();
+      )
+        .to_address()
+        .to_base58();
     }
     if (path[0] === WalletTypePurpose.CIP1852) {
       return cml.EnterpriseAddress.new(
         Number.parseInt(baseConfig.ChainNetworkId, 10),
-        cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
-      ).to_address().to_hex();
+        cml.Credential.new_pub_key(
+          derivedKey
+            .to_public()
+            .to_raw_key()
+            .hash()
+        )
+      )
+        .to_address()
+        .to_hex();
     }
     throw new Error('Unexpected purpose');
   });
@@ -362,16 +372,24 @@ export function getMangledAddressString(
   const baseConfig = getCardanoHaskellBaseConfig(networks.CardanoMainnet).reduce((acc, next) => Object.assign(acc, next), {});
   return RustModule.WasmScope(Module => {
     const cml = Module.CML;
-    const rootKey = ledgerRootBytes == null
-      ? cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array())
-      : cml.Bip32PrivateKey.from_raw_bytes(ledgerRootBytes);
+    const rootKey =
+      ledgerRootBytes == null
+        ? cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array())
+        : cml.Bip32PrivateKey.from_raw_bytes(ledgerRootBytes);
     const derivedKey = derivePath(rootKey, path);
     if (path[0] !== WalletTypePurpose.CIP1852) throw new Error('Unexpected purpose');
     return cml.BaseAddress.new(
       Number.parseInt(baseConfig.ChainNetworkId, 10),
-      cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash()),
+      cml.Credential.new_pub_key(
+        derivedKey
+          .to_public()
+          .to_raw_key()
+          .hash()
+      ),
       cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_bytes(new Uint8Array(stakingKey)))
-    ).to_address().to_hex();
+    )
+      .to_address()
+      .to_hex();
   });
 }
 
@@ -382,40 +400,60 @@ export function getAddressForType(mnemonic: string, path: Array<number>, type: C
     const rootKey = cml.Bip32PrivateKey.from_bip39_entropy(hexToBytes(mnemonicToEntropy(mnemonic)), new Uint8Array());
     const derivedKey = derivePath(rootKey, path);
     switch (type) {
-    case CoreAddressTypes.CARDANO_BASE: {
-      const newPath = [...path];
-      // -1 because newPath here starts at PURPOSE and not at ROOT
-      const chainLevel = 4 - 1;
-      const addressLevel = 5 - 1;
-      newPath[chainLevel] = 2;
-      newPath[addressLevel] = 0;
-      const stakingKey = derivePath(rootKey, newPath);
-      const addr = cml.BaseAddress.new(
-        Number.parseInt(baseConfig.ChainNetworkId, 10),
-        cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash()),
-        cml.Credential.new_pub_key(stakingKey.to_public().to_raw_key().hash())
-      );
-      return addr.to_address().to_hex();
-    }
-    case CoreAddressTypes.CARDANO_PTR: {
-      throw new Error(`${nameof(getAddressForType)} Not implemented`);
-    }
-    case CoreAddressTypes.CARDANO_ENTERPRISE: {
-      const addr = cml.EnterpriseAddress.new(
-        Number.parseInt(baseConfig.ChainNetworkId, 10),
-        cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
-      );
-      return addr.to_address().to_hex();
-    }
-    case CoreAddressTypes.CARDANO_REWARD: {
-      const addr = cml.RewardAddress.new(
-        Number.parseInt(baseConfig.ChainNetworkId, 10),
-        cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
-      );
-      return addr.to_address().to_hex();
-    }
-    default:
-      throw new Error(`${nameof(getAddressForType)} unknown type ` + type);
+      case CoreAddressTypes.CARDANO_BASE: {
+        const newPath = [...path];
+        // -1 because newPath here starts at PURPOSE and not at ROOT
+        const chainLevel = 4 - 1;
+        const addressLevel = 5 - 1;
+        newPath[chainLevel] = 2;
+        newPath[addressLevel] = 0;
+        const stakingKey = derivePath(rootKey, newPath);
+        const addr = cml.BaseAddress.new(
+          Number.parseInt(baseConfig.ChainNetworkId, 10),
+          cml.Credential.new_pub_key(
+            derivedKey
+              .to_public()
+              .to_raw_key()
+              .hash()
+          ),
+          cml.Credential.new_pub_key(
+            stakingKey
+              .to_public()
+              .to_raw_key()
+              .hash()
+          )
+        );
+        return addr.to_address().to_hex();
+      }
+      case CoreAddressTypes.CARDANO_PTR: {
+        throw new Error(`${nameof(getAddressForType)} Not implemented`);
+      }
+      case CoreAddressTypes.CARDANO_ENTERPRISE: {
+        const addr = cml.EnterpriseAddress.new(
+          Number.parseInt(baseConfig.ChainNetworkId, 10),
+          cml.Credential.new_pub_key(
+            derivedKey
+              .to_public()
+              .to_raw_key()
+              .hash()
+          )
+        );
+        return addr.to_address().to_hex();
+      }
+      case CoreAddressTypes.CARDANO_REWARD: {
+        const addr = cml.RewardAddress.new(
+          Number.parseInt(baseConfig.ChainNetworkId, 10),
+          cml.Credential.new_pub_key(
+            derivedKey
+              .to_public()
+              .to_raw_key()
+              .hash()
+          )
+        );
+        return addr.to_address().to_hex();
+      }
+      default:
+        throw new Error(`${nameof(getAddressForType)} unknown type ` + type);
     }
   });
 }
@@ -472,7 +510,10 @@ export function toRemoteByronTx(blockchain: Array<RemoteTransaction>, request: S
       if (!output) throw new Error('Missing Byron transaction output');
       parsedOutputs.push({
         address: toHexOrBase58(output.address().to_hex()),
-        amount: output.amount().coin().toString(),
+        amount: output
+          .amount()
+          .coin()
+          .toString(),
         assets: parseTokenList(output.amount().multi_asset()),
       });
     }
@@ -515,7 +556,7 @@ export function genGetAccountState(blockchain: Array<RemoteTransaction>, getRewa
       {|
         rewards: BigNumber,
         withdrawals: BigNumber,
-      |},
+      |}
     >();
     for (const key of Object.keys(rewardHistory)) {
       for (const reward of rewardHistory[key] ?? []) {
@@ -721,10 +762,7 @@ export class MockUtxoApi implements UtxoApiContract {
       for (let outputIndex = 0; outputIndex < tx.outputs.length; outputIndex++) {
         const output = tx.outputs[outputIndex];
         if (
-          !(
-            hexAddresses.includes(byronAddressToHex(output.address)) ||
-            hexAddresses.includes(toEnterprise(output.address) ?? '')
-          )
+          !(hexAddresses.includes(byronAddressToHex(output.address)) || hexAddresses.includes(toEnterprise(output.address) ?? ''))
         ) {
           continue;
         }
@@ -826,8 +864,7 @@ export class MockUtxoApi implements UtxoApiContract {
         tx.inputs
           .filter(
             input =>
-              hexAddresses.includes(byronAddressToHex(input.address)) ||
-              hexAddresses.includes(toEnterprise(input.address) ?? '')
+              hexAddresses.includes(byronAddressToHex(input.address)) || hexAddresses.includes(toEnterprise(input.address) ?? '')
           )
           .forEach(input => {
             utxoDiffItems.push(

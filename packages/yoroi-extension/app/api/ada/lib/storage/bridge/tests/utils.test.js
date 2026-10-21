@@ -74,10 +74,22 @@ test('extracts key-controlled payment hashes from bech32 addresses using CML-com
     addresses.map(address => {
       const cmlAddress = Module.CML.Address.from_bech32(address);
       const keyHash =
-        Module.CML.BaseAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex() ??
-        Module.CML.PointerAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex() ??
-        Module.CML.EnterpriseAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex() ??
-        Module.CML.RewardAddress.from_address(cmlAddress)?.payment().as_pub_key()?.to_hex();
+        Module.CML.BaseAddress.from_address(cmlAddress)
+          ?.payment()
+          .as_pub_key()
+          ?.to_hex() ??
+        Module.CML.PointerAddress.from_address(cmlAddress)
+          ?.payment()
+          .as_pub_key()
+          ?.to_hex() ??
+        Module.CML.EnterpriseAddress.from_address(cmlAddress)
+          ?.payment()
+          .as_pub_key()
+          ?.to_hex() ??
+        Module.CML.RewardAddress.from_address(cmlAddress)
+          ?.payment()
+          .as_pub_key()
+          ?.to_hex();
       return keyHash ?? null;
     })
   );
@@ -98,15 +110,22 @@ test('derives enterprise address bytes from key-controlled address forms with CM
     addressHexes.map(addressHex => {
       const address = Module.CML.Address.from_hex(addressHex);
       const keyHash =
-        Module.CML.BaseAddress.from_address(address)?.payment().as_pub_key() ??
-        Module.CML.PointerAddress.from_address(address)?.payment().as_pub_key() ??
-        Module.CML.EnterpriseAddress.from_address(address)?.payment().as_pub_key() ??
-        Module.CML.RewardAddress.from_address(address)?.payment().as_pub_key();
+        Module.CML.BaseAddress.from_address(address)
+          ?.payment()
+          .as_pub_key() ??
+        Module.CML.PointerAddress.from_address(address)
+          ?.payment()
+          .as_pub_key() ??
+        Module.CML.EnterpriseAddress.from_address(address)
+          ?.payment()
+          .as_pub_key() ??
+        Module.CML.RewardAddress.from_address(address)
+          ?.payment()
+          .as_pub_key();
       if (keyHash == null) return undefined;
-      return Module.CML.EnterpriseAddress.new(
-        address.network_id(),
-        Module.CML.Credential.new_pub_key(keyHash)
-      ).to_address().to_hex();
+      return Module.CML.EnterpriseAddress.new(address.network_id(), Module.CML.Credential.new_pub_key(keyHash))
+        .to_address()
+        .to_hex();
     })
   );
 

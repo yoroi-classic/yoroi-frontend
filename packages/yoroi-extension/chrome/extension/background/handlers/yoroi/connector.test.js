@@ -50,6 +50,7 @@ jest.mock('../../../../../app/api/ada', () => ({
   walletSignData: jest.fn(),
 }));
 jest.mock('../../../../../app/api/ada/lib/cardanoCrypto/utils', () => ({
+  transactionBodyHexToTransaction: tx => `full-${tx}`,
   transactionHexAddSignaturesFromWitnessSetHex: jest.fn(),
   transactionHexToWitnessSet: jest.fn(),
 }));

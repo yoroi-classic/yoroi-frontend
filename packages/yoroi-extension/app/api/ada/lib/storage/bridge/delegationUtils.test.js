@@ -17,10 +17,7 @@ test('creates byte-compatible stake registration, delegation, and deregistration
   const stakingKeyHash = '11'.repeat(28);
   const poolKeyHash = '22'.repeat(28);
   const expected = {
-    registrationAndDelegation: [
-      `82008200581c${stakingKeyHash}`,
-      `83028200581c${stakingKeyHash}581c${poolKeyHash}`,
-    ],
+    registrationAndDelegation: [`82008200581c${stakingKeyHash}`, `83028200581c${stakingKeyHash}581c${poolKeyHash}`],
     deregistration: [`82018200581c${stakingKeyHash}`],
   };
 

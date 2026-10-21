@@ -208,10 +208,7 @@ describe('generators', () => {
 
     const assets = createAssets({ cafebabe: 123, '1234567890': 456, aabbccddeeff: 789 });
 
-    const entries = [...iterateLenGetMap(assets)].map(([name, amount]) => [
-      bytesToHex(name.to_raw_bytes()),
-      Number(amount),
-    ]);
+    const entries = [...iterateLenGetMap(assets)].map(([name, amount]) => [bytesToHex(name.to_raw_bytes()), Number(amount)]);
 
     expect(entries.sort(([left], [right]) => left.localeCompare(right))).toEqual([
       ['1234567890', 456],

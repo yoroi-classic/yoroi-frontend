@@ -3,14 +3,6 @@
 import type { BackendNetworkInfo } from '../../../common/lib/state-fetch/types';
 import type { NetworkRow } from '../storage/database/primitives/tables';
 
-export type ProtocolParameters = {|
-  linearFee: {| constant: string, coefficient: string |},
-  coinsPerUtxoByte: string,
-  poolDeposit: string,
-  keyDeposit: string,
-  epoch: number,
-|};
-
 export type ExplorerPoolInfo = {|
   id: string,
   hash: string,
@@ -245,7 +237,7 @@ export type RemoteGenesisKeyDelegationCert = {|
   +vrfKeyHash: string,
 |};
 export type RemoteMoveInstantaneousRewardsCert = {|
-  +pot: number,
+  +pot: 0 | 1,
   +rewards: {| [stake_credential: string]: string /* coin */ |},
 |};
 export type RegistrationCert = {|

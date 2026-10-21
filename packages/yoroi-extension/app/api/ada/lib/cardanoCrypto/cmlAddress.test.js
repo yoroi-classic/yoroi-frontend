@@ -55,10 +55,13 @@ test('extracts enterprise payment key hashes for wallet transaction requests', (
   const vectors = RustModule.WasmScope(Module => {
     const cml = Module.CML;
     return ['key', 'script'].map(kind => {
-      const payment = kind === 'key'
-        ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)))
-        : cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-      const address = cml.EnterpriseAddress.new(1, payment).to_address().to_hex();
+      const payment =
+        kind === 'key'
+          ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)))
+          : cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
+      const address = cml.EnterpriseAddress.new(1, payment)
+        .to_address()
+        .to_hex();
       const keyHash = payment.as_pub_key();
       return { address, expected: keyHash?.to_bech32('addr_vkh') ?? null };
     });
@@ -83,7 +86,7 @@ test('creates DB certificate payload bytes matching historical fixtures', () => 
     return {
       stake: cml.Certificate.new_stake_registration(credential).to_cbor_hex(),
       delegation: cml.Certificate.new_stake_delegation(credential, pool).to_cbor_hex(),
-      retirement: cml.Certificate.new_pool_retirement(pool, 42n).to_cbor_hex(),
+      retirement: cml.Certificate.new_pool_retirement(pool, BigInt('42')).to_cbor_hex(),
     };
   });
   expect(result).toEqual({ stake: stakeHex, delegation: delegationHex, retirement: retirementHex });
@@ -132,7 +135,8 @@ test('normalizes Shelley and Byron hardware address inputs to their serialized a
   const cases = [
     {
       address: 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z',
-      expectedHex: '0254e887279408c196dc5859acbc62e749bf358078c622e8a5ef89173982d222817b5561bfdd1541aad78cd9ae7c361cb4dc003dd3acf06479',
+      expectedHex:
+        '0254e887279408c196dc5859acbc62e749bf358078c622e8a5ef89173982d222817b5561bfdd1541aad78cd9ae7c361cb4dc003dd3acf06479',
     },
     {
       address: 'Ae2tdPwUPEZC6WJfVQxTNN2tWw4skGrN6zRVukvxJmTFy1nYkVGQBuURU3L',
@@ -185,17 +189,21 @@ test('reads pointer-address coordinates from base-128 varints with CML', () => {
       { values: ['1', '2', '3'], expected: ['1', '2', '3'] },
       { values: ['128', '16384', '4294967295'], expected: ['128', '16384', '4294967295'] },
     ].map(({ values, expected }) => {
-      const bytes = [0x41, ...new Array(28).fill(0x11), ...values.flatMap(value => {
-        // eslint-disable-next-line no-undef
-        let remaining = BigInt(value);
-        const encoded = [Number(remaining & 0x7fn)];
-        remaining >>= 7n;
-        while (remaining > 0n) {
-          encoded.unshift(Number(remaining & 0x7fn) | 0x80);
-          remaining >>= 7n;
-        }
-        return encoded;
-      })];
+      const bytes = [
+        0x41,
+        ...new Array(28).fill(0x11),
+        ...values.flatMap(value => {
+          // eslint-disable-next-line no-undef
+          let remaining = BigInt(value);
+          const encoded = [Number(remaining & BigInt('0x7f'))];
+          remaining >>= BigInt('7');
+          while (remaining > BigInt('0')) {
+            encoded.unshift(Number(remaining & BigInt('0x7f')) | 0x80);
+            remaining >>= BigInt('7');
+          }
+          return encoded;
+        }),
+      ];
       const address = Module.CML.Address.from_raw_bytes(Uint8Array.from(bytes)).to_bech32();
       return { address, expected };
     })
@@ -213,11 +221,11 @@ test('decodes pointer address coordinates for both payment credential types', ()
       const encoded = ['128', '16384', '4294967295'].flatMap(value => {
         // eslint-disable-next-line no-undef
         let remaining = BigInt(value);
-        const result = [Number(remaining & 0x7fn)];
-        remaining >>= 7n;
-        while (remaining > 0n) {
-          result.unshift(Number(remaining & 0x7fn) | 0x80);
-          remaining >>= 7n;
+        const result = [Number(remaining & BigInt('0x7f'))];
+        remaining >>= BigInt('7');
+        while (remaining > BigInt('0')) {
+          result.unshift(Number(remaining & BigInt('0x7f')) | 0x80);
+          remaining >>= BigInt('7');
         }
         return result;
       });
@@ -265,7 +273,10 @@ test('derives staking public-key bytes with CML', () => {
   const path = [2, 0];
   const expected = RustModule.WasmScope(Module => {
     const account = Module.CML.Bip32PublicKey.from_raw_bytes(Buffer.from(accountPublicKeyHex, 'hex'));
-    const publicKey = account.derive(path[0]).derive(path[1]).to_raw_key();
+    const publicKey = account
+      .derive(path[0])
+      .derive(path[1])
+      .to_raw_key();
     return {
       bytes: bytesToHex(publicKey.to_raw_bytes()),
       hash: publicKey.hash().to_hex(),
@@ -394,10 +405,7 @@ test('keeps shared address and reward-address utility output compatible', () => 
   const addressHex = RustModule.WasmScope(Module => Module.CML.Address.from_bech32(address).to_hex());
   const stakeKeyHash = '12'.repeat(28);
   const rewardAddressHex = RustModule.WasmScope(Module =>
-    Module.CML.RewardAddress.new(
-      1,
-      Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash))
-    )
+    Module.CML.RewardAddress.new(1, Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash)))
       .to_address()
       .to_hex()
   );
@@ -442,14 +450,14 @@ test('extracts key-controlled staking credentials from CML transaction certifica
     const delegationKey = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(expectedKeyHashes[1]));
     const scriptCredential = CML.Credential.new_script(CML.ScriptHash.from_hex('de'.repeat(28)));
     const withdrawalKey = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(expectedKeyHashes[2]));
-    certificates.add(CML.Certificate.new_reg_cert(registrationKey, 2_000_000n));
+    certificates.add(CML.Certificate.new_reg_cert(registrationKey, BigInt('2000000')));
     certificates.add(CML.Certificate.new_stake_delegation(delegationKey, CML.Ed25519KeyHash.from_hex('ef'.repeat(28))));
     certificates.add(CML.Certificate.new_stake_registration(scriptCredential));
 
     const withdrawals = CML.MapRewardAccountToCoin.new();
-    withdrawals.insert(CML.RewardAddress.new(1, withdrawalKey), 5n);
+    withdrawals.insert(CML.RewardAddress.new(1, withdrawalKey), BigInt('5'));
 
-    const transactionBody = CML.TransactionBody.new(CML.TransactionInputList.new(), CML.TransactionOutputList.new(), 1n);
+    const transactionBody = CML.TransactionBody.new(CML.TransactionInputList.new(), CML.TransactionOutputList.new(), BigInt('1'));
     transactionBody.set_certs(certificates);
     transactionBody.set_withdrawals(withdrawals);
     return transactionBody.to_cbor_hex();

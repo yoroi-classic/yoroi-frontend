@@ -15,20 +15,26 @@ test('swap input conversion preserves legacy UTxO CBOR for ADA, assets, datum, a
     address: '6011111111111111111111111111111111111111111111111111111111',
     datumCborHex: '182a',
     scriptRefCborHex: 'd818582282008200581c22222222222222222222222222222222222222222222222222222222',
-    expected: '82825820333333333333333333333333333333333333333333333333333333333333333307a400581d601111111111111111111111111111111111111111111111111111111101821a001e8480a1581c44444444444444444444444444444444444444444444444444444444a142aabb03028201d81842182a03d818582282008200581c22222222222222222222222222222222222222222222222222222222',
+    expected:
+      '82825820333333333333333333333333333333333333333333333333333333333333333307a400581d601111111111111111111111111111111111111111111111111111111101821a001e8480a1581c44444444444444444444444444444444444444444444444444444444a142aabb03028201d81842182a03d818582282008200581c22222222222222222222222222222222222222222222222222222222',
   };
-  const inputs = await useGetInputs([{
-    address: fixture.address,
-    output: {
-      Transaction: { Hash: '33'.repeat(32) },
-      UtxoTransactionOutput: { OutputIndex: 7 },
-      tokens: [
-        { Token: { Identifier: '.', Metadata: { ticker: 'ADA' } }, TokenList: { Amount: '2000000' } },
-        { Token: { Identifier: '44'.repeat(28) + '.aabb', Metadata: { policyId: '44'.repeat(28), assetName: 'aabb' } }, TokenList: { Amount: '3' } },
-      ],
-      inlineDatumCborHex: fixture.datumCborHex,
-      scriptRefCborHex: fixture.scriptRefCborHex,
+  const inputs = await useGetInputs([
+    {
+      address: fixture.address,
+      output: {
+        Transaction: { Hash: '33'.repeat(32) },
+        UtxoTransactionOutput: { OutputIndex: 7 },
+        tokens: [
+          { Token: { Identifier: '.', Metadata: { ticker: 'ADA' } }, TokenList: { Amount: '2000000' } },
+          {
+            Token: { Identifier: '44'.repeat(28) + '.aabb', Metadata: { policyId: '44'.repeat(28), assetName: 'aabb' } },
+            TokenList: { Amount: '3' },
+          },
+        ],
+        inlineDatumCborHex: fixture.datumCborHex,
+        scriptRefCborHex: fixture.scriptRefCborHex,
+      },
     },
-  }]).getInputs();
+  ]).getInputs();
   expect(inputs).toEqual([fixture.expected]);
 });

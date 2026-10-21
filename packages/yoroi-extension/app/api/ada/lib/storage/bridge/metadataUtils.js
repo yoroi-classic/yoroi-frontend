@@ -34,10 +34,7 @@ export function parseMetadata(s: any): string {
   if (isHex(s)) {
     return RustModule.WasmScope(Module => {
       const metadatum = Module.CML.TransactionMetadatum.from_cbor_bytes(Buffer.from(s, 'hex'));
-      const metadataString = Module.CML.decode_metadatum_to_json_str(
-        metadatum,
-        Module.CML.MetadataJsonSchema.BasicConversions
-      );
+      const metadataString = Module.CML.decode_metadatum_to_json_str(metadatum, Module.CML.MetadataJsonSchema.BasicConversions);
       metadatum.free();
       return metadataString;
     });
@@ -49,10 +46,7 @@ export function parseMetadataDetailed(s: any): string {
   if (isHex(s)) {
     return RustModule.WasmScope(Module => {
       const metadatum = Module.CML.TransactionMetadatum.from_cbor_bytes(Buffer.from(s, 'hex'));
-      const metadataString = Module.CML.decode_metadatum_to_json_str(
-        metadatum,
-        Module.CML.MetadataJsonSchema.DetailedSchema
-      );
+      const metadataString = Module.CML.decode_metadatum_to_json_str(metadatum, Module.CML.MetadataJsonSchema.DetailedSchema);
       metadatum.free();
       return metadataString;
     });

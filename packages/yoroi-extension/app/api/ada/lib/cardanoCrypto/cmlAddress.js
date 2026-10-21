@@ -10,7 +10,10 @@ const derivePublicKeyHashHex = (accountPublicKey: any, path: Array<number>, star
     if (index == null) throw new Error('Invalid public key derivation path');
     publicKey = publicKey.derive(index);
   }
-  return publicKey.to_raw_key().hash().to_hex();
+  return publicKey
+    .to_raw_key()
+    .hash()
+    .to_hex();
 };
 
 export const deriveBip32PublicKeyHashHex = (accountPublicKeyHex: string, path: Array<number>, startIndex: number = 0): string =>
@@ -117,7 +120,12 @@ export const paymentKeyHashBech32FromEnterpriseAddress = (addressHex: string, pr
     const address = Module.CML.Address.from_hex(addressHex);
     const enterpriseAddress = Module.CML.EnterpriseAddress.from_address(address);
     if (enterpriseAddress == null) return null;
-    return enterpriseAddress.payment().as_pub_key()?.to_bech32(prefix) ?? null;
+    return (
+      enterpriseAddress
+        .payment()
+        .as_pub_key()
+        ?.to_bech32(prefix) ?? null
+    );
   });
 
 export const addressHasStakeCredential = (address: string, credentialCborHex: string): boolean =>
@@ -197,13 +205,13 @@ export const deriveRewardAddressFromAddress = (address: string, networkId: numbe
   });
 
 const readPointerComponent = (bytes: Uint8Array, start: number): {| value: bigint, next: number |} => {
-  let value = 0n;
+  let value = BigInt('0');
   let index = start;
   while (index < bytes.length) {
     const byte = bytes[index];
     if (byte === undefined) throw new Error('Invalid pointer address');
     // eslint-disable-next-line no-undef
-    value = (value << 7n) | BigInt(byte & 0x7f);
+    value = (value << BigInt('7')) | BigInt(byte & 0x7f);
     index += 1;
     if ((byte & 0x80) === 0) return { value, next: index };
   }
@@ -222,12 +230,12 @@ export const stakePointerFromAddressBech32 = (addressBech32: string): [string, s
   });
 
 export const stakePointerFromRawBytes = (bytes: Uint8Array): [string, string, string] => {
-    let offset = 29;
-    const slot = readPointerComponent(bytes, offset);
-    offset = slot.next;
-    const transactionIndex = readPointerComponent(bytes, offset);
-    offset = transactionIndex.next;
-    const certificateIndex = readPointerComponent(bytes, offset);
-    if (certificateIndex.next !== bytes.length) throw new Error('Invalid pointer address');
-    return [slot.value.toString(), transactionIndex.value.toString(), certificateIndex.value.toString()];
+  let offset = 29;
+  const slot = readPointerComponent(bytes, offset);
+  offset = slot.next;
+  const transactionIndex = readPointerComponent(bytes, offset);
+  offset = transactionIndex.next;
+  const certificateIndex = readPointerComponent(bytes, offset);
+  if (certificateIndex.next !== bytes.length) throw new Error('Invalid pointer address');
+  return [slot.value.toString(), transactionIndex.value.toString(), certificateIndex.value.toString()];
 };

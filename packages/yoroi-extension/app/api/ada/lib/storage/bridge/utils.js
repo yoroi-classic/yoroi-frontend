@@ -4,7 +4,7 @@ import type { CoreAddressT } from '../database/primitives/enums';
 import { CoreAddressTypes } from '../database/primitives/enums';
 import { StoredCertificateKind } from '../database/primitives/storedCertificateKinds';
 import { RustModule } from '../../cardanoCrypto/rustLoader';
-import { normalizeAddressToHex, stakingCredentialCborHexFromRewardAddress } from '../../cardanoCrypto/cmlAddress';
+import { normalizeAddressToHex, stakingKeyHashFromRewardAddress } from '../../cardanoCrypto/cmlAddress';
 import type { NetworkRow } from '../database/primitives/tables';
 import { isCardanoHaskell } from '../database/prepackaged/networks';
 import type { $npm$ReactIntl$MessageDescriptor } from 'react-intl';
@@ -269,7 +269,9 @@ export function getAddressPayload(address: string, network: $ReadOnly<NetworkRow
 
 export function unwrapStakingKey(stakingAddress: string): string {
   try {
-    return stakingCredentialCborHexFromRewardAddress(stakingAddress);
+    const keyHash = stakingKeyHashFromRewardAddress(stakingAddress);
+    if (keyHash == null) throw new Error('Staking credential is not a key');
+    return keyHash;
   } catch (_error) {
     return fail(`${nameof(unwrapStakingKey)} staking key invalid`);
   }

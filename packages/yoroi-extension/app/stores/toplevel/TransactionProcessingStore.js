@@ -17,7 +17,7 @@ import { convertToLocalizableError as ledgerConvertToLocalizableError } from '..
 import type { Addressing, Address, Value } from '../../api/ada/lib/storage/models/PublicDeriver/interfaces';
 import { generateCip15RegistrationMetadata, generateRegistrationMetadata } from '../../api/ada/lib/cardanoCrypto/catalyst';
 import { TxAuxiliaryDataSupplementType } from '@cardano-foundation/ledgerjs-hw-app-cardano';
-import { fail } from '../../coreUtils';
+import { fail, hexToBytes } from '../../coreUtils';
 import { transactionHexToBodyHex } from '../../api/ada/lib/cardanoCrypto/utils';
 import { getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks.js';
 import { LedgerConnect } from '../../utils/hwConnectHandler';
@@ -319,7 +319,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
         metadata
       );
 
-      return { signedTxHex: txHex, txId, metadata: metadata?.to_bytes() };
+      return { signedTxHex: txHex, txId, metadata };
     } catch (error) {
       Logger.error(`${nameof(TransactionProcessingStore)}::${nameof(this.trezorSignRawTx)} error: ` + stringifyError(error));
       throw new trezorConvertToLocalizableError(error);
@@ -404,7 +404,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       );
 
       const publicKeyInfo = {
-        key: RustModule.CML.Bip32PublicKey.from_hex(request.wallet.publicKey),
+        key: RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(request.wallet.publicKey)),
         addressing: {
           startLevel: 1,
           path: request.wallet.pathToPublic,
@@ -479,7 +479,9 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
           ledgerSignTxResp.auxiliaryDataSupplement.type !== TxAuxiliaryDataSupplementType.CIP36_REGISTRATION
         ) {
           throw new Error(
-            `${nameof(TransactionProcessingStore)}::${nameof(this.ledgerWalletSignRawTx)} unexpected Ledger sign transaction response`
+            `${nameof(TransactionProcessingStore)}::${nameof(
+              this.ledgerWalletSignRawTx
+            )} unexpected Ledger sign transaction response`
           );
         }
         const { cip36VoteRegistrationSignatureHex } = ledgerSignTxResp.auxiliaryDataSupplement;
@@ -508,7 +510,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
         new Map((request.additionalSenderUtxos || []).map(({ addressing, receiver }) => [addressing.path.join('/'), receiver]))
       );
 
-      return { signedTxHex: txHex, txId, metadata: metadata?.to_bytes() };
+      return { signedTxHex: txHex, txId, metadata };
     } catch (error) {
       Logger.error(
         `${nameof(TransactionProcessingStore)}::${nameof(this.ledgerWalletSignRawTx)} error: ` + stringifyError(error)

@@ -5,6 +5,7 @@ import { ConnectorError, TxSendErrorCodes } from './types';
 import { RustModule } from '../../../app/api/ada/lib/cardanoCrypto/rustLoader';
 import type { Addressing, IPublicDeriver } from '../../../app/api/ada/lib/storage/models/PublicDeriver/interfaces';
 import { PublicDeriver } from '../../../app/api/ada/lib/storage/models/PublicDeriver/index';
+import type { ConceptualWallet } from '../../../app/api/ada/lib/storage/models/ConceptualWallet';
 import {
   asGetAllUtxos,
   asGetBalance,
@@ -131,12 +132,14 @@ export async function selectCmlUtxosForValue(
     let requestedValue;
     try {
       requestedValue = /^\d+$/.test(valueString)
-        // eslint-disable-next-line no-undef
-        ? cml.Value.from_coin(BigInt(valueString))
+        ? // eslint-disable-next-line no-undef
+          cml.Value.from_coin(BigInt(valueString))
         : cml.Value.from_cbor_hex(valueString);
     } catch (error) {
       throw ConnectorError.invalidRequest(
-        `Invalid required value string "${valueString}". Expected an int number or a hex of serialized Value instance. Cause: ${String(error)}`
+        `Invalid required value string "${valueString}". Expected an int number or a hex of serialized Value instance. Cause: ${String(
+          error
+        )}`
       );
     }
     const targetAddress = cml.Address.from_hex(formattedUtxos[0].receiver);
@@ -150,76 +153,73 @@ export async function selectCmlUtxosForValue(
     const required = cml.Value.from_cbor_bytes(targetOutput.amount().to_cbor_bytes());
     const requestedAssets = [];
     const requestedMultiAsset = required.multi_asset();
-    const policies = requestedMultiAsset.keys();
-    for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
-      const policy = policies.get(policyIndex);
-      const assets = requestedMultiAsset.get_assets(policy);
-      if (assets == null) continue;
-      const names = assets.keys();
-      for (let assetIndex = 0; assetIndex < names.len(); assetIndex++) {
-        const asset = names.get(assetIndex);
-        requestedAssets.push({ policy: policy.to_hex(), asset: asset.to_hex() });
+    if (requestedMultiAsset != null) {
+      const policies = requestedMultiAsset.keys();
+      for (let policyIndex = 0; policyIndex < policies.len(); policyIndex++) {
+        const policy = policies.get(policyIndex);
+        const assets = requestedMultiAsset.get_assets(policy);
+        if (assets == null) continue;
+        const names = assets.keys();
+        for (let assetIndex = 0; assetIndex < names.len(); assetIndex++) {
+          const asset = names.get(assetIndex);
+          requestedAssets.push({ policy: policy.to_hex(), asset: asset.to_hex() });
+        }
       }
     }
     const candidates = formattedUtxos.map(utxo => {
       const value = cardanoValueFromRemoteFormat(utxo);
       const multiAsset = value.multi_asset();
       const matchingAssets = requestedAssets.reduce((count, requested) => {
+        if (multiAsset == null) return count;
         const assets = multiAsset.get_assets(cml.ScriptHash.from_hex(requested.policy));
         return count + (assets?.get(cml.AssetName.from_hex(requested.asset)) != null ? 1 : 0);
       }, 0);
       return { utxo, value, matchingAssets };
     });
-    const collateralReserve = [];
-    const spendable = [];
-    for (const candidate of candidates) {
-      if (candidate.utxo.assets.length === 0 && candidate.value.coin() <= 2000000n && collateralReserve.length < 3) {
-        collateralReserve.push(candidate);
-      } else {
-        spendable.push(candidate);
-      }
-    }
     const config = cml.TransactionBuilderConfigBuilder.new()
-      .fee_algo(cml.LinearFee.new(44n, 155381n, 0n))
+      .fee_algo(cml.LinearFee.new(BigInt('44'), BigInt('155381'), BigInt('0')))
       // eslint-disable-next-line no-undef
       .coins_per_utxo_byte(BigInt(coinsPerUtxoByte))
-      .pool_deposit(0n)
-      .key_deposit(0n)
+      .pool_deposit(BigInt('0'))
+      .key_deposit(BigInt('0'))
       .max_value_size(5000)
       .max_tx_size(16384)
-      .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+      .ex_unit_prices(
+        cml.ExUnitPrices.new(
+          cml.Rational.new(BigInt('577'), BigInt('10000')),
+          cml.Rational.new(BigInt('721'), BigInt('10000000'))
+        )
+      )
       .collateral_percentage(150)
       .max_collateral_inputs(3)
       .build();
     const builder = cml.TransactionBuilder.new(config);
     builder.add_output(cml.SingleOutputBuilderResult.new(targetOutput));
     const candidatesByRef = new Map();
-    for (const candidate of spendable) {
+    for (const candidate of candidates) {
       const input = cml.TransactionInput.new(
         cml.TransactionHash.from_hex(candidate.utxo.tx_hash),
         // eslint-disable-next-line no-undef
         BigInt(candidate.utxo.tx_index)
       );
-      const output = cml.TransactionOutput.new(
-        cml.Address.from_hex(candidate.utxo.receiver),
-        candidate.value
-      );
+      const output = cml.TransactionOutput.new(cml.Address.from_hex(candidate.utxo.receiver), candidate.value);
       builder.add_utxo(cml.SingleInputBuilder.new(input, output).payment_key());
       candidatesByRef.set(`${candidate.utxo.tx_hash}${candidate.utxo.tx_index}`, candidate);
     }
     const hasRequestedAssets = requestedAssets.length > 0;
+    let body;
     try {
       builder.select_utxos(
-        hasRequestedAssets
-          ? cml.CoinSelectionStrategyCIP2.LargestFirstMultiAsset
-          : cml.CoinSelectionStrategyCIP2.LargestFirst
+        hasRequestedAssets ? cml.CoinSelectionStrategyCIP2.LargestFirstMultiAsset : cml.CoinSelectionStrategyCIP2.LargestFirst
       );
       builder.add_change_if_needed(targetAddress, false);
+      body = builder.build(cml.ChangeSelectionAlgo.Default, targetAddress).body();
     } catch (error) {
-      if (/Insufficient|Not enough ADA/i.test(String(error))) throw new NotEnoughMoneyToSendError();
+      if (/Insufficient|Not enough ADA|minimum (?:UTxO|output)|below minimum/i.test(String(error))) {
+        throw new NotEnoughMoneyToSendError();
+      }
       throw error;
     }
-    const body = builder.build(cml.ChangeSelectionAlgo.Default, targetAddress).body();
     const selected = [];
     const selectedRefs = new Set();
     let selectedTotal = cml.Value.zero();
@@ -232,11 +232,24 @@ export async function selectCmlUtxosForValue(
       selectedRefs.add(ref);
       selectedTotal = selectedTotal.checked_add(candidate.value);
     }
+    const collateralReserve = candidates
+      .filter(
+        candidate =>
+          !selectedRefs.has(`${candidate.utxo.tx_hash}${candidate.utxo.tx_index}`) &&
+          candidate.utxo.assets.length === 0 &&
+          candidate.value.coin() <= BigInt('2000000')
+      )
+      .slice(0, 3);
+    const collateralRefs = new Set(collateralReserve.map(candidate => `${candidate.utxo.tx_hash}${candidate.utxo.tx_index}`));
     // eslint-disable-next-line no-undef
-    const desiredAda = required.coin() * 2n + 2000000n + BigInt(Math.max(3 - collateralReserve.length, 0)) * 1000000n;
+    const desiredAda =
+      required.coin() * BigInt('2') + BigInt('2000000') + BigInt(Math.max(3 - collateralReserve.length, 0)) * BigInt('1000000');
     if (selectedTotal.coin() < desiredAda && selected.length < 50) {
-      const improvements = spendable
-        .filter(candidate => !selectedRefs.has(`${candidate.utxo.tx_hash}${candidate.utxo.tx_index}`))
+      const improvements = candidates
+        .filter(candidate => {
+          const ref = `${candidate.utxo.tx_hash}${candidate.utxo.tx_index}`;
+          return !selectedRefs.has(ref) && !collateralRefs.has(ref);
+        })
         .sort((left, right) => {
           const assetDiff = right.matchingAssets - left.matchingAssets;
           return assetDiff !== 0 ? assetDiff : left.value.coin() > right.value.coin() ? -1 : 1;
@@ -417,7 +430,7 @@ export async function _connectorGetUnusedAddresses(
 }
 
 export async function connectorGetDRepKey(wallet: PublicDeriver<>): Promise<string> {
-  return (await getDRepKeyAndAddressing(wallet))[0].to_hex();
+  return (await getDRepKeyAndAddressing(wallet))[0];
 }
 
 export function getDrepRewardAddressHexAndAddressing(wallet: WalletState): [string, Addressing] {
@@ -428,7 +441,7 @@ export function getDrepRewardAddressHexAndAddressing(wallet: WalletState): [stri
     {}
   );
   const network = parseInt(config.ChainNetworkId, 10);
-  return [pubKeyHashToRewardAddress(pubKey.hash().to_hex(), network), addressing];
+  return [pubKeyHashToRewardAddress(pubKey, network), addressing];
 }
 
 export async function connectorGetStakeKey(
@@ -450,7 +463,7 @@ export async function connectorGetStakeKey(
   const stakeAddrHex = RustModule.WasmScope(Module => {
     return Module.CML.RewardAddress.new(
       Number.parseInt(network.BaseConfig[0].ChainNetworkId, 10),
-      Module.CML.Credential.new_pub_key(stakeKey.hash())
+      Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKey))
     )
       .to_address()
       .to_hex();
@@ -461,7 +474,7 @@ export async function connectorGetStakeKey(
   });
   return {
     // $FlowFixMe
-    key: stakeKey.to_hex(),
+    key: stakeKey,
     isRegistered: accountState[stakeAddrHex]?.stakeRegistered ?? false,
   };
 }
@@ -564,8 +577,11 @@ export async function connectorSignCardanoTxs(
           const addressing = ownAddressMap.get(receiver);
           if (addressing != null) {
             outputs.push({
-              amount: output.amount().coin().to_str(),
-              assets: parseTokenList(output.amount().multiasset()),
+              amount: output
+                .amount()
+                .coin()
+                .toString(),
+              assets: parseTokenList(output.amount().multi_asset()),
               receiver,
               tx_hash: txHash,
               tx_index: outputIndex,
@@ -690,7 +706,7 @@ async function __connectorSignCardanoTx(
         requiredPaymentCred,
         parsedStakingCred
       ).to_address();
-      requiredTxSignAddresses.add(bytesToHex(requiredAddress.to_address().to_raw_bytes()));
+      requiredTxSignAddresses.add(bytesToHex(requiredAddress.to_raw_bytes()));
     }
     for (const baseAddress of allBaseAddresses) {
       const { address, addressing } = baseAddress;
@@ -708,11 +724,11 @@ async function __connectorSignCardanoTx(
       }
     }
     const [drepKey, addressing] = await getDRepKeyAndAddressing(publicDeriver);
-    const drepCred = drepKey.hash().to_hex();
+    const drepCred = drepKey;
     if (totalAdditionalRequiredSignKeys.has(drepCred)) {
       const address = RustModule.CML.RewardAddress.new(
         0, // strictly speaking should use `ChainNetworkId` but doesn't matter
-        RustModule.CML.Credential.new_pub_key(drepKey.hash())
+        RustModule.CML.Credential.new_pub_key(RustModule.CML.Ed25519KeyHash.from_hex(drepKey))
       )
         .to_address()
         .to_hex();
@@ -724,8 +740,9 @@ async function __connectorSignCardanoTx(
   const adaApi = new AdaApi();
   const addressedUtxos = await adaApi.addressedUtxosWithSubmittedTxs(asAddressedUtxoCardano(utxos), publicDeriver, submittedTxs);
 
+  const collateralInputs = txBody.collateral_inputs();
   const utxoIdSet: Set<string> = iterateLenGet(txBody.inputs())
-    .join(iterateLenGet(txBody.collateral()))
+    .join(collateralInputs == null ? [] : iterateLenGet(collateralInputs))
     .map(input => `${input.transaction_id().to_hex()}${String(input.index())}`)
     .toSet();
 
@@ -796,7 +813,7 @@ export async function connectorCreateCardanoTx(
 }
 
 export async function connectorSendTxCardano(
-  wallet: IPublicDeriver</* ConceptualWallet */>,
+  wallet: IPublicDeriver<ConceptualWallet>,
   signedTxHex: string,
   localStorage: LocalStorageApi
 ): Promise<void> {
@@ -847,15 +864,22 @@ export async function connectorRecordSubmittedCardanoTransaction(
     return {
       fee: body.fee().toString(),
       ttl: String(body.ttl()),
-      inputs: iterateLenGet(body.inputs()).map(input => ({
-        txHash: input.transaction_id().to_hex(),
-        index: Number(input.index()),
-      })).toArray(),
-      outputs: iterateLenGet(body.outputs()).map(output => ({
-        address: output.address().to_hex(),
-        amount: output.amount().coin().toString(),
-        assets: parseTokenList(output.amount().multi_asset()),
-      })).toArray(),
+      inputs: iterateLenGet(body.inputs())
+        .map(input => ({
+          txHash: input.transaction_id().to_hex(),
+          index: Number(input.index()),
+        }))
+        .toArray(),
+      outputs: iterateLenGet(body.outputs())
+        .map(output => ({
+          address: output.address().to_hex(),
+          amount: output
+            .amount()
+            .coin()
+            .toString(),
+          assets: parseTokenList(output.amount().multi_asset()),
+        }))
+        .toArray(),
       withdrawals: iterateLenGetMap(body.withdrawals())
         .nonNullValue()
         .map(([key, amount]) => ({ address: key.to_address().to_hex(), amount: amount.toString() }))
@@ -927,18 +951,18 @@ export async function connectorRecordSubmittedCardanoTransaction(
   }
 
   const withdrawalsData = txData.withdrawals.map(withdrawal => ({
-      address: withdrawal.address,
-      value: new MultiToken(
-        [
-          {
-            amount: new BigNumber(withdrawal.amount),
-            identifier: defaultToken.Identifier,
-            networkId: defaultToken.NetworkId,
-          },
-        ],
-        defaults
-      ),
-    }));
+    address: withdrawal.address,
+    value: new MultiToken(
+      [
+        {
+          amount: new BigNumber(withdrawal.amount),
+          identifier: defaultToken.Identifier,
+          networkId: defaultToken.NetworkId,
+        },
+      ],
+      defaults
+    ),
+  }));
 
   const submittedTx: CardanoShelleyTransactionCtorData = {
     txid: txId,

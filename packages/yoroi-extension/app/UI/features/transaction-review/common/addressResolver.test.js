@@ -7,7 +7,7 @@ beforeAll(async () => {
   await RustModule.load();
 });
 
-test('resolves Shelley credential kinds with CML', () => {
+test('resolves Shelley payment credentials with CML', () => {
   const address = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
 
   expect(resolveAddress(address)).toEqual({

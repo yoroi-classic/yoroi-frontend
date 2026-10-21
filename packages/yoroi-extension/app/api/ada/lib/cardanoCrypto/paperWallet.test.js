@@ -39,7 +39,8 @@ test('unscrambles entropy with the legacy Rust paper-wallet vectors', () => {
     },
     {
       scrambled: '2a2a2a2a2a2a2a2ac7711874ecc4b3930088482b3b6c8b85',
-      password: 'This is a very long passphrase. This is a very long passphrase. This is a very long passphrase. This is a very long passphrase.',
+      password:
+        'This is a very long passphrase. This is a very long passphrase. This is a very long passphrase. This is a very long passphrase.',
       expected: 'ff'.repeat(16),
     },
   ];

@@ -84,7 +84,7 @@ function createWasmScope(): {|
           /*
            * A wrapper function is returned instead.
            */
-          return function (...args: any[]): any {
+          return function(...args: any[]): any {
             // Call the actual function bound to the original object.
             const res = realValue.bind(target)(...args);
             if (isWasmPointer(res)) {
@@ -133,23 +133,23 @@ class Module {
   _cml: any;
 
   async load(): Promise<void> {
-    if (
-      this._messageSigning != null &&
-      this._cml != null
-    )
-      return;
+    if (this._messageSigning != null && this._cml != null) return;
     this._messageSigning = await import('@emurgo/cardano-message-signing-browser/cardano_message_signing');
     // $FlowFixMe[untyped-import]
     this._cml = await import('@dcspark/cardano-multiplatform-lib-browser');
   }
 
-  __WasmScopeInternal<T>(callback: Module => T): {|
+  __WasmScopeInternal<T>(
+    callback: Module => T
+  ): {|
     result: T,
     scopeSize: number,
     scopeIsFree: boolean,
   |} {
     const scope = createWasmScope();
-    function onSuccess(result: T): {|
+    function onSuccess(
+      result: T
+    ): {|
       result: T,
       scopeSize: number,
       scopeIsFree: boolean,

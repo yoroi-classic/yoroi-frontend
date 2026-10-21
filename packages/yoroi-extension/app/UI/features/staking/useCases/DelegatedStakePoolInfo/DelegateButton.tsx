@@ -47,8 +47,14 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
   socialMediaInfo,
   btnVariant = 'primary',
 }) => {
-  const { openTxReviewModal, startLoadingTxReview, stakeKeyDeposit, primaryTokenInfo, showTxResultModal, networkId } =
-    useTxReviewModal();
+  const {
+    openTxReviewModal,
+    startLoadingTxReview,
+    stakeKeyDeposit,
+    primaryTokenInfo,
+    showTxResultModal,
+    networkId,
+  } = useTxReviewModal();
   const { data } = useYoroiRemoteConfig();
   const dRepID = data?.banners?.earnRewardsWithYoroi?.drepId;
 
@@ -74,7 +80,7 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
   };
 
   const onDelegateToStakePool = async () => {
-    const id = isTestnet ? (poolID ?? '7facad662e180ce45e5c504957cd1341940c72a708728f7ecfc6e349') : poolID;
+    const id = isTestnet ? poolID ?? '7facad662e180ce45e5c504957cd1341940c72a708728f7ecfc6e349' : poolID;
     const { signTxRequest } = await stores.delegation.createDelegationTransaction(id);
 
     openTxReviewModal({
@@ -139,9 +145,9 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
               <OperationsDetails
                 avatarGenerated={avatarGenerated}
                 poolName={poolName}
-                stakeKeyDeposit={`${new BigNumber(stakeKeyDeposit)
-                  .shiftedBy(-primaryTokenInfo.decimals)
-                  .toString()} ${primaryTokenInfo.name}`}
+                stakeKeyDeposit={`${new BigNumber(stakeKeyDeposit).shiftedBy(-primaryTokenInfo.decimals).toString()} ${
+                  primaryTokenInfo.name
+                }`}
                 socialMediaInfo={socialMediaInfo}
                 drepId={delegatingDRepId}
               />

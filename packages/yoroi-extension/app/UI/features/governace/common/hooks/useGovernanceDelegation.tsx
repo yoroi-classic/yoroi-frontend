@@ -32,8 +32,7 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
 
   const strings = useStrings();
 
-  const { governanceVoteChanged, createDrepDelegationTransaction, signDelegationTransaction, selectedWallet } =
-    useGovernance();
+  const { governanceVoteChanged, createDrepDelegationTransaction, signDelegationTransaction, selectedWallet } = useGovernance();
 
   const {
     openTxReviewModal,

@@ -12,9 +12,19 @@ beforeEach(() => jest.resetAllMocks());
 
 test('paginates UTxOs and converts amounts without losing asset or identity fields', async () => {
   mockedAxios.post
-    .mockResolvedValueOnce({ data: [{
-      utxo_id: 'hash0', tx_hash: 'hash', tx_index: 0, receiver: 'addr', amount: '9007199254740993', assets: [], block_num: 4,
-    }] })
+    .mockResolvedValueOnce({
+      data: [
+        {
+          utxo_id: 'hash0',
+          tx_hash: 'hash',
+          tx_index: 0,
+          receiver: 'addr',
+          amount: '9007199254740993',
+          assets: [],
+          block_num: 4,
+        },
+      ],
+    })
     .mockResolvedValueOnce({ data: [] });
   const api = new CardanoWalletUtxoApi('http://backend/api/', true, 1);
 
@@ -23,7 +33,10 @@ test('paginates UTxOs and converts amounts without losing asset or identity fiel
   expect(result.value?.[0]).toMatchObject({ utxoId: 'hash0', txHash: 'hash', txIndex: 0 });
   expect(result.value?.[0].amount.toFixed(0)).toEqual('9007199254740993');
   expect(mockedAxios.post).toHaveBeenNthCalledWith(2, 'http://backend/api/v2/txs/utxoAtPoint', {
-    addresses: ['addr'], referenceBlockHash: 'block', page: 2, pageSize: 1,
+    addresses: ['addr'],
+    referenceBlockHash: 'block',
+    page: 2,
+    pageSize: 1,
   });
 });
 
@@ -45,4 +58,42 @@ test('maps missing reference points to safe rollback across address batches', as
     result: UtxoApiResult.SAFEBLOCK_ROLLBACK,
   });
   expect(base.getUtxoAtPoint).toHaveBeenCalledTimes(2);
+});
+
+test('propagates a rollback result returned by any address batch', async () => {
+  const base = {
+    getSafeBlock: jest.fn(),
+    getBestBlock: jest.fn(),
+    getTipStatusWithReference: jest.fn(),
+    getUtxoAtPoint: jest.fn(),
+    getUtxoDiffSincePoint: jest
+      .fn()
+      .mockResolvedValueOnce({
+        result: UtxoApiResult.SUCCESS,
+        value: { diffItems: [], reference: { lastFoundBestBlock: 'best', lastFoundSafeBlock: 'safe' } },
+      })
+      .mockResolvedValueOnce({ result: UtxoApiResult.SAFEBLOCK_ROLLBACK }),
+  };
+  const api = new BatchedUtxoApi((base: any), 1);
+
+  await expect(
+    api.getUtxoDiffSincePoint({ addresses: ['a', 'b'], untilBlockHash: 'best', afterBestBlocks: ['safe'] })
+  ).resolves.toEqual({ result: UtxoApiResult.SAFEBLOCK_ROLLBACK });
+});
+
+test('returns an empty successful diff without treating no addresses as a rollback', async () => {
+  const base = {
+    getSafeBlock: jest.fn(),
+    getBestBlock: jest.fn(),
+    getTipStatusWithReference: jest.fn(),
+    getUtxoAtPoint: jest.fn(),
+    getUtxoDiffSincePoint: jest.fn(),
+  };
+  const api = new BatchedUtxoApi((base: any), 1);
+
+  await expect(api.getUtxoDiffSincePoint({ addresses: [], untilBlockHash: 'best', afterBestBlocks: ['safe'] })).resolves.toEqual({
+    result: UtxoApiResult.SUCCESS,
+    value: { diffItems: [], reference: { lastFoundBestBlock: 'best', lastFoundSafeBlock: 'safe' } },
+  });
+  expect(base.getUtxoDiffSincePoint).not.toHaveBeenCalled();
 });

@@ -40,7 +40,8 @@ export function generateRegistrationMetadata(
    * }
    */
 
-  return createCip36AuxiliaryData({
+  return createCip36AuxiliaryData(
+    {
       '1': [[prefix0x(votingPublicKey), 1]],
       '2': prefix0x(stakingPublicKey),
       '3': prefix0x(rewardAddress),
@@ -66,7 +67,9 @@ function createCip36AuxiliaryData(registrationData: Object, signer: Uint8Array =
     if (initialMetadataBytes == null) {
       throw new Error(`CML failed to serialize Catalyst metadata (kind ${initialAuxiliaryData.kind()})`);
     }
-    const hashedMetadata = blake2b(256 / 8).update(initialMetadataBytes).digest('binary');
+    const hashedMetadata = blake2b(256 / 8)
+      .update(initialMetadataBytes)
+      .digest('binary');
     initialAuxiliaryData.free();
     generalMetadata.set(
       // eslint-disable-next-line no-undef
@@ -90,7 +93,9 @@ function createCip36AuxiliaryData(registrationData: Object, signer: Uint8Array =
 export function privateKeyPublicKeyHex(privateKeyHex: string, extended: boolean = false): string {
   return RustModule.WasmScope(Module => {
     const bytes = Buffer.from(privateKeyHex, 'hex');
-    const privateKey = extended ? Module.CML.PrivateKey.from_extended_bytes(bytes) : Module.CML.PrivateKey.from_normal_bytes(bytes);
+    const privateKey = extended
+      ? Module.CML.PrivateKey.from_extended_bytes(bytes)
+      : Module.CML.PrivateKey.from_normal_bytes(bytes);
     return bytesToHex(privateKey.to_public().to_raw_bytes());
   });
 }
@@ -106,9 +111,12 @@ export function generateRegistration(request: {|
     privateKeyPublicKeyHex(request.stakePrivateKeyHex),
     request.receiverAddress,
     request.slotNumber,
-    hashedMetadata => RustModule.WasmScope(Module =>
-      Module.CML.PrivateKey.from_normal_bytes(Buffer.from(request.stakePrivateKeyHex, 'hex')).sign(hashedMetadata).to_hex()
-    )
+    hashedMetadata =>
+      RustModule.WasmScope(Module =>
+        Module.CML.PrivateKey.from_normal_bytes(Buffer.from(request.stakePrivateKeyHex, 'hex'))
+          .sign(hashedMetadata)
+          .to_hex()
+      )
   );
 }
 
@@ -118,7 +126,7 @@ export function generateCip15RegistrationMetadata(
   rewardAddress: string,
   nonce: number,
   signer: Uint8Array => string
-): any {
+): Uint8Array {
   /**
    * Catalyst follows a certain standard to prove the voting power
    * A transaction is submitted with following metadata format for the registration process
@@ -135,7 +143,8 @@ export function generateCip15RegistrationMetadata(
    * }
    */
 
-  return createCip36AuxiliaryData({
+  return createCip36AuxiliaryData(
+    {
       '1': prefix0x(votingPublicKey),
       '2': prefix0x(stakingPublicKey),
       '3': prefix0x(rewardAddress),

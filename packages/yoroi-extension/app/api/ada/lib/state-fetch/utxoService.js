@@ -40,7 +40,8 @@ export class UtxoService {
     if (localDiff.length > 0) {
       const knownBestBlock = localDiff.find(entry => entry.lastBestBlockHash === tipStatus.reference.lastFoundBestBlock);
       const rollbackIndex = knownBestBlock == null ? 0 : localDiff.indexOf(knownBestBlock) + 1;
-      for (const staleDiff of localDiff.slice(rollbackIndex)) await this.storage.removeDiffWithBestBlock(staleDiff.lastBestBlockHash);
+      for (const staleDiff of localDiff.slice(rollbackIndex))
+        await this.storage.removeDiffWithBestBlock(staleDiff.lastBestBlockHash);
 
       if (knownBestBlock != null) {
         const safeDiff = localDiff.find(entry => entry.lastBestBlockHash === tipStatus.reference.lastFoundSafeBlock);
@@ -52,8 +53,14 @@ export class UtxoService {
     await this.storage.appendUtxoDiffToBestBlock(diffToBestBlock);
   }
 
-  async syncSafeStateAndGetDiff(addresses: string[]): Promise<{|
-    safeUtxos: Utxo[], diff: UtxoDiff, bestBlock: string, localDiff: UtxoDiffToBestBlock[], tipStatus: any,
+  async syncSafeStateAndGetDiff(
+    addresses: string[]
+  ): Promise<{|
+    safeUtxos: Utxo[],
+    diff: UtxoDiff,
+    bestBlock: string,
+    localDiff: UtxoDiffToBestBlock[],
+    tipStatus: {| reference: {| lastFoundBestBlock: string, lastFoundSafeBlock?: string |} |},
   |}> {
     const { safeBlockHash, safeUtxos } = await this.getUtxoSafePoint(addresses);
     const localDiff = await this.storage.getUtxoDiffToBestBlock();
@@ -83,8 +90,12 @@ export class UtxoService {
     };
   }
 
-  async getUtxoDiffSincePoint(addresses: string[], afterBestBlocks: string[]): Promise<{|
-    safeBlockRollback: boolean, value?: {| diff: UtxoDiff, bestBlock: string |},
+  async getUtxoDiffSincePoint(
+    addresses: string[],
+    afterBestBlocks: string[]
+  ): Promise<{|
+    safeBlockRollback: boolean,
+    value?: {| diff: UtxoDiff, bestBlock: string |},
   |}> {
     const bestBlock = await this.api.getBestBlock();
     const response = await this.api.getUtxoDiffSincePoint({ addresses, afterBestBlocks, untilBlockHash: bestBlock });

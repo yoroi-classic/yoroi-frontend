@@ -243,10 +243,7 @@ export default class SwapStore extends Store<StoresMap> {
     const senderUtxos = [];
     for (const input of swapTx.inputRefs) {
       for (const utxo of wallet.utxos) {
-        if (
-          utxo.output.Transaction.Hash === input.txHash &&
-          utxo.output.UtxoTransactionOutput.OutputIndex === input.index
-        ) {
+        if (utxo.output.Transaction.Hash === input.txHash && utxo.output.UtxoTransactionOutput.OutputIndex === input.index) {
           senderUtxos.push({
             utxo_id: `${utxo.output.Transaction.Hash}${utxo.output.UtxoTransactionOutput.OutputIndex}`,
             tx_hash: utxo.output.Transaction.Hash,

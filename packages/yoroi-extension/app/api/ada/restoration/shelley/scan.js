@@ -9,7 +9,11 @@ import type { ConfigType } from '../../../../../config/config-types';
 import { ChainDerivations, BIP44_SCAN_SIZE } from '../../../../config/numbersConfig';
 
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
-import { enterpriseAndBaseAddressHexFromKeyHashes, paymentKeyHashHex, rewardAddressFromKeyHash } from '../../lib/cardanoCrypto/cmlAddress';
+import {
+  enterpriseAndBaseAddressHexFromKeyHashes,
+  paymentKeyHashHex,
+  rewardAddressFromKeyHash,
+} from '../../lib/cardanoCrypto/cmlAddress';
 
 import type { TreeInsert, InsertRequest } from '../../lib/storage/database/walletTypes/common/utils.types';
 import type { AddByHashFunc } from '../../../common/lib/storage/bridge/hashMapper';
@@ -30,7 +34,13 @@ export function genKeyhashBatchFunc(accountPublicKeyHex: string, chainIndex: num
     return RustModule.WasmScope(Module => {
       const accountPublicKey = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
       const addressChain = accountPublicKey.derive(chainIndex);
-      return indices.map(i => addressChain.derive(i).to_raw_key().hash().to_bech32(Bech32Prefix.PAYMENT_KEY_HASH));
+      return indices.map(i =>
+        addressChain
+          .derive(i)
+          .to_raw_key()
+          .hash()
+          .to_bech32(Bech32Prefix.PAYMENT_KEY_HASH)
+      );
     });
   };
 }
@@ -189,7 +199,12 @@ async function scanAccount(request: {|
   const accountAddress = [0].map(i => ({
     index: i,
     insert: async insertRequest => {
-      return await addShelleyChimericAccountAddress(request.addByHash, insertRequest, request.stakingKeyHash, request.chainNetworkId);
+      return await addShelleyChimericAccountAddress(
+        request.addByHash,
+        insertRequest,
+        request.stakingKeyHash,
+        request.chainNetworkId
+      );
     },
   }));
 

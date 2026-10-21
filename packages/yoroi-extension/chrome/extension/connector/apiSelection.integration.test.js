@@ -8,20 +8,21 @@ describe('connectorGetUtxosCardano CML selection', () => {
     await RustModule.load();
     const fixture = RustModule.WasmScope(Module => {
       const cml = Module.CML;
-      const policyId = cml.NativeScript.new_script_pubkey(cml.Ed25519KeyHash.from_hex('44'.repeat(28))).hash().to_hex();
+      const policyId = cml.NativeScript.new_script_pubkey(cml.Ed25519KeyHash.from_hex('44'.repeat(28)))
+        .hash()
+        .to_hex();
       const assetName = '74657374';
       const multiAsset = cml.MultiAsset.new();
       const assets = cml.MapAssetNameToCoin.new();
-      assets.insert(cml.AssetName.from_hex(assetName), 2n);
+      assets.insert(cml.AssetName.from_hex(assetName), BigInt('2'));
       multiAsset.insert_assets(cml.ScriptHash.from_hex(policyId), assets);
       return {
-        address: cml.EnterpriseAddress.new(
-          1,
-          cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)))
-        ).to_address().to_hex(),
+        address: cml.EnterpriseAddress.new(1, cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28))))
+          .to_address()
+          .to_hex(),
         policyId,
         assetName,
-        valueHex: cml.Value.new(1000000n, multiAsset).to_cbor_hex(),
+        valueHex: cml.Value.new(BigInt('1000000'), multiAsset).to_cbor_hex(),
       };
     });
     const tokenId = `${fixture.policyId}.${fixture.assetName}`;
@@ -54,17 +55,14 @@ describe('connectorGetUtxosCardano CML selection', () => {
         __esModule: true,
         ...actual,
         default: class {
-          utxosWithSubmittedTxs(utxos) { return utxos; }
+          utxosWithSubmittedTxs(utxos) {
+            return utxos;
+          }
         },
       };
     });
     const { connectorGetUtxosCardano } = require('./api');
-    const result = await connectorGetUtxosCardano(
-      { publicDeriverId: 1, testUtxos: dbUtxos },
-      fixture.valueHex,
-      null,
-      '4310'
-    );
+    const result = await connectorGetUtxosCardano({ publicDeriverId: 1, testUtxos: dbUtxos }, fixture.valueHex, null, '4310');
 
     expect(result).toHaveLength(2);
     expect(result.every(utxo => utxo.assets.some(asset => asset.assetId === tokenId))).toBe(true);
@@ -101,12 +99,9 @@ describe('connectorGetUtxosCardano CML selection', () => {
       const inputs = cml.TransactionInputList.new();
       const outputs = cml.TransactionOutputList.new();
       outputs.add(
-        cml.TransactionOutput.new(
-          cml.Address.from_hex(`61${'11'.repeat(28)}`),
-          cml.Value.from_coin(5000000n)
-        )
+        cml.TransactionOutput.new(cml.Address.from_hex(`61${'11'.repeat(28)}`), cml.Value.from_coin(BigInt('5000000')))
       );
-      const body = cml.TransactionBody.new(inputs, outputs, 170000n);
+      const body = cml.TransactionBody.new(inputs, outputs, BigInt('170000'));
       const transaction = cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true);
       return { txBodyHex: body.to_cbor_hex(), txHex: transaction.to_cbor_hex() };
     });
@@ -130,17 +125,15 @@ describe('connectorGetUtxosCardano CML selection', () => {
       const cml = Module.CML;
       const certificates = cml.CertificateList.new();
       certificates.add(
-        cml.Certificate.new_stake_deregistration(
-          cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(keyHashHex))
-        )
+        cml.Certificate.new_stake_deregistration(cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(keyHashHex)))
       );
       certificates.add(
         cml.Certificate.new_reg_drep_cert(
           cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(drepHashHex)),
-          500000000n
+          BigInt('500000000')
         )
       );
-      const body = cml.TransactionBody.new(cml.TransactionInputList.new(), cml.TransactionOutputList.new(), 0n);
+      const body = cml.TransactionBody.new(cml.TransactionInputList.new(), cml.TransactionOutputList.new(), BigInt('0'));
       body.set_certs(certificates);
       const { getCertificatesRequiredSignKeys } = require('./api');
       return Array.from(getCertificatesRequiredSignKeys(body));

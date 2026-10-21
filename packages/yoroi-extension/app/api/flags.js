@@ -65,6 +65,7 @@ export class FlagsApi {
           if (typeof featureFlag !== 'object') {
             const result = Boolean(featureFlag);
             await storageSet(feature, null, result, this.storage);
+            await storageSet(feature, network, result, this.storage);
             return result;
           }
           const networkFlag = featureFlag[network];
@@ -77,6 +78,19 @@ export class FlagsApi {
             return bestblock >= networkFlag;
           }
         }
+        // A successful response is authoritative. Persist the effective global
+        // value or disabled state so stale per-network values cannot survive.
+        const globalFlag = typeof featureFlag === 'object' && featureFlag != null ? featureFlag.global : featureFlag;
+        if (typeof globalFlag === 'boolean') {
+          await storageSet(feature, network, globalFlag, this.storage);
+          return globalFlag;
+        }
+        if (typeof globalFlag === 'number') {
+          await storageSet(feature, network, globalFlag, this.storage);
+          return bestblock >= globalFlag;
+        }
+        await storageSet(feature, network, false, this.storage);
+        return false;
       }
     } catch (error) {
       console.error(`Failed to resolve remote flag: ${JSON.stringify({ feature, network, bestblock })}`, error);

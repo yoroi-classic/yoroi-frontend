@@ -185,7 +185,9 @@ test('Ledger address parameters preserve script stake credentials with CML', () 
     const cml = Module.CML;
     const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
     const stake = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-    return cml.BaseAddress.new(0, payment, stake).to_address().to_hex();
+    return cml.BaseAddress.new(0, payment, stake)
+      .to_address()
+      .to_hex();
   });
   expect(
     toLedgerAddressParameters({
@@ -267,7 +269,7 @@ test('Create Ledger transaction', async () => {
     outputs.add(
       cml.TransactionOutput.new(
         cml.Address.from_hex(byronAddrToHex('Ae2tdPwUPEZAVDjkPPpwDhXMSAjH53CDmd2xMwuR9tZMAZWxLhFphrHKHXe')),
-        cml.Value.new(6_323_634n, cml.MultiAsset.new())
+        cml.Value.new(BigInt('6323634'), cml.MultiAsset.new())
       )
     );
 
@@ -278,12 +280,17 @@ test('Create Ledger transaction', async () => {
       )
     );
     const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-    const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_raw_key().to_public().hash());
+    const stakeCredential = cml.Credential.new_pub_key(
+      stakingKey
+        .to_raw_key()
+        .to_public()
+        .hash()
+    );
     const certificates = cml.CertificateList.new();
     certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
-    const body = cml.TransactionBody.new(inputs, outputs, 2_000n);
+    const body = cml.TransactionBody.new(inputs, outputs, BigInt('2000'));
     body.set_certs(certificates);
-    body.set_ttl(500n);
+    body.set_ttl(BigInt('500'));
     const rewardAddressString = cml.RewardAddress.new(Number.parseInt(network.BaseConfig[0].ChainNetworkId, 10), stakeCredential)
       .to_address()
       .to_hex();
@@ -402,56 +409,51 @@ test('Create Ledger transaction', async () => {
     const cml = Module.CML;
     return buildConnectorSignedTransaction(
       RustModule.WasmScope(InnerModule => {
-      const innerCml = InnerModule.CML;
-      const original = innerCml.Transaction.from_cbor_hex(txData.txHex);
-      const existingWitnessBuilder = innerCml.TransactionWitnessSetBuilder.new();
-      const existingKey = innerCml.PublicKey.from_bytes(new Uint8Array(32).fill(1));
-      const existingSignature = innerCml.Ed25519Signature.from_raw_bytes(new Uint8Array(64).fill(2));
-      existingWitnessBuilder.add_vkey(innerCml.Vkeywitness.new(existingKey, existingSignature));
-      return innerCml.Transaction.new(original.body(), existingWitnessBuilder.build(), true).to_cbor_hex();
-    }),
-    [
-      // this witnesses doesn't belong to the transaction / key. Just used to test wit generation
-      {
-        path: [WalletTypePurpose.CIP1852, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1],
-        witnessSignatureHex:
-          'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
-      },
-      {
-        path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1],
-        witnessSignatureHex:
-          'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
-      },
-      {
-        path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 2],
-        witnessSignatureHex:
-          'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
-      },
-      {
-        path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 0, 7],
-        witnessSignatureHex:
-          'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
-      },
-      {
-        path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 2, 0],
-        witnessSignatureHex:
-          'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
-      },
-    ],
-    {
-      addressing: {
-        startLevel: 1,
-        path: [WalletTypePurpose.CIP1852, CoinTypes.CARDANO, HARD_DERIVATION_START],
-      },
-      key: cml.Bip32PublicKey.from_raw_bytes(txData.accountPublicKeyBytes),
-    },
-    metadata,
-    new Map([
+        const innerCml = InnerModule.CML;
+        const original = innerCml.Transaction.from_cbor_hex(txData.txHex);
+        const existingWitnessBuilder = innerCml.TransactionWitnessSetBuilder.new();
+        const existingKey = innerCml.PublicKey.from_bytes(new Uint8Array(32).fill(1));
+        const existingSignature = innerCml.Ed25519Signature.from_raw_bytes(new Uint8Array(64).fill(2));
+        existingWitnessBuilder.add_vkey(innerCml.Vkeywitness.new(existingKey, existingSignature));
+        return innerCml.Transaction.new(original.body(), existingWitnessBuilder.build(), true).to_cbor_hex();
+      }),
       [
-        [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1].join('/'),
-        senderUtxos[0].receiver,
+        // this witnesses doesn't belong to the transaction / key. Just used to test wit generation
+        {
+          path: [WalletTypePurpose.CIP1852, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1],
+          witnessSignatureHex:
+            'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
+        },
+        {
+          path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1],
+          witnessSignatureHex:
+            'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
+        },
+        {
+          path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 2],
+          witnessSignatureHex:
+            'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
+        },
+        {
+          path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 0, 7],
+          witnessSignatureHex:
+            'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
+        },
+        {
+          path: [WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 2, 0],
+          witnessSignatureHex:
+            'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207',
+        },
       ],
-      ])
+      {
+        addressing: {
+          startLevel: 1,
+          path: [WalletTypePurpose.CIP1852, CoinTypes.CARDANO, HARD_DERIVATION_START],
+        },
+        key: cml.Bip32PublicKey.from_raw_bytes(txData.accountPublicKeyBytes),
+      },
+      metadata,
+      new Map([[[WalletTypePurpose.BIP44, CoinTypes.CARDANO, HARD_DERIVATION_START, 1, 1].join('/'), senderUtxos[0].receiver]])
     );
   });
   const signedSummary = RustModule.WasmScope(Module => {
@@ -465,13 +467,33 @@ test('Create Ledger transaction', async () => {
     return {
       bodyHex: body.to_cbor_hex(),
       txId: cml.hash_transaction(body).to_hex(),
-      vkeyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
-      finalVkeySignatureHex: vkeys.get(vkeys.len() - 1).ed25519_signature().to_hex(),
+      vkeyHashes: Array.from({ length: vkeys.len() }, (_, index) =>
+        vkeys
+          .get(index)
+          .vkey()
+          .hash()
+          .to_hex()
+      ),
+      finalVkeySignatureHex: vkeys
+        .get(vkeys.len() - 1)
+        .ed25519_signature()
+        .to_hex(),
       bootstrapCount: bootstraps.len(),
-      bootstrapPublicKeyHex: bytesToHex(bootstraps.get(0).public_key().to_raw_bytes()),
-      bootstrapSignatureHex: bootstraps.get(0).signature().to_hex(),
+      bootstrapPublicKeyHex: bytesToHex(
+        bootstraps
+          .get(0)
+          .public_key()
+          .to_raw_bytes()
+      ),
+      bootstrapSignatureHex: bootstraps
+        .get(0)
+        .signature()
+        .to_hex(),
       bootstrapChainCodeHex: bytesToHex(bootstraps.get(0).chain_code()),
-      bootstrapAttributesHex: bootstraps.get(0).attributes().to_cbor_hex(),
+      bootstrapAttributesHex: bootstraps
+        .get(0)
+        .attributes()
+        .to_cbor_hex(),
       auxiliaryDataHex: auxiliaryData.to_cbor_hex(),
       auxiliaryDataHash: body.auxiliary_data_hash().to_hex(),
       expectedAuxiliaryDataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata)).to_hex(),
@@ -481,7 +503,11 @@ test('Create Ledger transaction', async () => {
   expect(signedResult.txId).toEqual(signedSummary.txId);
   expect(signedSummary.vkeyHashes).toHaveLength(2);
   expect(signedSummary.vkeyHashes[0]).toEqual(
-    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
+    RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1))
+        .hash()
+        .to_hex()
+    )
   );
   expect(signedSummary.finalVkeySignatureHex).toEqual(
     'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207'
@@ -503,7 +529,10 @@ test('Create Ledger transaction', async () => {
     return {
       publicKeyHex: bytesToHex(bootstrapKey.to_raw_key().to_raw_bytes()),
       chainCodeHex: bytesToHex(bootstrapKey.chaincode()),
-      attributesHex: cml.ByronAddress.from_base58(senderUtxos[0].receiver).content().addr_attributes().to_cbor_hex(),
+      attributesHex: cml.ByronAddress.from_base58(senderUtxos[0].receiver)
+        .content()
+        .addr_attributes()
+        .to_cbor_hex(),
     };
   });
   expect(signedSummary.bootstrapPublicKeyHex).toEqual(expectedBootstrap.publicKeyHex);

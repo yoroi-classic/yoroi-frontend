@@ -33,12 +33,12 @@ import {
   type ConnectingMessage,
   type SigningMessage,
 } from '../../../connector/types';
-import { RustModule } from '../../../../../app/api/ada/lib/cardanoCrypto/rustLoader';
 import { Logger } from '../../../../../app/utils/logging';
 import { walletSignData, encodeHardwareWalletSignResult } from '../../../../../app/api/ada';
 import {
+  transactionBodyHexToTransaction,
   transactionHexAddSignaturesFromWitnessSetHex,
-  transactionHexToWitnessSet
+  transactionHexToWitnessSet,
 } from '../../../../../app/api/ada/lib/cardanoCrypto/utils';
 
 type RpcUid = number;
@@ -159,16 +159,7 @@ function signedTxWitnessResult(tx: string, witnessSetHex: string): string {
 }
 
 function fullTransactionHex(txHex: string): string {
-  return RustModule.WasmScope(Module => {
-    const cml = Module.CML;
-    // The connector input may be a complete transaction or only its body.
-    try {
-      return cml.Transaction.from_cbor_hex(txHex).to_cbor_hex();
-    } catch {
-      const body = cml.TransactionBody.from_cbor_hex(txHex);
-      return cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true).to_cbor_hex();
-    }
-  });
+  return transactionBodyHexToTransaction(txHex);
 }
 
 function cip103SignError(index: number): {|

@@ -6,9 +6,32 @@ import { Api, Resolver } from '@yoroi/types';
 import { RustModule } from './lib/cardanoCrypto/rustLoader';
 
 const unstoppableTlds = [
-  '.x', '.polygon', '.nft', '.crypto', '.blockchain', '.bitcoin', '.dao', '.888', '.wallet', '.binanceus', '.brave',
-  '.hi', '.klever', '.kresus', '.anime', '.manga', '.go', '.altimist', '.pudgy', '.unstoppable', '.austin', '.bitget',
-  '.pog', '.clay', '.zil', '.eth',
+  '.x',
+  '.polygon',
+  '.nft',
+  '.crypto',
+  '.blockchain',
+  '.bitcoin',
+  '.dao',
+  '.888',
+  '.wallet',
+  '.binanceus',
+  '.brave',
+  '.hi',
+  '.klever',
+  '.kresus',
+  '.anime',
+  '.manga',
+  '.go',
+  '.altimist',
+  '.pudgy',
+  '.unstoppable',
+  '.austin',
+  '.bitget',
+  '.pog',
+  '.clay',
+  '.zil',
+  '.eth',
 ];
 
 export const isResolvableDomain = (resolve: string): boolean =>
@@ -57,7 +80,13 @@ const getCnsMetadata = async (
   return metadata;
 };
 
-const getCnsAssetAddress = async (config: any, policyId: string, assetName: string, fetcherConfig: any, requestFn: any): Promise<string> => {
+const getCnsAssetAddress = async (
+  config: any,
+  policyId: string,
+  assetName: string,
+  fetcherConfig: any,
+  requestFn: any
+): Promise<string> => {
   const response = await requestData(
     { url: `${config.baseUrl}/api/asset/accounts?policy=${policyId}&asset=${assetName}` },
     fetcherConfig,
@@ -67,7 +96,12 @@ const getCnsAssetAddress = async (config: any, policyId: string, assetName: stri
   return response[0];
 };
 
-const getVirtualSubdomains = async (config: any, assetName: string, fetcherConfig: any, requestFn: any): Promise<Array<[string, string]>> => {
+const getVirtualSubdomains = async (
+  config: any,
+  assetName: string,
+  fetcherConfig: any,
+  requestFn: any
+): Promise<Array<[string, string]>> => {
   const response = await requestData(
     {
       url: `${config.baseUrl}/api/txs/utxoForAddresses`,
@@ -87,29 +121,57 @@ const getVirtualSubdomains = async (config: any, assetName: string, fetcherConfi
     const payment = addressDatum?.fields?.[0];
     const staking = addressDatum?.fields?.[1];
     const paymentHash = payment?.fields?.[0]?.bytes;
-    if (addressDatum?.constructor !== 0 || !/^[0-9a-fA-F]{56}$/.test(paymentHash ?? '') || !/^(?:[0-9a-fA-F]{2})*$/.test(keyHex ?? '')) {
+    if (
+      addressDatum?.constructor !== 0 ||
+      !/^[0-9a-fA-F]{56}$/.test(paymentHash ?? '') ||
+      !/^(?:[0-9a-fA-F]{2})+$/.test(keyHex ?? '') ||
+      (payment?.constructor !== 0 && payment?.constructor !== 1) ||
+      (staking != null && staking.constructor !== 0 && staking.constructor !== 1)
+    ) {
       throw new Resolver.Errors.InvalidDomain();
     }
 
     const address = RustModule.WasmScope(Module => {
       const cml = Module.CML;
-      const paymentCredential = payment.constructor === 0
-        ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(paymentHash))
-        : cml.Credential.new_script(cml.ScriptHash.from_hex(paymentHash));
-      const stakeRecord = staking?.constructor === 0 ? staking.fields?.[0]?.fields?.[0]?.fields?.[0]?.bytes : null;
-      const stakeCredential = typeof stakeRecord === 'string'
-        ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(stakeRecord))
-        : null;
-      const result = stakeCredential == null
-        ? cml.EnterpriseAddress.new(config.networkId, paymentCredential).to_address()
-        : cml.BaseAddress.new(config.networkId, paymentCredential, stakeCredential).to_address();
+      const paymentCredential =
+        payment.constructor === 0
+          ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(paymentHash))
+          : cml.Credential.new_script(cml.ScriptHash.from_hex(paymentHash));
+      const stakingRecord = staking?.constructor === 0 ? staking.fields?.[0] : null;
+      // StakingCredential constructor 1 is a pointer credential, which cannot
+      // be represented by the key/script address constructors below.
+      if (stakingRecord != null && stakingRecord.constructor !== 0) {
+        throw new Resolver.Errors.InvalidDomain();
+      }
+      const stakeCredentialData = stakingRecord?.fields?.[0];
+      if (stakeCredentialData != null && stakeCredentialData.constructor !== 0 && stakeCredentialData.constructor !== 1) {
+        throw new Resolver.Errors.InvalidDomain();
+      }
+      const stakeHash = stakeCredentialData?.fields?.[0]?.bytes;
+      const stakeCredential =
+        typeof stakeHash === 'string' && stakeHash.length === 56
+          ? stakeCredentialData.constructor === 0
+            ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(stakeHash))
+            : cml.Credential.new_script(cml.ScriptHash.from_hex(stakeHash))
+          : null;
+      if (stakingRecord != null && stakeCredential == null) throw new Resolver.Errors.InvalidDomain();
+      const result =
+        stakeCredential == null
+          ? cml.EnterpriseAddress.new(config.networkId, paymentCredential).to_address()
+          : cml.BaseAddress.new(config.networkId, paymentCredential, stakeCredential).to_address();
       return result.to_bech32();
     });
     return [Buffer.from(keyHex, 'hex').toString('utf8'), address];
   });
 };
 
-const resolveCns = async (resolve: string, isMainnet: boolean, fetcherConfig: any, requestFn: any, metadataFetcher: any): Promise<string> => {
+const resolveCns = async (
+  resolve: string,
+  isMainnet: boolean,
+  fetcherConfig: any,
+  requestFn: any,
+  metadataFetcher: any
+): Promise<string> => {
   if (!resolve.includes('.')) throw new Resolver.Errors.InvalidDomain();
   if (!resolve.endsWith('.ada')) throw new Resolver.Errors.UnsupportedTld();
   const config = isMainnet ? cnsConfigs.mainnet : cnsConfigs.preprod;
@@ -132,7 +194,11 @@ const resolveHandle = async (resolve: string, isMainnet: boolean, fetcherConfig:
   const handle = resolve.replace(/^\$/, '');
   let response;
   try {
-    response = await requestData({ url: `${isMainnet ? handleApiAddress.mainnet : handleApiAddress.preprod}${handle}` }, fetcherConfig, requestFn);
+    response = await requestData(
+      { url: `${isMainnet ? handleApiAddress.mainnet : handleApiAddress.preprod}${handle}` },
+      fetcherConfig,
+      requestFn
+    );
   } catch (error) {
     throw handleCnsApiError(error);
   }
@@ -146,7 +212,10 @@ const resolveUnstoppable = async (resolve: string, apiKey: string, fetcherConfig
   let response;
   try {
     response = await requestData(
-      { url: `${unstoppableApiAddress}${resolve}`, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` } },
+      {
+        url: `${unstoppableApiAddress}${resolve}`,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      },
       fetcherConfig,
       requestFn
     );
@@ -159,11 +228,15 @@ const resolveUnstoppable = async (resolve: string, apiKey: string, fetcherConfig
   throw new Resolver.Errors.InvalidResponse();
 };
 
-export const handleApiGetCryptoAddress = ({ request = fetchData, isMainnet = true }: any = {}): any =>
-  (resolve: string, fetcherConfig: any): Promise<string> => resolveHandle(resolve, isMainnet, fetcherConfig, request);
+export const handleApiGetCryptoAddress = ({ request = fetchData, isMainnet = true }: any = {}): any => (
+  resolve: string,
+  fetcherConfig: any
+): Promise<string> => resolveHandle(resolve, isMainnet, fetcherConfig, request);
 
-export const unstoppableApiGetCryptoAddress = ({ apiKey }: any, { request = fetchData }: any = {}): any =>
-  (resolve: string, fetcherConfig: any): Promise<string> => resolveUnstoppable(resolve, apiKey, fetcherConfig, request);
+export const unstoppableApiGetCryptoAddress = ({ apiKey }: any, { request = fetchData }: any = {}): any => (
+  resolve: string,
+  fetcherConfig: any
+): Promise<string> => resolveUnstoppable(resolve, apiKey, fetcherConfig, request);
 
 export const cnsCryptoAddress = (
   request: any = fetchData,
@@ -177,12 +250,18 @@ export const handleCnsApiError = (error: any): any =>
 
 export const resolverApiMaker = (
   { apiConfig, isMainnet = true }: any,
-  { request = fetchData, getMetadatas = (baseUrl, ids, fetcherConfig) => CardanoApi.getOnChainMetadatas(baseUrl)(ids, fetcherConfig) }: any = {}
+  {
+    request = fetchData,
+    getMetadatas = (baseUrl, ids, fetcherConfig) => CardanoApi.getOnChainMetadatas(baseUrl)(ids, fetcherConfig),
+  }: any = {}
 ): any => ({
   getCardanoAddresses: async ({ resolve, strategy = 'all' }: any, fetcherConfig: any): Promise<Array<any>> => {
     const operations = [
       [Resolver.NameServer.Handle, () => resolveHandle(resolve, isMainnet, fetcherConfig, request)],
-      [Resolver.NameServer.Unstoppable, () => resolveUnstoppable(resolve, apiConfig?.[Resolver.NameServer.Unstoppable]?.apiKey ?? '', fetcherConfig, request)],
+      [
+        Resolver.NameServer.Unstoppable,
+        () => resolveUnstoppable(resolve, apiConfig?.[Resolver.NameServer.Unstoppable]?.apiKey ?? '', fetcherConfig, request),
+      ],
       [Resolver.NameServer.Cns, () => resolveCns(resolve, isMainnet, fetcherConfig, request, getMetadatas)],
     ];
     const run = async ([nameServer, operation]: any): Promise<any> => {
@@ -195,10 +274,14 @@ export const resolverApiMaker = (
     };
     if (strategy === 'all') return Promise.all(operations.map(run));
     try {
-      return [await Promise.any(operations.map(async ([nameServer, operation]: any): Promise<any> => {
-        const address = await operation();
-        return { address, error: null, nameServer };
-      }))];
+      return [
+        await Promise.any(
+          operations.map(async ([nameServer, operation]: any): Promise<any> => {
+            const address = await operation();
+            return { address, error: null, nameServer };
+          })
+        ),
+      ];
     } catch (_error) {
       return [{ address: null, error: new Resolver.Errors.NotFound(), nameServer: null }];
     }

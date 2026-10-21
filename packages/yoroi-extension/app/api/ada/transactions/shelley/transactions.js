@@ -26,11 +26,7 @@ import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage
 import { normalizeAddressToHex } from '../../lib/cardanoCrypto/cmlAddress';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
-import {
-  identifierSplit,
-  asAddressedUtxo,
-  multiTokenFromRemote,
-} from '../utils';
+import { identifierSplit, asAddressedUtxo, multiTokenFromRemote } from '../utils';
 import { forceNonNull, hexToBytes } from '../../../../coreUtils';
 import { getCardanoHaskellBaseConfig, getNetworkById } from '../../lib/storage/database/prepackaged/networks';
 import { builtSendTokenList } from '../../../common';
@@ -160,13 +156,15 @@ export function sendAllUnsignedTxFromUtxo(
   return RustModule.WasmScope(Module => {
     const cml = Module.CML;
     const config = cml.TransactionBuilderConfigBuilder.new()
-      .fee_algo(cml.LinearFee.new(
-        // eslint-disable-next-line no-undef
-        BigInt(protocolParams.linearFeeCoefficient),
-        // eslint-disable-next-line no-undef
-        BigInt(protocolParams.linearFeeConstant),
-        0n
-      ))
+      .fee_algo(
+        cml.LinearFee.new(
+          // eslint-disable-next-line no-undef
+          BigInt(protocolParams.linearFeeCoefficient),
+          // eslint-disable-next-line no-undef
+          BigInt(protocolParams.linearFeeConstant),
+          BigInt('0')
+        )
+      )
       // eslint-disable-next-line no-undef
       .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte))
       // eslint-disable-next-line no-undef
@@ -175,7 +173,12 @@ export function sendAllUnsignedTxFromUtxo(
       .key_deposit(BigInt(protocolParams.keyDeposit))
       .max_value_size(MAX_VALUE_SIZE)
       .max_tx_size(MAX_TRANSACTION_SIZE)
-      .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+      .ex_unit_prices(
+        cml.ExUnitPrices.new(
+          cml.Rational.new(BigInt('577'), BigInt('10000')),
+          cml.Rational.new(BigInt('721'), BigInt('10000000'))
+        )
+      )
       .collateral_percentage(150)
       .max_collateral_inputs(3)
       .build();
@@ -207,18 +210,21 @@ export function sendAllUnsignedTxFromUtxo(
     }
     const body = txBuilder.build(cml.ChangeSelectionAlgo.Default, address).body();
     const outputs = body.outputs();
-    const changeAddr = receiver.addressing == null ? [] : Array.from({ length: outputs.len() }, (_, index) => {
-      const output = outputs.get(index);
-      if (output.address().to_hex() !== receiver.address) return null;
-      return {
-        addressing: receiver.addressing,
-        address: receiver.address,
-        values: multiTokenFromCmlValue(output.amount(), {
-          defaultNetworkId: protocolParams.networkId,
-          defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-        }),
-      };
-    }).filter(item => item != null);
+    const changeAddr =
+      receiver.addressing == null
+        ? []
+        : Array.from({ length: outputs.len() }, (_, index) => {
+            const output = outputs.get(index);
+            if (output.address().to_hex() !== receiver.address) return null;
+            return {
+              addressing: receiver.addressing,
+              address: receiver.address,
+              values: multiTokenFromCmlValue(output.amount(), {
+                defaultNetworkId: protocolParams.networkId,
+                defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+              }),
+            };
+          }).filter(item => item != null);
     return {
       senderUtxos: allUtxos,
       txBuilder: body.to_cbor_bytes(),
@@ -463,7 +469,7 @@ export async function newAdaUnsignedTxFromUtxo(
           BigInt(protocolParams.linearFeeCoefficient),
           // eslint-disable-next-line no-undef
           BigInt(protocolParams.linearFeeConstant),
-          0n
+          BigInt('0')
         )
       )
       // eslint-disable-next-line no-undef
@@ -474,7 +480,12 @@ export async function newAdaUnsignedTxFromUtxo(
       .key_deposit(BigInt(protocolParams.keyDeposit))
       .max_value_size(MAX_VALUE_SIZE)
       .max_tx_size(MAX_TRANSACTION_SIZE)
-      .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+      .ex_unit_prices(
+        cml.ExUnitPrices.new(
+          cml.Rational.new(BigInt('577'), BigInt('10000')),
+          cml.Rational.new(BigInt('721'), BigInt('10000000'))
+        )
+      )
       .collateral_percentage(150)
       .max_collateral_inputs(3)
       .cost_models(cml.CostModels.from_cbor_hex(COSTMODELS))
@@ -526,36 +537,34 @@ export async function newAdaUnsignedTxFromUtxo(
       }
     }
     const utxosByRef = new Map();
-    const addSelectionCandidate = utxo => {
+    const addSelectionCandidate = (utxo, force: boolean = false) => {
       const value = cmlValueFromRemoteFormat(cml, utxo);
       const input = cml.TransactionInput.new(
         cml.TransactionHash.from_hex(utxo.tx_hash),
         // eslint-disable-next-line no-undef
         BigInt(utxo.tx_index)
       );
-      const output = cml.TransactionOutput.new(
-        cml.Address.from_hex(utxo.receiver),
-        value
-      );
-      txBuilder.add_utxo(cml.SingleInputBuilder.new(input, output).payment_key());
+      const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
+      const inputBuilder = cml.SingleInputBuilder.new(input, output).payment_key();
+      if (force) txBuilder.add_input(inputBuilder);
+      else txBuilder.add_utxo(inputBuilder);
       utxosByRef.set(`${utxo.tx_hash}${utxo.tx_index}`, utxo);
     };
-    spendableUtxos.forEach(addSelectionCandidate);
+    if (outputs.length === 0) {
+      const forcedInput = spendableUtxos.shift() ?? reservedCollateral.shift();
+      if (forcedInput == null) throw new NotEnoughMoneyToSendError();
+      addSelectionCandidate(forcedInput, true);
+    }
+    // Let CIP-2 consider every UTxO. In particular, ADA UTxOs small enough
+    // to have been reserved for future collateral can still fund this spend.
+    spendableUtxos.concat(reservedCollateral).forEach(addSelectionCandidate);
 
     try {
       const hasMultiAssetOutput = outputs.some(output => output.amount.nonDefaultEntries().length > 0);
       const strategy = hasMultiAssetOutput
-        ? cml.CoinSelectionStrategyCIP2.RandomImproveMultiAsset
-        : cml.CoinSelectionStrategyCIP2.RandomImprove;
-      try {
-        txBuilder.select_utxos(strategy);
-      } catch (selectionError) {
-        if (!String(selectionError).includes('Not enough ADA') && !String(selectionError).includes('Insufficient')) {
-          throw selectionError;
-        }
-        reservedCollateral.forEach(addSelectionCandidate);
-        txBuilder.select_utxos(strategy);
-      }
+        ? cml.CoinSelectionStrategyCIP2.LargestFirstMultiAsset
+        : cml.CoinSelectionStrategyCIP2.LargestFirst;
+      txBuilder.select_utxos(strategy);
     } catch (error) {
       if (String(error).includes('Not enough ADA') || String(error).includes('Insufficient')) {
         throw new NotEnoughMoneyToSendError();
@@ -568,26 +577,16 @@ export async function newAdaUnsignedTxFromUtxo(
 
     const changeAddress = changeAdaAddr == null ? null : cml.Address.from_hex(changeAdaAddr.address);
     if (changeAddress != null) {
-      const missingCollateralCount = Math.max(3 - reservedCollateral.length, 0);
-      let available = txBuilder
-        .get_total_input()
-        .checked_sub(txBuilder.get_total_output())
-        .coin() - txBuilder.min_fee(false);
-      // Collateral recommendations are separate pure-ADA outputs in the old
-      // builder; adding them alongside a multiasset change output changes the
-      // established caller-visible change contract. Keep those transactions
-      // as a single change output and reserve candidates for selection only.
-      const hasAssetInputs = utxos.some(utxo => utxo.assets.length > 0);
-      if (!hasAssetInputs && !outputs.some(output => output.amount.nonDefaultEntries().length > 0)) {
-        for (let index = 0; index < missingCollateralCount; index++) {
-          if (available <= 2_000_000n) break;
-          const collateralOutput = cml.TransactionOutput.new(changeAddress, cml.Value.from_coin(2_000_000n));
-          txBuilder.add_output(cml.SingleOutputBuilderResult.new(collateralOutput));
-          available -= 2_000_000n;
-        }
-      }
       const hasChange = txBuilder.add_change_if_needed(changeAddress, false);
-      if (outputs.length === 0 && !hasChange) throw new NotEnoughMoneyToSendError();
+      if (!hasChange) {
+        const remainderAfterFee =
+          txBuilder
+            .get_total_input()
+            .checked_add(txBuilder.get_implicit_input())
+            .checked_sub(txBuilder.get_total_output())
+            .coin() - txBuilder.min_fee(false);
+        if (outputs.length === 0 || remainderAfterFee > BigInt('0')) throw new NotEnoughMoneyToSendError();
+      }
     } else {
       const remainder = txBuilder.get_total_input().checked_sub(txBuilder.get_total_output());
       txBuilder.set_fee(remainder.coin());
@@ -599,6 +598,7 @@ export async function newAdaUnsignedTxFromUtxo(
     try {
       signedBuilder = txBuilder.build(cml.ChangeSelectionAlgo.Default, changeForBuild);
     } catch (error) {
+      if (/less than the minimum UTXO value/i.test(String(error))) throw new CannotSendBelowMinimumValueError();
       if (String(error).includes('No outputs')) throw new NoOutputsError();
       if (String(error).includes('Not enough ADA')) throw new NotEnoughMoneyToSendError();
       throw error;
@@ -677,7 +677,7 @@ export async function maxSendableADA(request: {|
       token: $ReadOnly<TokenRow>,
       shouldSendAll?: boolean,
       amount?: string,
-    |}>,
+    |}>
   >,
 |}): Promise<BigNumber> {
   try {
@@ -710,7 +710,7 @@ export async function maxSendableADA(request: {|
             BigInt(config.LinearFee.coefficient),
             // eslint-disable-next-line no-undef
             BigInt(config.LinearFee.constant),
-            0n
+            BigInt('0')
           )
         )
         // eslint-disable-next-line no-undef
@@ -723,8 +723,8 @@ export async function maxSendableADA(request: {|
         .max_tx_size(MAX_TRANSACTION_SIZE)
         .ex_unit_prices(
           cml.ExUnitPrices.new(
-            cml.Rational.new(577n, 10000n),
-            cml.Rational.new(721n, 10000000n)
+            cml.Rational.new(BigInt('577'), BigInt('10000')),
+            cml.Rational.new(BigInt('721'), BigInt('10000000'))
           )
         )
         .collateral_percentage(150)
@@ -748,14 +748,7 @@ export async function maxSendableADA(request: {|
             addressedUtxo.map(utxo => multiTokenFromRemote(utxo, request.publicDeriver.networkId))
           )
         );
-        txBuilder.add_output(
-          cml.SingleOutputBuilderResult.new(
-            cml.TransactionOutput.new(
-              cmlReceiver,
-              output
-            )
-          )
-        );
+        txBuilder.add_output(cml.SingleOutputBuilderResult.new(cml.TransactionOutput.new(cmlReceiver, output)));
       }
 
       for (const input of addressedUtxo) {
@@ -773,10 +766,7 @@ export async function maxSendableADA(request: {|
           // eslint-disable-next-line no-undef
           BigInt(input.tx_index)
         );
-        const txOutput = cml.TransactionOutput.new(
-          cml.Address.from_hex(input.receiver),
-          cmlValue
-        );
+        const txOutput = cml.TransactionOutput.new(cml.Address.from_hex(input.receiver), cmlValue);
         txBuilder.add_input(cml.SingleInputBuilder.new(txInput, txOutput).payment_key());
       }
 
@@ -845,7 +835,9 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     }
     const config = cml.TransactionBuilderConfigBuilder.new()
       // eslint-disable-next-line no-undef
-      .fee_algo(cml.LinearFee.new(BigInt(protocolParams.linearFeeCoefficient), BigInt(protocolParams.linearFeeConstant), 0n))
+      .fee_algo(
+        cml.LinearFee.new(BigInt(protocolParams.linearFeeCoefficient), BigInt(protocolParams.linearFeeConstant), BigInt('0'))
+      )
       // eslint-disable-next-line no-undef
       .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte))
       // eslint-disable-next-line no-undef
@@ -854,7 +846,12 @@ async function newAdaUnsignedTxFromUtxoForConnector(
       .key_deposit(BigInt(protocolParams.keyDeposit))
       .max_value_size(MAX_VALUE_SIZE)
       .max_tx_size(MAX_TRANSACTION_SIZE)
-      .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+      .ex_unit_prices(
+        cml.ExUnitPrices.new(
+          cml.Rational.new(BigInt('577'), BigInt('10000')),
+          cml.Rational.new(BigInt('721'), BigInt('10000000'))
+        )
+      )
       .collateral_percentage(150)
       .max_collateral_inputs(3)
       .cost_models(cml.CostModels.from_cbor_hex(COSTMODELS))
@@ -879,12 +876,16 @@ async function newAdaUnsignedTxFromUtxoForConnector(
             ? cml.Address.from_hex(normalizedSigner)
             : cml.Address.from_bech32(normalizedSigner);
         } catch (_error) {
-          throw new Error(`Cannot process an invalid required signer, expecting an Ed25519KeyHash or a valid address with a payment key-hash, got: ${signer}`);
+          throw new Error(
+            `Cannot process an invalid required signer, expecting an Ed25519KeyHash or a valid address with a payment key-hash, got: ${signer}`
+          );
         }
         const credential = address.payment_cred();
         const keyHash = credential?.as_pub_key();
         if (keyHash == null) {
-          throw new Error(`Cannot process an invalid required signer, expecting an Ed25519KeyHash or a valid address with a payment key-hash, got: ${signer}`);
+          throw new Error(
+            `Cannot process an invalid required signer, expecting an Ed25519KeyHash or a valid address with a payment key-hash, got: ${signer}`
+          );
         }
         txBuilder.add_required_signer(keyHash);
       }
@@ -909,7 +910,7 @@ async function newAdaUnsignedTxFromUtxoForConnector(
       const script = cml.NativeScript.from_cbor_hex(entry.policyScript);
       const policyId = script.hash().to_hex();
       const group = mintGroups.get(policyId) ?? { script, assets: new Map() };
-      const previous = group.assets.get(entry.assetName) ?? 0n;
+      const previous = group.assets.get(entry.assetName) ?? BigInt('0');
       // eslint-disable-next-line no-undef
       group.assets.set(entry.assetName, previous + BigInt(entry.amount));
       mintGroups.set(policyId, group);
@@ -917,9 +918,12 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     for (const { script, assets } of mintGroups.values()) {
       const cmlAssets = cml.MapAssetNameToNonZeroInt64.new();
       for (const [assetName, amount] of assets) {
-        if (amount !== 0n) cmlAssets.insert(cml.AssetName.from_hex(assetName), amount);
+        if (amount !== BigInt('0')) cmlAssets.insert(cml.AssetName.from_hex(assetName), amount);
       }
-      if (cmlAssets.len() > 0) txBuilder.add_mint(cml.SingleMintBuilder.new(cmlAssets).native_script(script, cml.NativeScriptWitnessInfo.assume_signature_count()));
+      if (cmlAssets.len() > 0)
+        txBuilder.add_mint(
+          cml.SingleMintBuilder.new(cmlAssets).native_script(script, cml.NativeScriptWitnessInfo.assume_signature_count())
+        );
     }
 
     for (const [utxo, witness] of mustIncludeUtxos) {
@@ -929,20 +933,20 @@ async function newAdaUnsignedTxFromUtxoForConnector(
       const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
       const inputBuilder = cml.SingleInputBuilder.new(input, output);
       if (witness?.nativeScript != null) {
-        txBuilder.add_input(inputBuilder.native_script(
-          cml.NativeScript.from_cbor_hex(witness.nativeScript),
-          cml.NativeScriptWitnessInfo.assume_signature_count()
-        ));
+        txBuilder.add_input(
+          inputBuilder.native_script(
+            cml.NativeScript.from_cbor_hex(witness.nativeScript),
+            cml.NativeScriptWitnessInfo.assume_signature_count()
+          )
+        );
       } else if (witness?.plutusScript != null) {
         const redeemer = redeemersByUtxo.get(`${utxo.tx_hash}${utxo.tx_index}`);
         if (redeemer == null) throw new Error('Missing parsed Plutus redeemer');
         const script = cml.PlutusScript.from_v1(cml.PlutusV1Script.from_cbor_hex(witness.plutusScript));
         const partialWitness = cml.PartialPlutusWitness.new(cml.PlutusScriptWitness.new_script(script), redeemer.data());
-        txBuilder.add_input(inputBuilder.plutus_script(
-          partialWitness,
-          cml.Ed25519KeyHashList.new(),
-          cml.PlutusData.from_cbor_hex(witness.datum)
-        ));
+        txBuilder.add_input(
+          inputBuilder.plutus_script(partialWitness, cml.Ed25519KeyHashList.new(), cml.PlutusData.from_cbor_hex(witness.datum))
+        );
         txBuilder.set_exunits(cml.RedeemerWitnessKey.from_redeemer(redeemer), redeemer.ex_units());
       } else if (witness == null) {
         txBuilder.add_input(inputBuilder.payment_key());
@@ -953,11 +957,11 @@ async function newAdaUnsignedTxFromUtxoForConnector(
 
     for (const output of outputs) {
       const datumOption = output.dataHash == null ? undefined : cml.DatumOption.new_hash(cml.DatumHash.from_hex(output.dataHash));
-      txBuilder.add_output(cml.SingleOutputBuilderResult.new(cml.TransactionOutput.new(
-        cml.Address.from_hex(output.address),
-        cmlValueFromMultiToken(cml, output.amount),
-        datumOption
-      )));
+      txBuilder.add_output(
+        cml.SingleOutputBuilderResult.new(
+          cml.TransactionOutput.new(cml.Address.from_hex(output.address), cmlValueFromMultiToken(cml, output.amount), datumOption)
+        )
+      );
     }
 
     const utxosByRef = new Map();
@@ -975,7 +979,11 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     if (coinSelectUtxos.length > 0) {
       try {
         const hasMultiAssetOutput = outputs.some(output => output.amount.nonDefaultEntries().length > 0);
-        txBuilder.select_utxos(hasMultiAssetOutput ? cml.CoinSelectionStrategyCIP2.RandomImproveMultiAsset : cml.CoinSelectionStrategyCIP2.RandomImprove);
+        txBuilder.select_utxos(
+          hasMultiAssetOutput
+            ? cml.CoinSelectionStrategyCIP2.RandomImproveMultiAsset
+            : cml.CoinSelectionStrategyCIP2.RandomImprove
+        );
       } catch (error) {
         if (/Not enough ADA|Insufficient/.test(String(error))) throw new NotEnoughMoneyToSendError();
         if (/overflow/i.test(String(error))) throw new AssetOverflowError();
@@ -1083,17 +1091,17 @@ export async function signTransactionFromWallet(
   });
 
   requiredSignerHashes.forEach(requiredSignerKeyHash => {
-      if (addressPathByHash.has(requiredSignerKeyHash)) {
-        const addressAndPath = forceNonNull(addressPathByHash.get(requiredSignerKeyHash));
-        otherRequiredSigners.push({
-          address: addressAndPath.address,
-          addressing: {
-            path: addressAndPath.path,
-            startLevel: 1,
-          },
-        });
-      }
-    });
+    if (addressPathByHash.has(requiredSignerKeyHash)) {
+      const addressAndPath = forceNonNull(addressPathByHash.get(requiredSignerKeyHash));
+      otherRequiredSigners.push({
+        address: addressAndPath.address,
+        addressing: {
+          path: addressAndPath.path,
+          startLevel: 1,
+        },
+      });
+    }
+  });
 
   return signTransaction(
     senderUtxos,
@@ -1115,15 +1123,7 @@ export function signTransaction(
   metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
 ): Uint8Array {
-  return signCmlTransaction(
-    senderUtxos,
-    unsignedTx,
-    keyLevel,
-    signingKey,
-    stakingKey,
-    metadata,
-    otherRequiredSigners
-  );
+  return signCmlTransaction(senderUtxos, unsignedTx, keyLevel, signingKey, stakingKey, metadata, otherRequiredSigners);
 }
 
 function signCmlTransaction(
@@ -1179,7 +1179,10 @@ function signCmlTransaction(
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
     if (stakingHashes.size > 0 && stakingKey != null) {
       const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey);
-      const stakingKeyHash = cmlStakingKey.to_public().hash().to_hex();
+      const stakingKeyHash = cmlStakingKey
+        .to_public()
+        .hash()
+        .to_hex();
       if (stakingHashes.has(stakingKeyHash)) {
         witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, cmlStakingKey));
       }
@@ -1204,19 +1207,26 @@ export function genFilterSmallUtxo(request: {|
     const feeForInput = RustModule.WasmScope(Module => {
       const cml = Module.CML;
       const config = cml.TransactionBuilderConfigBuilder.new()
-        .fee_algo(cml.LinearFee.new(
-          // eslint-disable-next-line no-undef
-          BigInt(request.protocolParams.linearFeeCoefficient),
-          // eslint-disable-next-line no-undef
-          BigInt(request.protocolParams.linearFeeConstant),
-          0n
-        ))
-        .coins_per_utxo_byte(0n)
-        .pool_deposit(0n)
-        .key_deposit(0n)
+        .fee_algo(
+          cml.LinearFee.new(
+            // eslint-disable-next-line no-undef
+            BigInt(request.protocolParams.linearFeeCoefficient),
+            // eslint-disable-next-line no-undef
+            BigInt(request.protocolParams.linearFeeConstant),
+            BigInt('0')
+          )
+        )
+        .coins_per_utxo_byte(BigInt('0'))
+        .pool_deposit(BigInt('0'))
+        .key_deposit(BigInt('0'))
         .max_value_size(MAX_VALUE_SIZE)
         .max_tx_size(MAX_TRANSACTION_SIZE)
-        .ex_unit_prices(cml.ExUnitPrices.new(cml.Rational.new(577n, 10000n), cml.Rational.new(721n, 10000000n)))
+        .ex_unit_prices(
+          cml.ExUnitPrices.new(
+            cml.Rational.new(BigInt('577'), BigInt('10000')),
+            cml.Rational.new(BigInt('721'), BigInt('10000000'))
+          )
+        )
         .collateral_percentage(150)
         .max_collateral_inputs(3)
         .build();

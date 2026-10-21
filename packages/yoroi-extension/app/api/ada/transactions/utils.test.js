@@ -31,6 +31,7 @@ beforeAll(async () => {
 
 test('serializes remote swap UTxOs with CML', () => {
   const utxo = {
+    utxo_id: `${'33'.repeat(32)}#7`,
     tx_hash: '33'.repeat(32),
     tx_index: 7,
     receiver: RustModule.WasmScope(Module =>
@@ -39,14 +40,18 @@ test('serializes remote swap UTxOs with CML', () => {
       ).to_hex()
     ),
     amount: '2000000',
-    assets: [{ policyId: '44'.repeat(28), name: 'aabb', amount: '3' }],
+    assets: [{ assetId: `${'44'.repeat(28)}.aabb`, policyId: '44'.repeat(28), name: 'aabb', amount: '3' }],
   };
   const expected = RustModule.WasmScope(Module => {
     const cml = Module.CML;
     const multiAsset = cml.MultiAsset.new();
-    multiAsset.set(cml.ScriptHash.from_hex(utxo.assets[0].policyId), cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')), 3n);
-    const value = cml.Value.new(2_000_000n, multiAsset);
-    const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), 7n);
+    multiAsset.set(
+      cml.ScriptHash.from_hex(utxo.assets[0].policyId),
+      cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')),
+      BigInt('3')
+    );
+    const value = cml.Value.new(BigInt('2000000'), multiAsset);
+    const input = cml.TransactionInput.new(cml.TransactionHash.from_hex(utxo.tx_hash), BigInt('7'));
     const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
     return cml.TransactionUnspentOutput.new(input, output).to_cbor_hex();
   });
@@ -99,8 +104,12 @@ test('parses CML transaction output values into wallet token entries', () => {
   const outputBytes = RustModule.WasmScope(Module => {
     const cml = Module.CML;
     const multiAsset = cml.MultiAsset.new();
-    multiAsset.set(cml.ScriptHash.from_hex('44'.repeat(28)), cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')), 3n);
-    const value = cml.Value.new(2_000_000n, multiAsset);
+    multiAsset.set(
+      cml.ScriptHash.from_hex('44'.repeat(28)),
+      cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')),
+      BigInt('3')
+    );
+    const value = cml.Value.new(BigInt('2000000'), multiAsset);
     const output = cml.TransactionOutput.new(
       cml.Address.from_bech32(
         'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0'
@@ -111,11 +120,13 @@ test('parses CML transaction output values into wallet token entries', () => {
   });
   const actual = RustModule.WasmScope(Module => {
     const output = Module.CML.TransactionOutput.from_cbor_bytes(outputBytes);
-    return multiTokenFromCMLValue(output.amount(), defaults).entries().map(entry => ({
-      identifier: entry.identifier,
-      networkId: entry.networkId,
-      amount: entry.amount.toString(),
-    }));
+    return multiTokenFromCMLValue(output.amount(), defaults)
+      .entries()
+      .map(entry => ({
+        identifier: entry.identifier,
+        networkId: entry.networkId,
+        amount: entry.amount.toString(),
+      }));
   });
   expect(actual).toEqual([
     { identifier: '.', networkId: defaults.defaultNetworkId, amount: '2000000' },
@@ -129,10 +140,14 @@ test('parses Byron outputs, datum hashes, and unknown assets for connector displ
     const cml = Module.CML;
     const address = cml.ByronAddress.from_base58('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4').to_address();
     const multiAsset = cml.MultiAsset.new();
-    multiAsset.set(cml.ScriptHash.from_hex('55'.repeat(28)), cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')), 5n);
+    multiAsset.set(
+      cml.ScriptHash.from_hex('55'.repeat(28)),
+      cml.AssetName.from_raw_bytes(Buffer.from('aabb', 'hex')),
+      BigInt('5')
+    );
     const output = cml.TransactionOutput.new(
       address,
-      cml.Value.new(3_000_000n, multiAsset),
+      cml.Value.new(BigInt('3000000'), multiAsset),
       cml.DatumOption.new_hash(cml.DatumHash.from_hex('66'.repeat(32)))
     );
     return { hex: output.to_cbor_hex(), address: address.to_hex(), dataHash: '66'.repeat(32) };

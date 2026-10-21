@@ -38,17 +38,26 @@ export class BatchedUtxoApi implements UtxoApiContract {
     this.maxAddresses = maxAddresses;
   }
 
-  getSafeBlock(): Promise<string> { return this.base.getSafeBlock(); }
-  getBestBlock(): Promise<string> { return this.base.getBestBlock(); }
+  getSafeBlock(): Promise<string> {
+    return this.base.getSafeBlock();
+  }
+  getBestBlock(): Promise<string> {
+    return this.base.getBestBlock();
+  }
   getTipStatusWithReference(bestBlocks: string[]): Promise<UtxoApiResponse<TipStatusReference>> {
     return this.base.getTipStatusWithReference(bestBlocks);
   }
 
   async getUtxoAtPoint(request: UtxoAtPointRequest): Promise<UtxoApiResponse<Utxo[]>> {
+    if (request.addresses.length === 0) return { result: UtxoApiResult.SUCCESS, value: [] };
     try {
-      const batches = await Promise.all(chunk(request.addresses, this.maxAddresses).map(addresses =>
-        this.base.getUtxoAtPoint({ addresses, referenceBlockHash: request.referenceBlockHash })
-      ));
+      const batches = await Promise.all(
+        chunk(request.addresses, this.maxAddresses).map(addresses =>
+          this.base.getUtxoAtPoint({ addresses, referenceBlockHash: request.referenceBlockHash })
+        )
+      );
+      const failedBatch = batches.find(batch => batch.result !== UtxoApiResult.SUCCESS);
+      if (failedBatch != null) return { result: failedBatch.result };
       return { result: UtxoApiResult.SUCCESS, value: batches.flatMap(batch => batch.value ?? []) };
     } catch (error) {
       return { result: referenceError(error) };
@@ -56,17 +65,33 @@ export class BatchedUtxoApi implements UtxoApiContract {
   }
 
   async getUtxoDiffSincePoint(request: UtxoDiffSincePointRequest): Promise<UtxoApiResponse<UtxoDiff>> {
+    if (request.addresses.length === 0) {
+      return {
+        result: UtxoApiResult.SUCCESS,
+        value: {
+          diffItems: [],
+          reference: { lastFoundBestBlock: request.untilBlockHash, lastFoundSafeBlock: request.afterBestBlocks[0] },
+        },
+      };
+    }
     try {
-      const batches = await Promise.all(chunk(request.addresses, this.maxAddresses).map(addresses =>
-        this.base.getUtxoDiffSincePoint({ ...request, addresses })
-      ));
-      const diffs = batches.map(batch => batch.value).filter(Boolean);
+      const batches = await Promise.all(
+        chunk(request.addresses, this.maxAddresses).map(addresses => this.base.getUtxoDiffSincePoint({ ...request, addresses }))
+      );
+      const failedBatch = batches.find(batch => batch.result !== UtxoApiResult.SUCCESS);
+      if (failedBatch != null) return { result: failedBatch.result };
+      const diffs = batches.map(batch => {
+        if (batch.value == null) throw new Error('Successful UTxO diff batch is missing its value');
+        return batch.value;
+      });
       const bestBlocks = new Set(diffs.map(diff => diff.reference.lastFoundBestBlock));
       if (bestBlocks.size > 1) return { result: UtxoApiResult.BESTBLOCK_ROLLBACK };
-      const safeBlockIndex = Math.max(...diffs.map(diff => {
-        const hash = diff.reference.lastFoundSafeBlock;
-        return hash == null ? -1 : request.afterBestBlocks.indexOf(hash);
-      }));
+      const safeBlockIndex = Math.max(
+        ...diffs.map(diff => {
+          const hash = diff.reference.lastFoundSafeBlock;
+          return hash == null ? -1 : request.afterBestBlocks.indexOf(hash);
+        })
+      );
       if (safeBlockIndex < 0) return { result: UtxoApiResult.SAFEBLOCK_ROLLBACK };
       return {
         result: UtxoApiResult.SUCCESS,
@@ -86,8 +111,13 @@ export class BatchedUtxoApi implements UtxoApiContract {
 }
 
 type UtxoApiAtPointResponse = {|
-  utxo_id: string, tx_hash: string, tx_index: number, receiver: string, amount: string,
-  assets: Asset[], block_num: number,
+  utxo_id: string,
+  tx_hash: string,
+  tx_index: number,
+  receiver: string,
+  amount: string,
+  assets: Asset[],
+  block_num: number,
 |};
 export class CardanoWalletUtxoApi implements UtxoApiContract {
   apiUrl: string;
@@ -115,10 +145,12 @@ export class CardanoWalletUtxoApi implements UtxoApiContract {
       const response = await axios.post(`${this.apiUrl}v2/tipStatus`, { reference: { bestBlocks } });
       return {
         result: UtxoApiResult.SUCCESS,
-        value: { reference: {
-          lastFoundBestBlock: response.data.reference.lastFoundBestBlock,
-          lastFoundSafeBlock: response.data.reference.lastFoundSafeBlock,
-        } },
+        value: {
+          reference: {
+            lastFoundBestBlock: response.data.reference.lastFoundBestBlock,
+            lastFoundSafeBlock: response.data.reference.lastFoundSafeBlock,
+          },
+        },
       };
     } catch (error) {
       if (error.response?.data?.error?.response === 'REFERENCE_POINT_BLOCK_NOT_FOUND') {
@@ -165,7 +197,8 @@ export class CardanoWalletUtxoApi implements UtxoApiContract {
         afterBestblocks: request.afterBestBlocks,
         diffLimit: this.pageSize,
       });
-      if (response.data.lastFoundBestblock == null) throw new Error('Unexpected state: no bestblock match is found in the request reference!');
+      if (response.data.lastFoundBestblock == null)
+        throw new Error('Unexpected state: no bestblock match is found in the request reference!');
       const reference = {
         lastFoundBestBlock: response.data.lastFoundBestblock,
         lastFoundSafeBlock: response.data.lastFoundSafeblock,
@@ -186,10 +219,18 @@ export class CardanoWalletUtxoApi implements UtxoApiContract {
           diffItems: items.map(item => {
             const base = { amount: new BigNumber(item.amount), id: item.id, type: item.type };
             if (item.type === DiffType.INPUT) return base;
-            return { ...base, utxo: {
-              amount: new BigNumber(item.amount), assets: item.assets, blockNum: item.block_num,
-              receiver: item.receiver, txHash: item.tx_hash, txIndex: item.tx_index, utxoId: item.id,
-            } };
+            return {
+              ...base,
+              utxo: {
+                amount: new BigNumber(item.amount),
+                assets: item.assets,
+                blockNum: item.block_num,
+                receiver: item.receiver,
+                txHash: item.tx_hash,
+                txIndex: item.tx_index,
+                utxoId: item.id,
+              },
+            };
           }),
           reference,
         },

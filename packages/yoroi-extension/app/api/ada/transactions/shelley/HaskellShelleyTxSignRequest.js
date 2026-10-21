@@ -8,37 +8,8 @@ import { ISignRequest } from '../../../common/lib/transactions/ISignRequest';
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
 import { MultiToken } from '../../../common/lib/MultiToken';
 import { PRIMARY_ASSET_CONSTANTS } from '../../lib/storage/database/primitives/enums';
-import { multiTokenFromRemote } from '../utils';
+import { multiTokenFromCMLValue, multiTokenFromRemote } from '../utils';
 import { bytesToHex } from '../../../../coreUtils';
-
-function multiTokenFromCmlValue(cml: any, value: any, networkId: number): MultiToken {
-  const entries = [
-    {
-      identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-      amount: new BigNumber(value.coin().toString()),
-      networkId,
-    },
-  ];
-  const multiAsset = value.multi_asset();
-  const policyIds = multiAsset.keys();
-  for (let policyIndex = 0; policyIndex < policyIds.len(); policyIndex++) {
-    const policyId = policyIds.get(policyIndex);
-    const assets = multiAsset.get_assets(policyId);
-    const assetNames = assets.keys();
-    for (let assetIndex = 0; assetIndex < assetNames.len(); assetIndex++) {
-      const assetName = assetNames.get(assetIndex);
-      entries.push({
-        identifier: `${policyId.to_hex()}.${bytesToHex(assetName.to_raw_bytes())}`,
-        amount: new BigNumber(assets.get(assetName).toString()),
-        networkId,
-      });
-    }
-  }
-  return new MultiToken(entries, {
-    defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-    defaultNetworkId: networkId,
-  });
-}
 
 /**
  * We take a copy of these parameters instead of re-evaluating them from the network
@@ -170,11 +141,10 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     if (this.implicitInputValue != null) {
       values.joinAddMutable(
         RustModule.WasmScope(Module =>
-          multiTokenFromCmlValue(
-            Module.CML,
-            Module.CML.Value.from_cbor_bytes(this.implicitInputValue),
-            this.networkSettingSnapshot.NetworkId
-          )
+          multiTokenFromCMLValue(Module.CML.Value.from_cbor_bytes(this.implicitInputValue), {
+            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+          })
         )
       );
     }
@@ -189,7 +159,10 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
       return Array.from({ length: outputs.len() }, (_, index) => {
         const output = outputs.get(index);
         return {
-          value: multiTokenFromCmlValue(Module.CML, output.amount(), this.networkSettingSnapshot.NetworkId),
+          value: multiTokenFromCMLValue(output.amount(), {
+            defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+            defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+          }),
           isForeign: false,
           address: output.address().to_hex(),
         };
@@ -198,10 +171,13 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   }
 
   totalOutput(): MultiToken {
-    return this.outputs().reduce((total, output) => total.joinAddMutable(output.value), new MultiToken([], {
-      defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-      defaultNetworkId: this.networkSettingSnapshot.NetworkId,
-    }));
+    return this.outputs().reduce(
+      (total, output) => total.joinAddMutable(output.value),
+      new MultiToken([], {
+        defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
+        defaultNetworkId: this.networkSettingSnapshot.NetworkId,
+      })
+    );
   }
 
   fee(): MultiToken {
@@ -213,7 +189,9 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
       identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
       amount: new BigNumber(
         RustModule.WasmScope(Module =>
-          Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).fee().toString()
+          Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes())
+            .fee()
+            .toString()
         )
       ).plus(this.depositAmount ?? '0'),
       networkId: this.networkSettingSnapshot.NetworkId,

@@ -1,16 +1,23 @@
 import axios from 'axios';
 import { poolKeyHashHexToBech32 } from './lib/cardanoCrypto/cmlAddress';
 
-const EXPLORER_API = 'https://a.cexplorer.io/yoroi-api/';
+const EXPLORER_API_BY_NETWORK: { [string]: string } = {
+  mainnet: 'https://a.cexplorer.io/yoroi-api/',
+  preprod: 'https://preprod.cexplorer.io/yoroi-api/',
+  preview: 'https://preview.cexplorer.io/yoroi-api/',
+};
 const DEFAULT_SATURATION_THRESHOLD = 0.8;
 
-const getPool = async hash => {
+const getPool = async (networkName, hash) => {
+  const explorerApi = EXPLORER_API_BY_NETWORK[networkName];
+  if (explorerApi == null) return null;
   const params = new URLSearchParams({ search: hash });
-  const { data } = await axios.post(EXPLORER_API, params.toString(), {
+  const { data } = await axios.post(explorerApi, params.toString(), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   });
   if (!data.pools) return null;
   const [pool] = Object.values(data.pools);
+  if (pool == null) return null;
   return {
     id: pool.id_bech,
     hash: pool.id,
@@ -26,7 +33,7 @@ const getPool = async hash => {
   };
 };
 
-export async function getPoolTransition(apiUrl, poolHashHex) {
+export async function getPoolTransition(apiUrl, poolHashHex, networkName) {
   let transitionData;
   try {
     const response = await axios.get('/v2.1/pools/poolTransitionInfo', { baseURL: apiUrl });
@@ -52,14 +59,17 @@ export async function getPoolTransition(apiUrl, poolHashHex) {
 
   let threshold = transitionData.saturationThreshold ?? DEFAULT_SATURATION_THRESHOLD;
   if (threshold < 0 || threshold > 1) {
-    console.warn(`Incorrect saturation threshold value "${threshold}", expected between 0 and 1. Using default "${DEFAULT_SATURATION_THRESHOLD}"`);
+    console.warn(
+      `Incorrect saturation threshold value "${threshold}", expected between 0 and 1. Using default "${DEFAULT_SATURATION_THRESHOLD}"`
+    );
     threshold = DEFAULT_SATURATION_THRESHOLD;
   }
-  const current = await getPool(poolHashHex);
+  const current = await getPool(networkName, poolHashHex);
   let suggested = null;
   for (const candidateId of suggestion.candidates) {
-    suggested = await getPool(candidateId);
-    if (suggested == null || Number(suggested.saturation) > threshold) continue;
+    const candidate = await getPool(networkName, candidateId);
+    if (candidate == null || Number(candidate.saturation) > threshold) continue;
+    suggested = candidate;
     break;
   }
   if (current == null || suggested == null) return null;

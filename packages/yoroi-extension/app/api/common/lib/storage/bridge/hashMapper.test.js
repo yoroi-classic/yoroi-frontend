@@ -30,7 +30,10 @@ test('maps base and pointer address hashes through their canonical enterprise ad
       baseEnterpriseHex: CML.EnterpriseAddress.new(baseAddress.network_id(), CML.BaseAddress.from_address(baseAddress).payment())
         .to_address()
         .to_hex(),
-      pointerEnterpriseHex: CML.EnterpriseAddress.new(pointerAddress.network_id(), CML.PointerAddress.from_address(pointerAddress).payment())
+      pointerEnterpriseHex: CML.EnterpriseAddress.new(
+        pointerAddress.network_id(),
+        CML.PointerAddress.from_address(pointerAddress).payment()
+      )
         .to_address()
         .to_hex(),
     };

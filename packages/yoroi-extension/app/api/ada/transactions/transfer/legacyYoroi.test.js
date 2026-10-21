@@ -83,16 +83,16 @@ describe('Haskell Shelley era tx format tests', () => {
     }
 
     const transferInfo = await yoroiTransferTxFromAddresses({
-        addresses: [addr1, addr2],
-        network,
-        getUTXOsForAddresses: _addresses => Promise.resolve([utxo]),
-        keyLevel: Bip44DerivationLevels.ACCOUNT.level,
-        signingKey: accountPrivateKeyBytes,
-        outputAddr: {
-          address: outAddress,
-        },
-        absSlotNumber: new BigNumber(1),
-        protocolParams: getProtocolParams(),
+      addresses: [addr1, addr2],
+      network,
+      getUTXOsForAddresses: _addresses => Promise.resolve([utxo]),
+      keyLevel: Bip44DerivationLevels.ACCOUNT.level,
+      signingKey: accountPrivateKeyBytes,
+      outputAddr: {
+        address: outAddress,
+      },
+      absSlotNumber: new BigNumber(1),
+      protocolParams: getProtocolParams(),
     });
 
     const expectedFee = new BigNumber('166601');
@@ -116,7 +116,10 @@ describe('Haskell Shelley era tx format tests', () => {
         inputIndex: input.index().toString(),
         outputCount: body.outputs().len(),
         outputAddress: Module.CML.ByronAddress.from_address(output.address())?.to_base58(),
-        outputAmount: output.amount().coin().toString(),
+        outputAmount: output
+          .amount()
+          .coin()
+          .toString(),
         witnessCount: witnesses.len(),
         witness: witnesses.get(0).to_cbor_hex(),
       };

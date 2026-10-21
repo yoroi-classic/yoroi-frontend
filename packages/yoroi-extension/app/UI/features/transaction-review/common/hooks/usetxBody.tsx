@@ -44,28 +44,32 @@ export const getCborTxBody = async (cbor: string): Promise<TransactionBody> => {
         const output = outputs.get(index);
         const amount = output.amount();
         const multiAsset = amount.multi_asset();
-        const policyIds = multiAsset.keys();
         const formattedAssets = {};
 
-        for (let policyIndex = 0; policyIndex < policyIds.len(); policyIndex++) {
-          const policyId = policyIds.get(policyIndex);
-          const assets = multiAsset.get_assets(policyId);
-          if (assets == null) continue;
-          const assetNames = assets.keys();
-          const formattedPolicyAssets = {};
+        if (multiAsset != null) {
+          const policyIds = multiAsset.keys();
+          for (let policyIndex = 0; policyIndex < policyIds.len(); policyIndex++) {
+            const policyId = policyIds.get(policyIndex);
+            const assets = multiAsset.get_assets(policyId);
+            if (assets == null) continue;
+            const assetNames = assets.keys();
+            const formattedPolicyAssets = {};
 
-          for (let assetIndex = 0; assetIndex < assetNames.len(); assetIndex++) {
-            const assetName = assetNames.get(assetIndex);
-            const quantity = assets.get(assetName);
-            if (quantity == null) continue;
-            formattedPolicyAssets[assetName.to_hex()] = quantity.toString();
+            for (let assetIndex = 0; assetIndex < assetNames.len(); assetIndex++) {
+              const assetName = assetNames.get(assetIndex);
+              const quantity = assets.get(assetName);
+              if (quantity == null) continue;
+              formattedPolicyAssets[assetName.to_hex()] = quantity.toString();
+            }
+
+            formattedAssets[policyId.to_hex()] = formattedPolicyAssets;
           }
-
-          formattedAssets[policyId.to_hex()] = formattedPolicyAssets;
         }
 
+        const address = output.address();
+        const byronAddress = Module.CML.ByronAddress.from_address(address);
         return {
-          address: output.address().to_bech32(),
+          address: byronAddress?.to_base58() ?? address.to_bech32(),
           amount: {
             coin: amount.coin().toString(),
             multiasset: Object.keys(formattedAssets).length === 0 ? null : formattedAssets,

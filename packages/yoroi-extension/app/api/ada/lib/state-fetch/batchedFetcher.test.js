@@ -34,10 +34,9 @@ function generateAddresses(count: number): Array<string> {
       .derive(HARD_DERIVATION_START)
       .derive(ChainDerivations.EXTERNAL);
     return Array.from({ length: count }, (_, index) =>
-      cml.AddressContent.icarus_from_key(
-        chainKey.derive(index).to_public(),
-        cml.ProtocolMagic.new(Number(byronNetworkId))
-      ).to_address().to_base58()
+      cml.AddressContent.icarus_from_key(chainKey.derive(index).to_public(), cml.ProtocolMagic.new(Number(byronNetworkId)))
+        .to_address()
+        .to_base58()
     );
   });
 }

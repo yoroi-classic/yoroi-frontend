@@ -5,6 +5,7 @@ import { isHex } from './hex';
 
 test('recognizes non-empty hex strings without accepting invalid digits', () => {
   expect(isHex('aB09')).toBe(true);
+  expect(isHex('abc')).toBe(false);
   expect(isHex('')).toBe(false);
   expect(isHex('0x10')).toBe(false);
 });
