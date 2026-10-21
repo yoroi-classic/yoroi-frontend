@@ -15,7 +15,15 @@ import type {
 } from './utxoTypes';
 import { DiffType, UtxoApiResult } from './utxoTypes';
 
-type ApiError = { response?: { data?: { error?: { response?: string } } } };
+type ApiError = {|
+  response?: {|
+    data?: {|
+      error?: {|
+        response?: string,
+      |},
+    |},
+  |},
+|};
 
 function referenceError(error: ApiError): $Values<typeof UtxoApiResult> {
   const kind = error.response?.data?.error?.response;

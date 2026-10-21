@@ -8,9 +8,9 @@
 // service worker. This module replaces `rustLoader.js` in the background service
 // worker with the help of webpack NormalModuleReplacementPlugin.
 import * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
-type CmlApi = $Exports<'@dcspark/cardano-multiplatform-lib-browser'>;
-
 import * as CMLBrowser from '@dcspark/cardano-multiplatform-lib-browser';
+
+type CmlApi = $Exports<'@dcspark/cardano-multiplatform-lib-browser'>;
 
 // TODO: unmagic the constants
 function isWasmPointer(o: ?any): boolean {

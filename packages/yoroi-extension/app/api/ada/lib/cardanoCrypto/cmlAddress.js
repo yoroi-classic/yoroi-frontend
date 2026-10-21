@@ -10,7 +10,10 @@ const derivePublicKeyHashHex = (accountPublicKey: any, path: Array<number>, star
     if (index == null) throw new Error('Invalid public key derivation path');
     publicKey = publicKey.derive(index);
   }
-  return publicKey.to_raw_key().hash().to_hex();
+  return publicKey
+    .to_raw_key()
+    .hash()
+    .to_hex();
 };
 
 export const deriveBip32PublicKeyHashHex = (accountPublicKeyHex: string, path: Array<number>, startIndex: number = 0): string =>
@@ -66,12 +69,16 @@ export const enterpriseAddressHexFromBaseOrPointerAddress = (addressHex: string)
     const address = Module.CML.Address.from_hex(addressHex);
     const baseAddress = Module.CML.BaseAddress.from_address(address);
     if (baseAddress != null) {
-      return Module.CML.EnterpriseAddress.new(address.network_id(), baseAddress.payment()).to_address().to_hex();
+      return Module.CML.EnterpriseAddress.new(address.network_id(), baseAddress.payment())
+        .to_address()
+        .to_hex();
     }
 
     const pointerAddress = Module.CML.PointerAddress.from_address(address);
     if (pointerAddress != null) {
-      return Module.CML.EnterpriseAddress.new(address.network_id(), pointerAddress.payment()).to_address().to_hex();
+      return Module.CML.EnterpriseAddress.new(address.network_id(), pointerAddress.payment())
+        .to_address()
+        .to_hex();
     }
 
     throw new Error('Address is not a base or pointer address');
@@ -100,7 +107,12 @@ export const stakingKeyHashFromRewardAddress = (stakingAddressHex: string): stri
   RustModule.WasmScope(Module => {
     const rewardAddress = Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(stakingAddressHex));
     if (rewardAddress == null) throw new Error('Staking address is not a reward address');
-    return rewardAddress.payment().as_pub_key()?.to_hex() ?? null;
+    return (
+      rewardAddress
+        .payment()
+        .as_pub_key()
+        ?.to_hex() ?? null
+    );
   });
 
 export const paymentKeyHashBech32FromEnterpriseAddress = (addressHex: string, prefix: string): string | null =>
@@ -108,7 +120,12 @@ export const paymentKeyHashBech32FromEnterpriseAddress = (addressHex: string, pr
     const address = Module.CML.Address.from_hex(addressHex);
     const enterpriseAddress = Module.CML.EnterpriseAddress.from_address(address);
     if (enterpriseAddress == null) return null;
-    return enterpriseAddress.payment().as_pub_key()?.to_bech32(prefix) ?? null;
+    return (
+      enterpriseAddress
+        .payment()
+        .as_pub_key()
+        ?.to_bech32(prefix) ?? null
+    );
   });
 
 export const addressHasStakeCredential = (address: string, credentialCborHex: string): boolean =>
@@ -131,27 +148,33 @@ export const poolKeyHashHexToBech32 = (poolKeyHashHex: string): string =>
 
 export const baseAddressesFromKeyHashes = (
   networkId: number,
-  keyHashes: Array<{ payment: string, stake: string }>
+  keyHashes: Array<{| payment: string, stake: string |}>
 ): Array<string> =>
   RustModule.WasmScope(Module =>
     keyHashes.map(({ payment, stake }) => {
       const paymentCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(payment));
       const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stake));
-      return Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential).to_address().to_bech32();
+      return Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential)
+        .to_address()
+        .to_bech32();
     })
   );
 
 export const rewardAddressFromKeyHash = (networkId: number, stakeKeyHash: string): string =>
   RustModule.WasmScope(Module => {
     const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash));
-    return Module.CML.RewardAddress.new(networkId, stakeCredential).to_address().to_hex();
+    return Module.CML.RewardAddress.new(networkId, stakeCredential)
+      .to_address()
+      .to_hex();
   });
 
 export const baseAddressHexFromKeyHashes = (networkId: number, paymentKeyHash: string, stakeKeyHash: string): string =>
   RustModule.WasmScope(Module => {
     const paymentCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(paymentKeyHash));
     const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash));
-    return Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential).to_address().to_hex();
+    return Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential)
+      .to_address()
+      .to_hex();
   });
 
 export const enterpriseAndBaseAddressHexFromKeyHashes = (
@@ -162,8 +185,12 @@ export const enterpriseAndBaseAddressHexFromKeyHashes = (
   RustModule.WasmScope(Module => {
     const paymentCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(paymentKeyHash));
     const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stakeKeyHash));
-    const enterpriseAddressHex = Module.CML.EnterpriseAddress.new(networkId, paymentCredential).to_address().to_hex();
-    const baseAddressHex = Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential).to_address().to_hex();
+    const enterpriseAddressHex = Module.CML.EnterpriseAddress.new(networkId, paymentCredential)
+      .to_address()
+      .to_hex();
+    const baseAddressHex = Module.CML.BaseAddress.new(networkId, paymentCredential, stakeCredential)
+      .to_address()
+      .to_hex();
     return { enterpriseAddressHex, baseAddressHex };
   });
 
@@ -172,7 +199,9 @@ export const deriveRewardAddressFromAddress = (address: string, networkId: numbe
     const baseAddress = Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(address));
     const stakeCredential = baseAddress?.stake();
     if (stakeCredential == null) throw new Error('Address has no stake credential');
-    return Module.CML.RewardAddress.new(networkId, stakeCredential).to_address().to_bech32();
+    return Module.CML.RewardAddress.new(networkId, stakeCredential)
+      .to_address()
+      .to_bech32();
   });
 
 const readPointerComponent = (bytes: Uint8Array, start: number): {| value: BigIntValue, next: number |} => {

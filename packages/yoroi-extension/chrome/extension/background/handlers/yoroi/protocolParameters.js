@@ -1,6 +1,6 @@
 // @flow
 import type { HandlerType } from './type';
-import type { ProtocolParameters } from '../../../../../app/api/ada/lib/state-fetch/types';
+import type { ProtocolParameters } from '../../../../../app/api/ada/lib/state-fetch/protocolParameters';
 import ProtocolParametersApi from '../../../../../app/api/ada/lib/state-fetch/protocolParametersApi';
 import {
   getNetworkById,
