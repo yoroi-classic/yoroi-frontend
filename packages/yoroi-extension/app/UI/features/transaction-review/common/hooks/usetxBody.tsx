@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { RustModule } from '../../../../../api/ada/lib/cardanoCrypto/rustLoader';
-import { YoroiUnsignedTx } from '../../../../types/yoroi';
 import { TransactionBody } from '../types';
 
 export const useTxBody = ({
@@ -8,7 +7,7 @@ export const useTxBody = ({
   unsignedTx,
 }: {
   cbor?: string | null;
-  unsignedTx?: YoroiUnsignedTx | null;
+  unsignedTx?: Uint8Array | null;
 }): TransactionBody | { body: TransactionBody } | undefined => {
   const query = useQuery({
     queryKey: ['useTxBody', cbor, unsignedTx],
@@ -18,7 +17,7 @@ export const useTxBody = ({
       }
 
       if (unsignedTx != null) {
-        return getUnsignedTxTxBody(unsignedTx.unsignedTx);
+        return getUnsignedTxTxBody(unsignedTx);
       }
 
       throw new Error('useTxBody: missing both cbor and unsignedTx');

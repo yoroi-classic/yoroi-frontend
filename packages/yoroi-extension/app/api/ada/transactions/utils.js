@@ -22,9 +22,9 @@ import { bytesToHex } from '../../../coreUtils';
 const RANDOM_BASE_ADDRESS =
   'addr_test1qzz6hulv54gzf2suy2u5gkvmt6ysasfdlvvegy3fmf969y7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qy0adz0';
 
-export function cardanoAssetToIdentifier(policyId: {| to_hex: () => string |}, name: {| name: () => Uint8Array |}): string {
+export function cardanoAssetToIdentifier(policyId: RustModule.CML.ScriptHash, name: RustModule.CML.AssetName): string {
   // note: possible for name to be empty causing a trailing hyphen
-  return `${policyId.to_hex()}.${bytesToHex(name.name())}`;
+  return `${policyId.to_hex()}.${bytesToHex(name.to_raw_bytes())}`;
 }
 export function identifierToCardanoAsset(identifier: string): {| policyId: string, name: string |} {
   // recall: 'a.'.split() gives ['a', ''] as desired
@@ -43,7 +43,9 @@ export function identifierSplit(identifier: string): {| policyId: string, name: 
   };
 }
 
-export function parseTokenList(assets: void | RustModule.CML.MultiAsset): Array<{|
+export function parseTokenList(
+  assets: void | RustModule.CML.MultiAsset
+): Array<{|
   assetId: string,
   policyId: string,
   name: string,
@@ -67,7 +69,7 @@ export function parseTokenList(assets: void | RustModule.CML.MultiAsset): Array<
         amount: amount.toString(),
         assetId: cardanoAssetToIdentifier(policyId, assetName),
         policyId: policyId.to_hex(),
-        name: bytesToHex(assetName.name()),
+        name: bytesToHex(assetName.to_raw_bytes()),
       });
     }
   }
@@ -201,7 +203,7 @@ export function multiTokenFromRemote(
         +name: string,
         +amount: string,
         ...
-      }>,
+      }>
     >,
     ...
   }>,
@@ -283,7 +285,7 @@ export function convertAdaTransactionsToExportRows(
       ...WithNullableFields<DbBlock>,
       ...UserAnnotation,
       ...
-    }>,
+    }>
   >,
   defaultAssetRow: $ReadOnly<TokenRow>
 ): Array<TransactionExportRow> {
@@ -294,11 +296,16 @@ export function convertAdaTransactionsToExportRows(
         date: tx.block.BlockTime,
         type: tx.type === transactionTypes.INCOME ? 'in' : 'out',
         amount: formatBigNumberToFloatString(
-          tx.amount.get(defaultAssetRow.Identifier)?.abs().shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ??
-            new BigNumber(0)
+          tx.amount
+            .get(defaultAssetRow.Identifier)
+            ?.abs()
+            .shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ?? new BigNumber(0)
         ),
         fee: formatBigNumberToFloatString(
-          tx.fee.get(defaultAssetRow.Identifier)?.abs().shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ?? new BigNumber(0)
+          tx.fee
+            .get(defaultAssetRow.Identifier)
+            ?.abs()
+            .shiftedBy(-defaultAssetRow.Metadata.numberOfDecimals) ?? new BigNumber(0)
         ),
         id: tx.transaction.Hash,
       });
@@ -309,9 +316,7 @@ export function convertAdaTransactionsToExportRows(
 
 export function sumInputsOutputs(
   ios: $ReadOnlyArray<
-    $ReadOnly<
-      UtxoTransactionInputRow | UtxoTransactionOutputRow | AccountingTransactionInputRow | AccountingTransactionOutputRow,
-    >,
+    $ReadOnly<UtxoTransactionInputRow | UtxoTransactionOutputRow | AccountingTransactionInputRow | AccountingTransactionOutputRow>
   >,
   tokens: $PropertyType<DbTokenInfo, 'tokens'>,
   defaultToken: DefaultTokenEntry
@@ -443,7 +448,10 @@ export function cardanoMinAdaRequiredFromRemoteFormat(
 export function getTransactionFeeFromCbor(txHex: string): BigNumber {
   try {
     return RustModule.WasmScope(Module => {
-      const feeStr = Module.CML.Transaction.from_cbor_hex(txHex).body().fee().toString();
+      const feeStr = Module.CML.Transaction.from_cbor_hex(txHex)
+        .body()
+        .fee()
+        .toString();
       return new BigNumber(feeStr);
     });
   } catch (e) {
@@ -458,7 +466,9 @@ export function getTransactionFeeFromCbor(txHex: string): BigNumber {
 export function getTransactionTotalOutputFromCbor(txHex: string, defaults: DefaultTokenEntry): MultiToken {
   try {
     return RustModule.WasmScope(Module => {
-      const outputs = Module.CML.Transaction.from_cbor_hex(txHex).body().outputs();
+      const outputs = Module.CML.Transaction.from_cbor_hex(txHex)
+        .body()
+        .outputs();
       const sum = new MultiToken([], defaults);
       for (let index = 0; index < outputs.len(); index++) {
         const value = outputs.get(index).amount();

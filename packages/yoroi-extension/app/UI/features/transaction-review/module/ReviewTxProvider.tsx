@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { getPrivateStakingKey, getProtocolParameters } from '../../../../api/thunk';
 import { useModal } from '../../../components/modals/ModalContext';
-import { YoroiUnsignedTx } from '../../../types/yoroi';
 import { addressHexToBech32 } from '../../../utils/common';
 import { createCurrrentWalletInfo } from '../../../utils/createCurrentWalletInfo';
 import { TxFail } from '../common/TransactionResult/TxFail';
@@ -17,9 +16,9 @@ type ModalState = {
   width: string;
   isLoading: boolean;
   modalView: 'transactionReview' | 'walletInfo';
-  unsignedTx: YoroiUnsignedTx | null;
+  unsignedTx: Uint8Array | null;
   drepID: string;
-  cborTx: YoroiUnsignedTx | null;
+  cborTx: string | null;
 };
 type ModalActions = {
   openTxReviewModal: any;

@@ -11,6 +11,7 @@ import {
   cardanoMinAdaRequiredFromRemoteFormat,
   cardanoValueFromMultiToken,
   multiTokenFromCMLValue,
+  parseTokenList,
   parseCMLTransactionOutput,
 } from './utils';
 import { RustModule } from '../lib/cardanoCrypto/rustLoader';
@@ -28,6 +29,27 @@ import { MultiToken } from '../../common/lib/MultiToken';
 
 beforeAll(async () => {
   await RustModule.load();
+});
+
+test('parses CML asset names from raw bytes', () => {
+  const tokens = RustModule.WasmScope(Module => {
+    const multiAsset = Module.CML.MultiAsset.new();
+    multiAsset.set(
+      Module.CML.ScriptHash.from_hex('44'.repeat(28)),
+      Module.CML.AssetName.from_raw_bytes(Buffer.from('deadbeef', 'hex')),
+      BigInt('7')
+    );
+    return parseTokenList(multiAsset);
+  });
+
+  expect(tokens).toEqual([
+    {
+      amount: '7',
+      assetId: `${'44'.repeat(28)}.deadbeef`,
+      policyId: '44'.repeat(28),
+      name: 'deadbeef',
+    },
+  ]);
 });
 
 test('serializes remote swap UTxOs with CML', () => {

@@ -224,7 +224,10 @@ export function toTrezorSignRequest(
       const encodedOutput = output.to_cbor_bytes();
       const isPostAlonzoTransactionOutput = encodedOutput.length > 0 && (encodedOutput[0] & 0xe0) === 0xa0;
 
-      const amount = output.amount().coin().toString();
+      const amount = output
+        .amount()
+        .coin()
+        .toString();
       const { tokenBundle } = toTrezorTokenBundle(cml, output.amount().multi_asset());
       const outputDataHash = output.datum_hash();
 
@@ -262,12 +265,16 @@ export function toTrezorSignRequest(
 
       const baseAddr = cml.BaseAddress.from_address(addr);
       if (baseAddr) {
-        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment()).to_address().to_hex();
+        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment())
+          .to_address()
+          .to_hex();
         const ownPaymentPath =
           ownAddressMap(paymentAddress) || changeAddrs.find(({ address }) => address === addr.to_hex())?.addressing.path;
         if (ownPaymentPath) {
           const stake = baseAddr.stake();
-          const stakeAddr = cml.RewardAddress.new(networkId, stake).to_address().to_hex();
+          const stakeAddr = cml.RewardAddress.new(networkId, stake)
+            .to_address()
+            .to_hex();
           const ownStakePath = ownAddressMap(stakeAddr);
           if (ownStakePath) {
             // stake address is ours
@@ -347,7 +354,9 @@ export function toTrezorSignRequest(
       return result;
     }
 
-    const outputs = iterateLenGet(txBody.outputs()).map(formatOutput).toArray();
+    const outputs = iterateLenGet(txBody.outputs())
+      .map(formatOutput)
+      .toArray();
 
     const formattedRequiredSigners = [];
     const additionalWitnessRequests = [];
@@ -355,8 +364,12 @@ export function toTrezorSignRequest(
     if (requiredSigners) {
       for (const hash of iterateLenGet(requiredSigners)) {
         const credential = cml.Credential.new_pub_key(hash);
-        const enterpriseAddress = cml.EnterpriseAddress.new(networkId, credential).to_address().to_hex();
-        const stakeAddress = cml.RewardAddress.new(networkId, credential).to_address().to_hex();
+        const enterpriseAddress = cml.EnterpriseAddress.new(networkId, credential)
+          .to_address()
+          .to_hex();
+        const stakeAddress = cml.RewardAddress.new(networkId, credential)
+          .to_address()
+          .to_hex();
         const ownAddressPath = ownAddressMap(enterpriseAddress) || ownAddressMap(stakeAddress);
         if (ownAddressPath) {
           formattedRequiredSigners.push({
@@ -446,11 +459,29 @@ export function toTrezorSignRequest(
       formattedCollateral = formatInputs(collateral);
     }
 
-    // temp workaround for buggy Mint.to_js_value()
-    const formattedMint = JSON.parse(txBody.mint()?.to_json() ?? 'null')?.map(([policyId, assets]) => ({
-      policyId,
-      tokenAmounts: Object.keys(assets).map(assetNameBytes => ({ assetNameBytes, mintAmount: assets[assetNameBytes] })),
-    }));
+    const mint = txBody.mint();
+    const formattedMint =
+      mint == null
+        ? null
+        : iterateLenGet(mint.keys())
+            .map(policyId => {
+              const assets = mint.get_assets(policyId);
+              if (assets == null) throw new Error('Missing mint assets');
+              return {
+                policyId: policyId.to_hex(),
+                tokenAmounts: iterateLenGet(assets.keys())
+                  .map(assetName => {
+                    const amount = assets.get(assetName);
+                    if (amount == null) throw new Error('Missing mint amount');
+                    return {
+                      assetNameBytes: bytesToHex(assetName.to_raw_bytes()),
+                      mintAmount: amount.toString(),
+                    };
+                  })
+                  .toArray(),
+              };
+            })
+            .toArray();
 
     const scriptDataHash = txBody.script_data_hash()?.to_hex();
 

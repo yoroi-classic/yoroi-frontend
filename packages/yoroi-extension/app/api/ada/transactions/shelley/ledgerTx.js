@@ -57,7 +57,7 @@ function toLedgerTokenBundle(assets: any): Array<AssetGroup> | null {
       if (assetName == null) throw new Error('Missing asset name');
       const amount = assetsForPolicy.get(assetName);
       if (amount == null) throw new Error('Missing asset amount');
-      tokens.push({ assetNameHex: bytesToHex(assetName.name()), amount: amount.toString() });
+      tokens.push({ assetNameHex: bytesToHex(assetName.to_raw_bytes()), amount: amount.toString() });
     }
 
     // sort by asset name to the order specified by rfc7049
@@ -304,7 +304,9 @@ export function toLedgerAddressParameters(request: {|
     }
     const baseAddr = cml.BaseAddress.from_address(address);
     if (baseAddr != null) {
-      const addressPayload = cml.RewardAddress.new(request.networkId, baseAddr.stake()).to_address().to_hex();
+      const addressPayload = cml.RewardAddress.new(request.networkId, baseAddr.stake())
+        .to_address()
+        .to_hex();
       const addressing = request.addressingMap(addressPayload);
       if (addressing == null) {
         const stakeCred = baseAddr.stake();
@@ -434,12 +436,16 @@ export function toLedgerSignRequest(
 
       const baseAddr = cml.BaseAddress.from_address(addr);
       if (baseAddr) {
-        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment()).to_address().to_hex();
+        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment())
+          .to_address()
+          .to_hex();
         const ownPaymentPath =
           ownAddressMap(paymentAddress) || changeAddrs.find(({ address }) => address === addr.to_hex())?.addressing.path;
         if (ownPaymentPath) {
           const stake = baseAddr.stake();
-          const stakeAddr = cml.RewardAddress.new(networkId, stake).to_address().to_hex();
+          const stakeAddr = cml.RewardAddress.new(networkId, stake)
+            .to_address()
+            .to_hex();
           const ownStakePath = ownAddressMap(stakeAddr);
           if (ownStakePath) {
             // stake address is ours
@@ -502,7 +508,10 @@ export function toLedgerSignRequest(
         throw new Error('not expecting to pay to reward address');
       }
 
-      const amount = output.amount().coin().toString();
+      const amount = output
+        .amount()
+        .coin()
+        .toString();
       const tokenBundle = toLedgerTokenBundle(output.amount().multi_asset());
       const outputDataHash = output.datum_hash();
       const plutusData = output.datum()?.as_datum();
@@ -552,8 +561,12 @@ export function toLedgerSignRequest(
     const formattedRequiredSigners = [];
     function hashHexToOwnAddressPath(hashHex: string): ?Array<number> {
       const hash = cml.Ed25519KeyHash.from_hex(hashHex);
-      const enterpriseAddress = cml.EnterpriseAddress.new(networkId, cml.Credential.new_pub_key(hash)).to_address().to_hex();
-      const stakeAddress = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(hash)).to_address().to_hex();
+      const enterpriseAddress = cml.EnterpriseAddress.new(networkId, cml.Credential.new_pub_key(hash))
+        .to_address()
+        .to_hex();
+      const stakeAddress = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(hash))
+        .to_address()
+        .to_hex();
       return ownAddressMap(enterpriseAddress) || ownAddressMap(stakeAddress);
     }
 
@@ -764,7 +777,7 @@ export function toLedgerSignRequest(
           formattedVotingProcedures[formattedVotingProcedures.length - 1].votes.push({
             govActionId: {
               txHashHex: govActionId.transaction_id().to_hex(),
-              govActionIndex: govActionId.gov_action_index(),
+              govActionIndex: Number(govActionId.gov_action_index().toString()),
             },
             votingProcedure: {
               vote: formattedVoteKind,
@@ -800,11 +813,7 @@ export function toLedgerSignRequest(
         certificates: formattedCertificates,
         withdrawals: formattedWithdrawals,
         auxiliaryData: formattedAuxiliaryData,
-        mint:
-          JSON.parse(txBody.mint()?.to_json() ?? 'null')?.map(([policyIdHex, assets]) => ({
-            policyIdHex,
-            tokens: Object.keys(assets).map(assetNameHex => ({ assetNameHex, amount: assets[assetNameHex] })),
-          })) ?? null,
+        mint: toLedgerTokenBundle(txBody.mint()),
         scriptDataHashHex: txBody.script_data_hash()?.to_hex() ?? null,
         collateralInputs: formattedCollateral,
         requiredSigners: formattedRequiredSigners.length > 0 ? formattedRequiredSigners : null,
