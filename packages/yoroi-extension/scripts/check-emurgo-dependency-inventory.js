@@ -43,8 +43,6 @@ const EXPECTED_LOCKFILE_EMURGO_PACKAGE_ENTRIES = [
   'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs',
   'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs',
   'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection/node_modules/@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection/node_modules/@emurgo/cardano-serialization-lib-nodejs',
 ];
 
 const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
@@ -54,8 +52,6 @@ const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
   'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cross-csl-core',
   'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs:dependencies:@emurgo/cross-csl-core',
   'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/@yoroi/staking:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap/node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',

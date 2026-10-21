@@ -8,6 +8,40 @@ import { getCardanoSpendingKeyHash, normalizeToAddress } from '../../lib/storage
 import { CardanoCertificateType, CardanoAddressType } from 'trezor-connect-flow';
 import { ChainDerivations } from '../../../../config/numbersConfig';
 
+jest.mock('trezor-connect-flow', () => ({
+  CardanoAddressType: {
+    BASE: 0,
+    POINTER: 4,
+    ENTERPRISE: 6,
+    BYRON: 8,
+    REWARD: 14,
+  },
+  CardanoCertificateType: {
+    STAKE_REGISTRATION: 0,
+    STAKE_DEREGISTRATION: 1,
+    STAKE_DELEGATION: 2,
+    STAKE_POOL_REGISTRATION: 3,
+    STAKE_REGISTRATION_CONWAY: 7,
+    STAKE_DEREGISTRATION_CONWAY: 8,
+    VOTE_DELEGATION: 9,
+  },
+  CardanoDRepType: {
+    KEY_HASH: 0,
+    SCRIPT_HASH: 1,
+    ABSTAIN: 2,
+    NO_CONFIDENCE: 3,
+  },
+  CardanoGovernanceRegistrationFormat: { CIP15: 0, CIP36: 1 },
+  CardanoTxOutputSerializationFormat: { ARRAY_LEGACY: 0, MAP_BABBAGE: 1 },
+  CardanoTxSigningMode: {
+    ORDINARY_TRANSACTION: 0,
+    POOL_REGISTRATION_AS_OWNER: 1,
+    MULTISIG_TRANSACTION: 2,
+    PLUTUS_TRANSACTION: 3,
+  },
+  CardanoTxWitnessType: { BYRON_WITNESS: 0, SHELLEY_WITNESS: 1 },
+}));
+
 beforeAll(async () => {
   await RustModule.load();
 });
@@ -187,7 +221,12 @@ test('Create Trezor transaction', async () => {
     '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
   );
   const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-  const stakeCredential = RustModule.WalletV4.Credential.from_keyhash(stakingKey.to_raw_key().to_public().hash());
+  const stakeCredential = RustModule.WalletV4.Credential.from_keyhash(
+    stakingKey
+      .to_raw_key()
+      .to_public()
+      .hash()
+  );
   certs.add(RustModule.WalletV4.Certificate.new_stake_registration(RustModule.WalletV4.StakeRegistration.new(stakeCredential)));
   txBuilder.set_certs(certs);
   txBuilder.set_fee(RustModule.WalletV4.BigNum.from_str('2000'));
