@@ -2,7 +2,7 @@
 import { beforeAll, expect, test } from '@jest/globals';
 import '../../../../../api/ada/lib/test-config.forTests';
 import { RustModule } from '../../../../../api/ada/lib/cardanoCrypto/rustLoader';
-import { formatCborMetadata } from './useFormatMetadata';
+import { formatCborMetadata, formatUnsignedTxMetadata } from './useFormatMetadata';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -13,6 +13,18 @@ test('parses transaction auxiliary metadata with CML', () => {
   const txCbor = '84a3008001800200a0f5a11902a2a1636d736781717b2268656c6c6f223a22776f726c64227d';
 
   expect(formatCborMetadata(txCbor, { auxiliary_data_hash: 'metadata-hash' } as any)).toEqual({
+    hash: 'metadata-hash',
+    metadata: { msg: [{ hello: 'world' }] },
+  });
+});
+
+test('parses auxiliary metadata bytes for unsigned transaction review', () => {
+  const txCbor = '84a3008001800200a0f5a11902a2a1636d736781717b2268656c6c6f223a22776f726c64227d';
+  const metadataBytes = RustModule.WasmScope(Module =>
+    Module.CML.Transaction.from_cbor_hex(txCbor).auxiliary_data().to_cbor_bytes()
+  );
+
+  expect(formatUnsignedTxMetadata(metadataBytes, { auxiliary_data_hash: 'metadata-hash' } as any)).toEqual({
     hash: 'metadata-hash',
     metadata: { msg: [{ hello: 'world' }] },
   });

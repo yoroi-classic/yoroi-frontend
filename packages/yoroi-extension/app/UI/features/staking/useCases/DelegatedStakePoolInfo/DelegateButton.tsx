@@ -99,6 +99,7 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
         kind: 'delegate',
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 
@@ -152,6 +153,7 @@ export const DelegateButton: React.FC<DelegateButtonProps> = ({
         kind: 'delegate',
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 

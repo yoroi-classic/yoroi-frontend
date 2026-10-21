@@ -461,7 +461,7 @@ export function toTrezorSignRequest(
                     const amount = assets.get(assetName);
                     if (amount == null) throw new Error('Missing mint amount');
                     return {
-                      assetNameBytes: bytesToHex(assetName.to_raw_bytes()),
+                      assetNameBytes: assetName.to_hex(),
                       mintAmount: amount.toString(),
                     };
                   })

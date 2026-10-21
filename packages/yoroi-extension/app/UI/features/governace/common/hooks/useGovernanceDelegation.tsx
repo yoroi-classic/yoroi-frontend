@@ -82,6 +82,7 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
         openTxReviewModal({
           modalView: 'transactionReview',
           unsignedTx: txSignRequest.signTxRequest.unsignedTx,
+          metadata: txSignRequest.signTxRequest.metadata,
           submitTx: (password: string) => {
             void signGovernanceTx(password);
           },
@@ -132,6 +133,7 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
           setUnsignedTx({
             type: 'setUnsignedTx',
             unsignedTx: txSignRequest.signTxRequest.unsignedTx,
+            metadata: txSignRequest.signTxRequest.metadata,
           });
         } finally {
           stopLoadingTxReview();

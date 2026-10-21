@@ -17,6 +17,7 @@ type ModalState = {
   isLoading: boolean;
   modalView: 'transactionReview' | 'walletInfo';
   unsignedTx: Uint8Array | null;
+  metadata: Uint8Array | null;
   drepID: string;
   cborTx: string | null;
 };
@@ -101,6 +102,7 @@ export const ReviewTxProvider = ({
         width: payload.width,
         modalView: payload.modalView,
         unsignedTx: payload.unsignedTx,
+        metadata: payload.metadata,
         cborTx: payload.cborTx,
         receiverCustomTitle: payload.receiverCustomTitle,
         submitTx: payload.submitTx,
@@ -138,6 +140,7 @@ export const ReviewTxProvider = ({
       dispatch({
         type: 'setUnsignedTx',
         unsignedTx: payload.unsignedTx,
+        metadata: payload.metadata,
       });
     },
     setCborTx: (payload: any) => {
@@ -194,6 +197,7 @@ const modalReducer = (state: ModalState, action: ModalAction) => {
         isLoading: false,
         modalView: action.modalView ?? defaultState.modalView,
         unsignedTx: action.unsignedTx ?? defaultState.unsignedTx,
+        metadata: action.metadata ?? defaultState.metadata,
         cborTx: action.cborTx ?? defaultState.cborTx,
         receiverCustomTitle: action.receiverCustomTitle,
         submitTx: action.submitTx,
@@ -215,7 +219,7 @@ const modalReducer = (state: ModalState, action: ModalAction) => {
       return { ...state, drepID: action.drepID };
 
     case 'setUnsignedTx':
-      return { ...state, unsignedTx: action.unsignedTx };
+      return { ...state, unsignedTx: action.unsignedTx, metadata: action.metadata ?? null };
 
     case 'setCborTx':
       return { ...state, cborTx: action.cborTx };
@@ -243,6 +247,7 @@ const defaultState: ModalState = Object.freeze({
   isLoading: false,
   modalView: 'transactionReview',
   unsignedTx: null,
+  metadata: null,
   cborTx: null,
   passswordInput: '',
   inputError: null,
