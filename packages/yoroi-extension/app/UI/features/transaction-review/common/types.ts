@@ -96,7 +96,7 @@ export const CertificateType = {
   VoteRegistrationAndDelegation: 'VoteRegistrationAndDelegation', // NO
 } as const;
 
-export type CertificateType = typeof CertificateType[keyof typeof CertificateType];
+export type CertificateType = (typeof CertificateType)[keyof typeof CertificateType];
 
 export const TransactionResult = {
   SUCCESS: 'success', //
@@ -105,4 +105,4 @@ export const TransactionResult = {
   NO_CARDANO_RUNNING: 'noCardanoRunning', //
 } as const;
 
-export type TransactionResultType = typeof TransactionResult[keyof typeof TransactionResult];
+export type TransactionResultType = (typeof TransactionResult)[keyof typeof TransactionResult];

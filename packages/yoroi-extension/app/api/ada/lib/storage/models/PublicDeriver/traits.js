@@ -578,9 +578,8 @@ const AddBip44FromPublicMixin = (superclass: Class<AddBip44FromPublicDependencie
         derivationTables,
         this.getParent().getPublicDeriverLevel()
       );
-      const asDisplayCutoffInstance: void | (IDisplayCutoff & DisplayCutoffDependencies & AddBip44FromPublic) = asDisplayCutoff(
-        this
-      );
+      const asDisplayCutoffInstance: void | (IDisplayCutoff & DisplayCutoffDependencies & AddBip44FromPublic) =
+        asDisplayCutoff(this);
       if (asDisplayCutoffInstance != null) {
         await updateCutoffFromInsert(
           tx,
@@ -1305,7 +1304,7 @@ const ScanLegacyCardanoAccountUtxo: * = Mixin<ScanLegacyCardanoAccountUtxoDepend
   ScanLegacyCardanoAccountUtxoMixin
 );
 const ScanLegacyCardanoAccountUtxoInstance = ((ScanLegacyCardanoAccountUtxo: any): ReturnType<
-  typeof ScanLegacyCardanoAccountUtxoMixin
+  typeof ScanLegacyCardanoAccountUtxoMixin,
 >);
 export function asScanLegacyCardanoAccountUtxoInstance<T: IPublicDeriver<any>>(
   obj: T

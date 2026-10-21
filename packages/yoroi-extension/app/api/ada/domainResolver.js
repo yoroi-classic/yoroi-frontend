@@ -143,17 +143,18 @@ const getVirtualSubdomains = async (
       if (stakingRecord != null && stakingRecord.constructor !== 0) {
         throw new Resolver.Errors.InvalidDomain();
       }
-      const stakeCredentialData = stakingRecord?.fields?.[0];
+      const stakeCredentialData = stakingRecord == null ? null : stakingRecord.fields?.[0];
       if (stakeCredentialData != null && stakeCredentialData.constructor !== 0 && stakeCredentialData.constructor !== 1) {
         throw new Resolver.Errors.InvalidDomain();
       }
       const stakeHash = stakeCredentialData?.fields?.[0]?.bytes;
-      const stakeCredential =
-        typeof stakeHash === 'string' && stakeHash.length === 56
-          ? stakeCredentialData.constructor === 0
+      let stakeCredential = null;
+      if (typeof stakeHash === 'string' && /^[0-9a-fA-F]{56}$/.test(stakeHash)) {
+        stakeCredential =
+          stakeCredentialData != null && stakeCredentialData.constructor === 0
             ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(stakeHash))
-            : cml.Credential.new_script(cml.ScriptHash.from_hex(stakeHash))
-          : null;
+            : cml.Credential.new_script(cml.ScriptHash.from_hex(stakeHash));
+      }
       if (stakingRecord != null && stakeCredential == null) throw new Resolver.Errors.InvalidDomain();
       const result =
         stakeCredential == null
@@ -228,22 +229,24 @@ const resolveUnstoppable = async (resolve: string, apiKey: string, fetcherConfig
   throw new Resolver.Errors.InvalidResponse();
 };
 
-export const handleApiGetCryptoAddress = ({ request = fetchData, isMainnet = true }: any = {}): any => (
-  resolve: string,
-  fetcherConfig: any
-): Promise<string> => resolveHandle(resolve, isMainnet, fetcherConfig, request);
+export const handleApiGetCryptoAddress =
+  ({ request = fetchData, isMainnet = true }: any = {}): any =>
+  (resolve: string, fetcherConfig: any): Promise<string> =>
+    resolveHandle(resolve, isMainnet, fetcherConfig, request);
 
-export const unstoppableApiGetCryptoAddress = ({ apiKey }: any, { request = fetchData }: any = {}): any => (
-  resolve: string,
-  fetcherConfig: any
-): Promise<string> => resolveUnstoppable(resolve, apiKey, fetcherConfig, request);
+export const unstoppableApiGetCryptoAddress =
+  ({ apiKey }: any, { request = fetchData }: any = {}): any =>
+  (resolve: string, fetcherConfig: any): Promise<string> =>
+    resolveUnstoppable(resolve, apiKey, fetcherConfig, request);
 
-export const cnsCryptoAddress = (
-  request: any = fetchData,
-  metadataFetcher: any = (baseUrl, ids, fetcherConfig) => CardanoApi.getOnChainMetadatas(baseUrl)(ids, fetcherConfig),
-  isMainnet: boolean = true
-): any => (resolve: string, fetcherConfig: any): Promise<string> =>
-  resolveCns(resolve, isMainnet, fetcherConfig, request, metadataFetcher);
+export const cnsCryptoAddress =
+  (
+    request: any = fetchData,
+    metadataFetcher: any = (baseUrl, ids, fetcherConfig) => CardanoApi.getOnChainMetadatas(baseUrl)(ids, fetcherConfig),
+    isMainnet: boolean = true
+  ): any =>
+  (resolve: string, fetcherConfig: any): Promise<string> =>
+    resolveCns(resolve, isMainnet, fetcherConfig, request, metadataFetcher);
 
 export const handleCnsApiError = (error: any): any =>
   error instanceof Api.Errors.NotFound ? new Resolver.Errors.NotFound() : error;
@@ -274,7 +277,9 @@ export const resolverApiMaker = (
     };
     if (strategy === 'all') return Promise.all(operations.map(run));
     try {
+      // Flow 0.142 predates the Promise.any standard library declaration.
       return [
+        // $FlowFixMe[prop-missing]
         await Promise.any(
           operations.map(async ([nameServer, operation]: any): Promise<any> => {
             const address = await operation();

@@ -6,18 +6,22 @@ const path = require('path');
 const WORKSPACE_ROOT = path.resolve(__dirname, '..', '..', '..');
 const SOURCE_DIRECTORIES = [
   'packages/yoroi-extension/api',
+  'packages/yoroi-extension/assets',
   'packages/yoroi-extension/app',
   'packages/yoroi-extension/chrome',
   'packages/yoroi-extension/config',
   'packages/yoroi-extension/flow',
+  'packages/yoroi-extension/flow-typed',
   'packages/yoroi-extension/ledger',
   'packages/yoroi-extension/posthog',
   'packages/yoroi-extension/scripts',
   'packages/yoroi-extension/webpack',
+  'packages/yoroi-extension/workers',
   'packages/e2e-tests/helpers',
   'packages/e2e-tests/pages',
   'packages/e2e-tests/scripts',
   'packages/e2e-tests/test',
+  'packages/e2e-tests/testRunsData',
   'packages/e2e-tests/utils',
 ];
 const ROOT_SOURCE_FILES = [
@@ -25,19 +29,22 @@ const ROOT_SOURCE_FILES = [
   'packages/yoroi-extension/eslint.config.js',
   'packages/yoroi-extension/jest.config.js',
   'packages/yoroi-extension/jestSetup.js',
+  'packages/yoroi-extension/.d.ts',
+  'packages/yoroi-extension/.flowconfig',
+  'packages/yoroi-extension/.babelrc.js',
 ];
 const PACKAGE_PATHS = ['packages/yoroi-extension', 'packages/e2e-tests'];
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
 const FORBIDDEN_SOURCE_PATTERNS = [
   /@emurgo\/cardano-serialization-lib-(?:browser|nodejs)/,
-  /@emurgo\/cross-csl-(?:browser|core|nodejs)/,
+  /@emurgo\/cross-csl-[\w-]+/,
   /\byoroi-eutxo-txs\b/,
   /\b(?:WalletV2|WalletV4|CrossCsl)\b/,
   /\b(?:RustModule|Module)\.CSL\b/,
 ];
 const FORBIDDEN_PACKAGE_PATTERNS = [
   /^@emurgo\/cardano-serialization-lib-(?:browser|nodejs)$/,
-  /^@emurgo\/cross-csl-(?:browser|core|nodejs)$/,
+  /^@emurgo\/cross-csl-[\w-]+$/,
   /^yoroi-eutxo-txs$/,
 ];
 
@@ -98,7 +105,10 @@ function scanWorkspace() {
     });
   for (const relativePath of ROOT_SOURCE_FILES) {
     const absolutePath = path.join(WORKSPACE_ROOT, relativePath);
-    if (!fs.existsSync(absolutePath)) continue;
+    if (!fs.existsSync(absolutePath)) {
+      findings.push(`${relativePath}: configured source file is missing`);
+      continue;
+    }
     findings.push(...sourceFindings(fs.readFileSync(absolutePath, 'utf8'), relativePath));
   }
   findings.push(...PACKAGE_PATHS.flatMap(packageFindings));

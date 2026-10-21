@@ -116,10 +116,7 @@ describe('Haskell Shelley era tx format tests', () => {
         inputIndex: input.index().toString(),
         outputCount: body.outputs().len(),
         outputAddress: Module.CML.ByronAddress.from_address(output.address())?.to_base58(),
-        outputAmount: output
-          .amount()
-          .coin()
-          .toString(),
+        outputAmount: output.amount().coin().toString(),
         witnessCount: witnesses.len(),
         witness: witnesses.get(0).to_cbor_hex(),
       };

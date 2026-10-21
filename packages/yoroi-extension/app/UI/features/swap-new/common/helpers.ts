@@ -162,12 +162,7 @@ export const toBaseUnits = (val?: string | null, decimals = 0): bigint | null =>
   const dp = bn.decimalPlaces();
   if ((dp ?? 0) > decimals) return null; // too many fraction digits
   // shift to base units and floor (no rounding up), then to bigint
-  return BigInt(
-    bn
-      .shiftedBy(decimals)
-      .integerValue(BigNumber.ROUND_DOWN)
-      .toFixed()
-  );
+  return BigInt(bn.shiftedBy(decimals).integerValue(BigNumber.ROUND_DOWN).toFixed());
 };
 
 export const getPriceImpactRisk = (priceImpact: number) => {

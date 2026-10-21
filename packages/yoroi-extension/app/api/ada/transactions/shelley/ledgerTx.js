@@ -148,8 +148,8 @@ function wasmCertToAnchor(wasmAnchor: any): ?AnchorParams {
   return wasmAnchor == null
     ? undefined
     : {
-        url: wasmAnchor.url().url(),
-        hashHex: wasmAnchor.anchor_data_hash().to_hex(),
+        url: wasmAnchor.anchor_url().get(),
+        hashHex: wasmAnchor.anchor_doc_hash().to_hex(),
       };
 }
 
@@ -304,9 +304,7 @@ export function toLedgerAddressParameters(request: {|
     }
     const baseAddr = cml.BaseAddress.from_address(address);
     if (baseAddr != null) {
-      const addressPayload = cml.RewardAddress.new(request.networkId, baseAddr.stake())
-        .to_address()
-        .to_hex();
+      const addressPayload = cml.RewardAddress.new(request.networkId, baseAddr.stake()).to_address().to_hex();
       const addressing = request.addressingMap(addressPayload);
       if (addressing == null) {
         const stakeCred = baseAddr.stake();
@@ -436,16 +434,12 @@ export function toLedgerSignRequest(
 
       const baseAddr = cml.BaseAddress.from_address(addr);
       if (baseAddr) {
-        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment())
-          .to_address()
-          .to_hex();
+        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment()).to_address().to_hex();
         const ownPaymentPath =
           ownAddressMap(paymentAddress) || changeAddrs.find(({ address }) => address === addr.to_hex())?.addressing.path;
         if (ownPaymentPath) {
           const stake = baseAddr.stake();
-          const stakeAddr = cml.RewardAddress.new(networkId, stake)
-            .to_address()
-            .to_hex();
+          const stakeAddr = cml.RewardAddress.new(networkId, stake).to_address().to_hex();
           const ownStakePath = ownAddressMap(stakeAddr);
           if (ownStakePath) {
             // stake address is ours
@@ -508,10 +502,7 @@ export function toLedgerSignRequest(
         throw new Error('not expecting to pay to reward address');
       }
 
-      const amount = output
-        .amount()
-        .coin()
-        .toString();
+      const amount = output.amount().coin().toString();
       const tokenBundle = toLedgerTokenBundle(output.amount().multi_asset());
       const outputDataHash = output.datum_hash();
       const plutusData = output.datum()?.as_datum();
@@ -561,12 +552,8 @@ export function toLedgerSignRequest(
     const formattedRequiredSigners = [];
     function hashHexToOwnAddressPath(hashHex: string): ?Array<number> {
       const hash = cml.Ed25519KeyHash.from_hex(hashHex);
-      const enterpriseAddress = cml.EnterpriseAddress.new(networkId, cml.Credential.new_pub_key(hash))
-        .to_address()
-        .to_hex();
-      const stakeAddress = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(hash))
-        .to_address()
-        .to_hex();
+      const enterpriseAddress = cml.EnterpriseAddress.new(networkId, cml.Credential.new_pub_key(hash)).to_address().to_hex();
+      const stakeAddress = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(hash)).to_address().to_hex();
       return ownAddressMap(enterpriseAddress) || ownAddressMap(stakeAddress);
     }
 
@@ -707,7 +694,7 @@ export function toLedgerSignRequest(
     const votingProcedures = txBody.voting_procedures();
     if (votingProcedures) {
       formattedVotingProcedures = [];
-      const voters = votingProcedures.get_voters();
+      const voters = votingProcedures.keys();
       for (let i = 0; i < voters.len(); i++) {
         const voter = voters.get(i);
         if (!voter) {
@@ -715,27 +702,22 @@ export function toLedgerSignRequest(
         }
         let formattedVoter;
 
-        const dRepCred = voter.to_drep_credential();
-        if (dRepCred) {
-          const dRepCredKeyHash = dRepCred.to_keyhash();
-          if (dRepCredKeyHash) {
-            formattedVoter = {
-              type: VoterType.DREP_KEY_PATH,
-              // fixme
-              keyPath: [1852 + HARD_DERIVATION_START, 1815 + HARD_DERIVATION_START, 0 + HARD_DERIVATION_START, 3, 0],
-            };
-          }
-          // else
-          const dRepCredScriptHash = dRepCred.to_scripthash();
-          if (dRepCredScriptHash) {
-            formattedVoter = {
-              type: VoterType.DREP_SCRIPT_HASH,
-              scriptHashHex: dRepCredScriptHash.to_hex(),
-            };
-          }
+        const dRepKeyHash = voter.as_d_rep_key_hash();
+        if (dRepKeyHash) {
+          formattedVoter = {
+            type: VoterType.DREP_KEY_PATH,
+            // fixme
+            keyPath: [1852 + HARD_DERIVATION_START, 1815 + HARD_DERIVATION_START, 0 + HARD_DERIVATION_START, 3, 0],
+          };
         }
-        // else
-        const stakePoolKeyHash = voter.to_stake_pool_key_hash();
+        const dRepScriptHash = voter.as_d_rep_script_hash();
+        if (dRepScriptHash) {
+          formattedVoter = {
+            type: VoterType.DREP_SCRIPT_HASH,
+            scriptHashHex: dRepScriptHash.to_hex(),
+          };
+        }
+        const stakePoolKeyHash = voter.as_staking_pool_key_hash();
         if (stakePoolKeyHash) {
           // todo: support key path for friendly UI
           formattedVoter = {
@@ -752,17 +734,21 @@ export function toLedgerSignRequest(
           voter: formattedVoter,
           votes: [],
         });
-        const govActionIds = votingProcedures.get_governance_action_ids_by_voter(voter);
+        const proceduresByAction = votingProcedures.get(voter);
+        if (!proceduresByAction) {
+          throw new Error('unexpectedly missing voting procedures for voter');
+        }
+        const govActionIds = proceduresByAction.keys();
         for (let j = 0; j < govActionIds.len(); j++) {
           const govActionId = govActionIds.get(j);
           if (!govActionId) {
             throw new Error('unexpectedly missing gov action id');
           }
-          const votingProcedure = votingProcedures.get(voter, govActionId);
+          const votingProcedure = proceduresByAction.get(govActionId);
           if (!votingProcedure) {
             throw new Error('unexpectedly missing voting procedure');
           }
-          const voteKind = votingProcedure.vote_kind();
+          const voteKind = votingProcedure.vote();
           let formattedVoteKind;
           if (voteKind === 0) {
             formattedVoteKind = VoteOption.NO;
@@ -778,14 +764,14 @@ export function toLedgerSignRequest(
           formattedVotingProcedures[formattedVotingProcedures.length - 1].votes.push({
             govActionId: {
               txHashHex: govActionId.transaction_id().to_hex(),
-              govActionIndex: govActionId.index(),
+              govActionIndex: govActionId.gov_action_index(),
             },
             votingProcedure: {
               vote: formattedVoteKind,
               anchor: anchor
                 ? {
-                    url: anchor.url().url(),
-                    hashHex: anchor.anchor_data_hash().to_hex(),
+                    url: anchor.anchor_url().get(),
+                    hashHex: anchor.anchor_doc_hash().to_hex(),
                   }
                 : null,
             },

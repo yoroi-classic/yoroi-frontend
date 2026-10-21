@@ -59,8 +59,7 @@ test('Generate standard wallet root key with frozen derivation vectors', () => {
   const cmlRoot = generateWalletRootKey(mnemonic);
   const path = [WalletTypePurpose.CIP1852, CoinTypes.CARDANO, HARD_DERIVATION_START, ChainDerivations.EXTERNAL, 0];
   const expected = {
-    root:
-      '104e6fe092dff467502839395b9415672f35af08ae094a9b9bb7823caa5e835845b60600c66c654bf1a27b5d202a76b2169d0dfbf67b1cb9db89459892d319be16c6824f38cbc9377d14de83f8619fa5a7368ae74cffa939e42d91b877e2c1be',
+    root: '104e6fe092dff467502839395b9415672f35af08ae094a9b9bb7823caa5e835845b60600c66c654bf1a27b5d202a76b2169d0dfbf67b1cb9db89459892d319be16c6824f38cbc9377d14de83f8619fa5a7368ae74cffa939e42d91b877e2c1be',
     child:
       'd8dae696cbb0d1d566c5ff1f2c5a6f7ed1a3beb55851c43c63ad39d9b65e835838a0bf4eb8ab52239cd0719ef39d465da73505f0e3d1b0d5fd0ac4c11bfa13eca25eb4be55487dbdadce0b6173637fcf179cb14ca3b7b6ecfe4728635343eeeb',
     publicChild:

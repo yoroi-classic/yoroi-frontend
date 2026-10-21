@@ -24,14 +24,10 @@ export default class AdaYoroiTransferStore extends Store<StoresMap> {
   );
 
   _restoreWalletForTransfer: ({|
-    rootPk: RustModule.CML.Bip32PrivateKey,
+    accountKey: RustModule.CML.Bip32PrivateKey,
     accountIndex: number,
   |}) => Promise<RestoreWalletForTransferResponse> = async request => {
-    const accountPubKey = request.rootPk
-      .derive(WalletTypePurpose.BIP44)
-      .derive(CoinTypes.CARDANO)
-      .derive(request.accountIndex)
-      .to_public();
+    const accountPubKey = request.accountKey.to_public();
 
     if (this.stores.profile.selectedNetwork == null) {
       throw new Error(`${nameof(AdaYoroiTransferStore)}::${nameof(this._restoreWalletForTransfer)} no network selected`);
@@ -59,21 +55,18 @@ export default class AdaYoroiTransferStore extends Store<StoresMap> {
     // 1) get receive address
     const destinationAddress = await request.getDestinationAddress();
 
-    // 2) Perform restoration
     const accountIndex = 0 + HARD_DERIVATION_START; // TODO: don't hardcode index
+    const accountKey = rootPk.derive(WalletTypePurpose.BIP44).derive(CoinTypes.CARDANO).derive(accountIndex);
+
+    // 2) Perform restoration
     const { addresses } = await this._restoreWalletForTransfer({
-      rootPk,
+      accountKey,
       accountIndex,
     });
 
     request.updateStatusCallback();
 
     // 3) Calculate private keys for restored wallet utxo
-
-    const accountKey = rootPk
-      .derive(WalletTypePurpose.BIP44)
-      .derive(CoinTypes.CARDANO)
-      .derive(accountIndex);
 
     // 4) generate transaction
 

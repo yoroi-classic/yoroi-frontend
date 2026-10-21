@@ -152,3 +152,45 @@ test('aligns hardware witness sets with their transaction indexes', async () => 
     protocol: 'cardano',
   });
 });
+
+test('preserves an incoming full CIP-30 transaction when returning the signed transaction', async () => {
+  const fullTx = '8280a0f5f6';
+  RustModule.WasmScope = callback =>
+    callback({
+      CML: {
+        Transaction: {
+          from_cbor_hex: tx => {
+            if (tx !== fullTx) throw new Error('not a full transaction');
+            return { to_cbor_hex: () => fullTx };
+          },
+        },
+      },
+    });
+  const connection = {
+    pendingSigns: {
+      '9': {
+        continuationData: { type: 'cardano-tx', returnTx: true, tx: fullTx },
+        request: { type: 'tx/cardano', tx: { tx: fullTx }, uid: 9 },
+      },
+    },
+  };
+  getConnectedSite.mockResolvedValue(connection);
+  getConnectedWallet.mockResolvedValue({});
+  transactionHexAddSignaturesFromWitnessSetHex.mockReturnValue('signed-full-tx');
+
+  await UserSignConfirm.handle({
+    password: '',
+    tabId: 44,
+    tx: null,
+    uid: 9,
+    witnessSetHex: 'witness-set',
+  });
+
+  expect(transactionHexAddSignaturesFromWitnessSetHex).toHaveBeenCalledWith(fullTx, 'witness-set');
+  expect(sendToInjector).toHaveBeenCalledWith(44, {
+    type: 'connector_rpc_response',
+    uid: 9,
+    return: { ok: 'signed-full-tx' },
+    protocol: 'cardano',
+  });
+});

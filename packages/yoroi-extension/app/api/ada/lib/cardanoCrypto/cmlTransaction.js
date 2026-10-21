@@ -5,7 +5,7 @@ import { hexToBytes } from '../../../../coreUtils';
 const SET_TAG = BigInt('258');
 const SET_BODY_KEYS = new Set([0, 4, 13, 14, 18]);
 
-type CborHead = {| major: number, additional: number, value: bigint |};
+type CborHead = {| major: number, additional: number, value: BigIntValue |};
 
 function readHead(bytes: Uint8Array, offset: number): CborHead {
   if (offset >= bytes.length) throw new Error('Unexpected end of CBOR');
@@ -45,12 +45,12 @@ function skipItem(bytes: Uint8Array, offset: number, depth: number = 0): number 
     (head.additional < 24 || head.additional === 31
       ? 1
       : head.additional === 24
-      ? 2
-      : head.additional === 25
-      ? 3
-      : head.additional === 26
-      ? 5
-      : 9);
+        ? 2
+        : head.additional === 25
+          ? 3
+          : head.additional === 26
+            ? 5
+            : 9);
   if (head.major === 0 || head.major === 1) return cursor;
   if (head.major === 2 || head.major === 3) {
     if (head.value === -BigInt('1')) {
@@ -63,13 +63,19 @@ function skipItem(bytes: Uint8Array, offset: number, depth: number = 0): number 
   }
   if (head.major === 4 || head.major === 5) {
     const indefinite = head.value === -BigInt('1');
-    const count = indefinite ? undefined : Number(head.value) * (head.major === 5 ? 2 : 1);
     let consumed = 0;
-    while (indefinite ? bytes[cursor] !== 0xff : consumed < count) {
+    if (indefinite) {
+      while (bytes[cursor] !== 0xff) {
+        cursor = skipItem(bytes, cursor, depth + 1);
+      }
+      return cursor + 1;
+    }
+    const count = Number(head.value) * (head.major === 5 ? 2 : 1);
+    while (consumed < count) {
       cursor = skipItem(bytes, cursor, depth + 1);
       consumed++;
     }
-    return indefinite ? cursor + 1 : cursor;
+    return cursor;
   }
   if (head.major === 6) return skipItem(bytes, cursor, depth + 1);
   if (head.major === 7) return cursor;
@@ -84,14 +90,14 @@ function bodySetTagStates(bytes: Uint8Array): Array<boolean> {
     body.additional === 31
       ? 1
       : body.additional < 24
-      ? 1
-      : body.additional === 24
-      ? 2
-      : body.additional === 25
-      ? 3
-      : body.additional === 26
-      ? 5
-      : 9;
+        ? 1
+        : body.additional === 24
+          ? 2
+          : body.additional === 25
+            ? 3
+            : body.additional === 26
+              ? 5
+              : 9;
   let pairs = 0;
   const states = [];
   while (indefinite ? bytes[cursor] !== 0xff : pairs < Number(body.value)) {

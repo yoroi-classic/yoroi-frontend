@@ -9,7 +9,7 @@ import {
   addressesFromCborIfNeeded,
   getAmountInHex,
   getCmlValue,
-  getPubKeyHashFromHex,
+  getKeyHashFromHex,
   mapCborUtxos,
   toInt,
 } from './dAppTxHelper.js';
@@ -104,10 +104,9 @@ test('mock dApp CML transaction bytes stay stable for the frozen legacy fixture'
   );
 });
 
-test('public key hashes are derived by CML', () => {
-  const publicKeyBytes = Uint8Array.from({ length: 32 }, (_, index) => index);
-  const publicKey = CML.PublicKey.from_bytes(publicKeyBytes);
-  const hash = getPubKeyHashFromHex(Buffer.from(publicKeyBytes).toString('hex'));
+test('CIP-95 key hashes are parsed as 28-byte hashes, not public keys', () => {
+  const hashHex = '491112dd01155c07dab485f71b572e0cae759e2cd38b1c0e97554297';
+  const hash = getKeyHashFromHex(hashHex);
 
-  assert.equal(hash.to_hex(), '491112dd01155c07dab485f71b572e0cae759e2cd38b1c0e97554297');
+  assert.equal(hash.to_hex(), hashHex);
 });

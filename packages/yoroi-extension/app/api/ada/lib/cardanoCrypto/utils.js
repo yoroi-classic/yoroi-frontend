@@ -23,11 +23,7 @@ export function addressBech32ToHex(bech32: string): string {
 }
 
 export function transactionHexToWitnessSet(txHex: string): string {
-  return RustModule.WasmScope(Module =>
-    Module.CML.Transaction.from_cbor_hex(txHex)
-      .witness_set()
-      .to_cbor_hex()
-  );
+  return RustModule.WasmScope(Module => Module.CML.Transaction.from_cbor_hex(txHex).witness_set().to_cbor_hex());
 }
 
 export function transactionBodyHexToTransaction(txBodyHex: string): string {
@@ -39,11 +35,7 @@ export function transactionBodyHexToTransaction(txBodyHex: string): string {
 }
 
 export function transactionHexToBodyHex(txHex: string): string {
-  return RustModule.WasmScope(Module =>
-    Module.CML.Transaction.from_cbor_hex(txHex)
-      .body()
-      .to_cbor_hex()
-  );
+  return RustModule.WasmScope(Module => Module.CML.Transaction.from_cbor_hex(txHex).body().to_cbor_hex());
 }
 
 export function transactionHexToHash(txHex: string): string {
@@ -234,13 +226,7 @@ function getWithdrawalKeyHashesFromTransactionBody(txBody: any): Set<string> {
   const withdrawals = txBody.withdrawals?.();
   if (withdrawals != null) {
     for (const rewardAddress of iterateLenGet(withdrawals.keys())) {
-      maybe(
-        rewardAddress
-          .payment()
-          .as_pub_key()
-          ?.to_hex(),
-        x => result.add(x)
-      );
+      maybe(rewardAddress.payment().as_pub_key()?.to_hex(), x => result.add(x));
     }
   }
   return result;

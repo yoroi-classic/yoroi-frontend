@@ -162,9 +162,9 @@ const checkWalletIsStillConnected = async <ParamT, ReturnT, WalletType>(
 const signDataHandler = NewHandler.withSyncedWallet<
   [
     string, // rawAddress
-    string // payload
+    string, // payload
   ],
-  void
+  void,
 >(async ({ message, wallet, tabId }) => {
   const rawAddress = message.params[0];
   const payload = message.params[1];
@@ -224,9 +224,9 @@ const Handlers = Object.freeze({
         tx: string,
         partialSign: boolean,
         returnTx: boolean,
-      |}
+      |},
     ],
-    void
+    void,
   >(async ({ message, tabId }) => {
     const connection = await getConnectedSite(tabId);
     if (connection == null) {
@@ -258,9 +258,9 @@ const Handlers = Object.freeze({
         tx: string,
         partialSign: boolean,
         returnTx: false,
-      |}>
+      |}>,
     ],
-    void
+    void,
   >(async ({ message, tabId }) => {
     const connection = await getConnectedSite(tabId);
     if (connection == null) {
@@ -333,9 +333,9 @@ const Handlers = Object.freeze({
   'get_utxos/cardano': NewHandler.withSyncedWallet<
     [
       string | null, // valueExpected
-      boolean // paginate
+      boolean, // paginate
     ],
-    null
+    null,
   >(async ({ wallet, message }) => {
     const valueExpected = message.params[0] == null ? null : asValue(message.params[0]);
     const paginate = message.params[1] == null ? null : asPaginate(message.params[1]);
@@ -525,11 +525,7 @@ const Handlers = Object.freeze({
     let requiredAmount: string = firstParam || String(MAX_COLLATERAL);
     if (!/^\d+$/.test(requiredAmount)) {
       try {
-        requiredAmount = RustModule.WasmScope(Module =>
-          Module.CML.Value.from_cbor_hex(requiredAmount)
-            .coin()
-            .toString()
-        );
+        requiredAmount = RustModule.WasmScope(Module => Module.CML.Value.from_cbor_hex(requiredAmount).coin().toString());
       } catch {
         return {
           err: {

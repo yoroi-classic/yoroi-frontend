@@ -2,7 +2,7 @@
 import { beforeAll, expect, test } from '@jest/globals';
 import '../../../../../api/ada/lib/test-config.forTests';
 import { RustModule } from '../../../../../api/ada/lib/cardanoCrypto/rustLoader';
-import { getCborTxBody } from './usetxBody';
+import { getCborTxBody, getUnsignedTxTxBody } from './usetxBody';
 
 beforeAll(async () => {
   await RustModule.load();
@@ -11,6 +11,14 @@ beforeAll(async () => {
 test('parses a CBOR transaction body with CML', async () => {
   // A minimal transaction body with the mandatory inputs, outputs, and fee fields.
   await expect(getCborTxBody('84a3008001800200a0f5f6')).resolves.toMatchObject({ inputs: [], outputs: [], fee: '0' });
+});
+
+test('parses unsigned CML body bytes for staking and governance review', async () => {
+  const bodyBytes = RustModule.WasmScope(Module => Module.CML.TransactionBody.from_cbor_hex('a3008001800200').to_cbor_bytes());
+
+  await expect(getUnsignedTxTxBody(bodyBytes)).resolves.toMatchObject({
+    body: { inputs: [], outputs: [], fee: '0' },
+  });
 });
 
 test('preserves fees and output coin amounts above Number.MAX_SAFE_INTEGER', async () => {

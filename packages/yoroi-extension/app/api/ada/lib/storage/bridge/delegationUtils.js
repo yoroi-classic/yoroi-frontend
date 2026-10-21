@@ -29,8 +29,8 @@ export type RewardHistoryResponse = Array<
   [
     number, // epoch
     MultiToken, // amount
-    string // poolHash
-  ]
+    string, // poolHash
+  ],
 >;
 export type RewardHistoryFunc = (request: RewardHistoryRequest) => Promise<RewardHistoryResponse>;
 

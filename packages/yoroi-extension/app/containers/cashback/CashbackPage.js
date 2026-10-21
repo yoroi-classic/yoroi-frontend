@@ -274,12 +274,7 @@ const CashbackPageContainer = observer((props: AllProps) => {
 
   function stringToHex(str) {
     return Array.from(str)
-      .map(char =>
-        char
-          .charCodeAt(0)
-          .toString(16)
-          .padStart(2, '0')
-      )
+      .map(char => char.charCodeAt(0).toString(16).padStart(2, '0'))
       .join('');
   }
 

@@ -1,4 +1,5 @@
 // @flow
+/* global BigInt */
 import '../lib/test-config.forTests';
 import BigNumber from 'bignumber.js';
 import {
@@ -58,7 +59,7 @@ test('serializes remote swap UTxOs with CML', () => {
   expect(cardanoUtxoHexFromRemoteFormat(utxo)).toEqual(expected);
 });
 
-test('calculates min-ADA for token outputs with CML parity', () => {
+test('calculates minimum ADA for token outputs', () => {
   const tokens = MultiToken.from({
     defaults: { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId },
     values: [
@@ -75,7 +76,6 @@ test('calculates min-ADA for token outputs with CML parity', () => {
       ),
       cardanoValueFromMultiToken(tokens, Module)
     );
-    // eslint-disable-next-line no-undef
     return CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString();
   });
   expect(cardanoMinAdaRequiredFromAssets(tokens, coinsPerByte).toString()).toEqual(cmlMinimum);

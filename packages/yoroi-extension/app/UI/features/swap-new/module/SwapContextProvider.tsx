@@ -160,7 +160,7 @@ export const SwapContextProvider = ({ children, currentWallet, stores }: any) =>
   ]);
 
   useEffect(() => {
-    const normalizeId = (id?: string | null) => (id === '.' ? '' : id ?? '');
+    const normalizeId = (id?: string | null) => (id === '.' ? '' : (id ?? ''));
 
     const asset = ftAssetList.find(a => a.info.id === normalizeId(state.tokenInInput.tokenId));
     const balance = asset ? BigInt(asset.quantity) : BigInt(0);

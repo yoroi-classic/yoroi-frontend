@@ -652,11 +652,7 @@ export default class ConnectorStore extends Store<StoresMap> {
             if (stakeRegistration) {
               cip95Info.push({
                 type: 'StakeRegistrationCert',
-                coin:
-                  cert
-                    .as_reg_cert()
-                    ?.deposit()
-                    .toString() ?? null,
+                coin: cert.as_reg_cert()?.deposit().toString() ?? null,
               });
               continue;
             }
@@ -664,11 +660,7 @@ export default class ConnectorStore extends Store<StoresMap> {
             if (stakeDeregistration) {
               cip95Info.push({
                 type: 'StakeDeregistrationCert',
-                coin:
-                  cert
-                    .as_unreg_cert()
-                    ?.deposit()
-                    .toString() ?? null,
+                coin: cert.as_unreg_cert()?.deposit().toString() ?? null,
               });
               continue;
             }
@@ -751,29 +743,32 @@ export default class ConnectorStore extends Store<StoresMap> {
           }
         const votingProcedures = body.voting_procedures();
         if (votingProcedures) {
-          const voters = votingProcedures.get_voters();
+          const voters = votingProcedures.keys();
           for (let i = 0; i < voters.len(); i++) {
             const voter = voters.get(i);
             if (!voter) throw new Error('unexpectedly missing voter');
-            const govActionIds = votingProcedures.get_governance_action_ids_by_voter(voter);
+            const proceduresByAction = votingProcedures.get(voter);
+            if (!proceduresByAction) throw new Error('unexpectedly missing voting procedures for voter');
+            const govActionIds = proceduresByAction.keys();
             for (let j = 0; j < govActionIds.len(); j++) {
               const govActionId = govActionIds.get(j);
               if (!govActionId) throw new Error('unexpectedly missing governance action id');
-              const votingProcedure = votingProcedures.get(voter, govActionId);
+              const votingProcedure = proceduresByAction.get(govActionId);
               if (!votingProcedure) throw new Error('unexpectedly missing voting procedure');
-              const voterCredential = voter.to_constitutional_committee_hot_credential() || voter.to_drep_credential();
               const voterHash =
-                voterCredential?.as_script()?.to_hex() ||
-                voterCredential?.as_pub_key()?.to_hex() ||
-                voter.to_stake_pool_key_hash()?.to_hex();
+                voter.as_constitutional_committee_hot_script_hash()?.to_hex() ||
+                voter.as_constitutional_committee_hot_key_hash()?.to_hex() ||
+                voter.as_d_rep_script_hash()?.to_hex() ||
+                voter.as_d_rep_key_hash()?.to_hex() ||
+                voter.as_staking_pool_key_hash()?.to_hex();
               if (!voterHash) throw new Error('unexpected voter');
               cip95Info.push({
                 type: 'VotingProcedure',
                 voterType: voter.kind(),
                 voterHash,
                 govActionTxId: govActionId.transaction_id().to_hex(),
-                govActionIndex: Number(govActionId.index()),
-                vote: votingProcedure.vote_kind(),
+                govActionIndex: Number(govActionId.gov_action_index()),
+                vote: votingProcedure.vote(),
                 anchor: deserializeAnchor(votingProcedure.anchor()),
               });
             }
@@ -1011,10 +1006,7 @@ export default class ConnectorStore extends Store<StoresMap> {
     const fee = {
       tokenId: unsignedTx.fee().getDefaultEntry().identifier,
       networkId: unsignedTx.fee().getDefaultEntry().networkId,
-      amount: unsignedTx
-        .fee()
-        .getDefaultEntry()
-        .amount.toString(),
+      amount: unsignedTx.fee().getDefaultEntry().amount.toString(),
     };
     const { amount, total } = await this._calculateAmountAndTotal(
       connectedWallet,

@@ -62,7 +62,7 @@ test('addressToKind classifies Cardano address forms with bech32 and hex inputs'
   }
 });
 
-test('extracts key-controlled payment hashes from bech32 addresses using CML-compatible bytes', async () => {
+test('extracts key-controlled payment hashes from known Shelley address vectors', async () => {
   await RustModule.load();
   const addresses = [
     'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z',
@@ -70,35 +70,16 @@ test('extracts key-controlled payment hashes from bech32 addresses using CML-com
     'addr1vahzs6qr0cmmrh64p7jd2qtq2wlgggl5e0enr2my20f44ssv2wfee',
     'stake1az0vrvznk3xya3c7l0fqp6qwkth5emmc37vyaevydah3r0cv6gnpm',
   ];
-  const expected = RustModule.WasmScope(Module =>
-    addresses.map(address => {
-      const cmlAddress = Module.CML.Address.from_bech32(address);
-      const keyHash =
-        Module.CML.BaseAddress.from_address(cmlAddress)
-          ?.payment()
-          .as_pub_key()
-          ?.to_hex() ??
-        Module.CML.PointerAddress.from_address(cmlAddress)
-          ?.payment()
-          .as_pub_key()
-          ?.to_hex() ??
-        Module.CML.EnterpriseAddress.from_address(cmlAddress)
-          ?.payment()
-          .as_pub_key()
-          ?.to_hex() ??
-        Module.CML.RewardAddress.from_address(cmlAddress)
-          ?.payment()
-          .as_pub_key()
-          ?.to_hex();
-      return keyHash ?? null;
-    })
-  );
-
-  expect(addresses.map(getCardanoSpendingKeyHash)).toEqual(expected);
+  expect(addresses.map(getCardanoSpendingKeyHash)).toEqual([
+    '54e887279408c196dc5859acbc62e749bf358078c622e8a5ef891739',
+    '54150ca61c807d71413c11cd8d2ee2935c92ddbf3423234f5af1e44f',
+    '6e2868037e37b1df550fa4d5016053be8423f4cbf331ab6453d35ac2',
+    '9ec1b053b44c4ec71efbd200e80eb2ef4cef788f984ee5846f6f11bf',
+  ]);
   expect(getCardanoSpendingKeyHash('Ae2tdPwUPEZC6WJfVQxTNN2tWw4skGrN6zRVukvxJmTFy1nYkVGQBuURU3L')).toBeNull();
 });
 
-test('derives enterprise address bytes from key-controlled address forms with CML', async () => {
+test('derives enterprise address bytes from key-controlled address vectors', async () => {
   await RustModule.load();
   const addressHexes = [
     '0254e887279408c196dc5859acbc62e749bf358078c622e8a5ef89173982d222817b5561bfdd1541aad78cd9ae7c361cb4dc003dd3acf06479',
@@ -106,30 +87,12 @@ test('derives enterprise address bytes from key-controlled address forms with CM
     '676e2868037e37b1df550fa4d5016053be8423f4cbf331ab6453d35ac2',
     'e89ec1b053b44c4ec71efbd200e80eb2ef4cef788f984ee5846f6f11bf',
   ];
-  const expected = RustModule.WasmScope(Module =>
-    addressHexes.map(addressHex => {
-      const address = Module.CML.Address.from_hex(addressHex);
-      const keyHash =
-        Module.CML.BaseAddress.from_address(address)
-          ?.payment()
-          .as_pub_key() ??
-        Module.CML.PointerAddress.from_address(address)
-          ?.payment()
-          .as_pub_key() ??
-        Module.CML.EnterpriseAddress.from_address(address)
-          ?.payment()
-          .as_pub_key() ??
-        Module.CML.RewardAddress.from_address(address)
-          ?.payment()
-          .as_pub_key();
-      if (keyHash == null) return undefined;
-      return Module.CML.EnterpriseAddress.new(address.network_id(), Module.CML.Credential.new_pub_key(keyHash))
-        .to_address()
-        .to_hex();
-    })
-  );
-
-  expect(addressHexes.map(toEnterprise)).toEqual(expected);
+  expect(addressHexes.map(toEnterprise)).toEqual([
+    '6254e887279408c196dc5859acbc62e749bf358078c622e8a5ef891739',
+    '6254150ca61c807d71413c11cd8d2ee2935c92ddbf3423234f5af1e44f',
+    '676e2868037e37b1df550fa4d5016053be8423f4cbf331ab6453d35ac2',
+    '689ec1b053b44c4ec71efbd200e80eb2ef4cef788f984ee5846f6f11bf',
+  ]);
 });
 
 test('uses CML for Byron and Shelley string address conversions', async () => {

@@ -188,11 +188,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     values.add({
       identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
       amount: new BigNumber(
-        RustModule.WasmScope(Module =>
-          Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes())
-            .fee()
-            .toString()
-        )
+        RustModule.WasmScope(Module => Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).fee().toString())
       ).plus(this.depositAmount ?? '0'),
       networkId: this.networkSettingSnapshot.NetworkId,
     });

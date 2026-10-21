@@ -59,12 +59,8 @@ test('creates byte-compatible deregistration certificates from key reward addres
     const cml = Module.CML;
     const keyCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
     const scriptCredential = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-    const keyAddressHex = cml.RewardAddress.new(1, keyCredential)
-      .to_address()
-      .to_hex();
-    const scriptAddressHex = cml.RewardAddress.new(1, scriptCredential)
-      .to_address()
-      .to_hex();
+    const keyAddressHex = cml.RewardAddress.new(1, keyCredential).to_address().to_hex();
+    const scriptAddressHex = cml.RewardAddress.new(1, scriptCredential).to_address().to_hex();
     return {
       keyRewardAddressHex: keyAddressHex,
       scriptRewardAddressHex: scriptAddressHex,

@@ -105,9 +105,7 @@ test('resolves CNS virtual subdomains from Plutus address credentials using CML'
     const cml = Module.CML;
     const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(paymentHash));
     const stake = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(stakeHash));
-    return cml.BaseAddress.new(1, payment, stake)
-      .to_address()
-      .to_bech32();
+    return cml.BaseAddress.new(1, payment, stake).to_address().to_bech32();
   });
 
   expect(results.find(result => result.nameServer === Resolver.NameServer.Cns)?.address).toBe(expected);

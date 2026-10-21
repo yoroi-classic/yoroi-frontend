@@ -18,8 +18,8 @@ const initialStakingProvider = {
 const StakingContext = React.createContext(initialStakingProvider);
 
 type StakingProviderProps = {
-  children: React.ReactNode,
-  stores: StoresMap,
+  children: React.ReactNode;
+  stores: StoresMap;
 };
 
 export const StakingContextProvider = observer(({ children, stores }: StakingProviderProps) => {

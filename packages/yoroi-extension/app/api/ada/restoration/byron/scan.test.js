@@ -16,10 +16,7 @@ test('CML reproduces Byron BIP44 external and internal addresses by index and ne
   const rootKey = generateWalletRootKey(
     'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon share'
   );
-  const accountKey = rootKey
-    .derive(WalletTypePurpose.BIP44)
-    .derive(CoinTypes.CARDANO)
-    .derive(HARD_DERIVATION_START);
+  const accountKey = rootKey.derive(WalletTypePurpose.BIP44).derive(CoinTypes.CARDANO).derive(HARD_DERIVATION_START);
   const accountPublicKeyHex = bytesToHex(accountKey.to_public().to_raw_bytes());
   const network = networks.CardanoMainnet;
   const byronProtocolMagic = Number(network.BaseConfig[0].ByronNetworkId);
@@ -58,14 +55,7 @@ test('CML reproduces Byron BIP44 external and internal addresses by index and ne
     const chainIndex = isExternal ? 1 : 0;
     const cmlChildKeys = RustModule.WasmScope(Module => {
       const accountPublicKey = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
-      return [0, 1, 17].map(index =>
-        bytesToHex(
-          accountPublicKey
-            .derive(chainIndex)
-            .derive(index)
-            .to_raw_bytes()
-        )
-      );
+      return [0, 1, 17].map(index => bytesToHex(accountPublicKey.derive(chainIndex).derive(index).to_raw_bytes()));
     });
     expect(cmlChildKeys).toEqual(legacyVectors[chainIndex].map(([childKey]) => childKey));
     const cmlAddresses = v2genAddressBatchFunc(accountPublicKeyHex, chainIndex, byronProtocolMagic)([0, 1, 17]);

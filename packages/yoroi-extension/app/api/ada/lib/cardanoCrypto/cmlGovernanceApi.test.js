@@ -13,9 +13,7 @@ describe('CmlGovernanceApi', () => {
     const stakeHash = '11'.repeat(28);
     const rewardAddress = RustModule.WasmScope(Module => {
       const keyHash = Module.CML.Ed25519KeyHash.from_hex(stakeHash);
-      return Module.CML.RewardAddress.new(0, Module.CML.Credential.new_pub_key(keyHash))
-        .to_address()
-        .to_hex();
+      return Module.CML.RewardAddress.new(0, Module.CML.Credential.new_pub_key(keyHash)).to_address().to_hex();
     });
     const stake = { registration: { deposit: '2000000' }, poolDelegation: { pool: 'pool1' }, drepDelegation: null };
     const drep = { registration: { deposit: '5000000' } };

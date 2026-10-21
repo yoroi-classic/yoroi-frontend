@@ -16,7 +16,7 @@ const cborTextHex = (text: string): string => {
   return bytesToHex(new Uint8Array([...cborLength(3, bytes.length), ...bytes]));
 };
 
-const cborInteger = (value: bigint): Array<number> => {
+const cborInteger = (value: BigIntValue): Array<number> => {
   const major = value < BigInt('0') ? 1 : 0;
   const remaining = value < BigInt('0') ? -value - BigInt('1') : value;
   // CBOR's 8-byte integer representation is limited to an unsigned 64-bit
@@ -156,9 +156,10 @@ export const poolRegistrationPayloads = (poolParams: {|
     }
 
     let metadata = undefined;
-    if (poolParams.poolMetadata != null) {
-      const url = CML.Url.from_cbor_hex(cborTextHex(poolParams.poolMetadata.url));
-      const metadataHash = CML.PoolMetadataHash.from_hex(poolParams.poolMetadata.metadataHash);
+    const poolMetadata = poolParams.poolMetadata;
+    if (poolMetadata != null) {
+      const url = CML.Url.from_cbor_hex(cborTextHex(poolMetadata.url));
+      const metadataHash = CML.PoolMetadataHash.from_hex(poolMetadata.metadataHash);
       metadata = CML.PoolMetadata.new(url, metadataHash);
     }
 

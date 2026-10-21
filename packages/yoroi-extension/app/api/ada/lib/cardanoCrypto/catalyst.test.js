@@ -17,11 +17,7 @@ test('Generate Catalyst registration tx', async () => {
     // stake_test1uzhr5zn6akj2affzua8ylcm8t872spuf5cf6tzjrvnmwemcehgcjm (e0ae3a0a7aeda4aea522e74e4fe36759fca80789a613a58a4364f6ecef)
     const address = cml.RewardAddress.new(
       0,
-      cml.Credential.new_pub_key(
-        cml.PrivateKey.from_normal_bytes(Buffer.from(stakePrivateKeyHex, 'hex'))
-          .to_public()
-          .hash()
-      )
+      cml.Credential.new_pub_key(cml.PrivateKey.from_normal_bytes(Buffer.from(stakePrivateKeyHex, 'hex')).to_public().hash())
     );
 
     const nonce = 1234;
@@ -57,8 +53,7 @@ test('Generate Catalyst registration tx', async () => {
         '5': 0,
       },
       '61285': {
-        '1':
-          '0x503e1b9e607e32f0d74a93da7261eb603132cf95d5405ee36d14431d3212bd49902445eeb47168e48858e295fd495cfad69f9fc1ea6da0ee3272c016a0bdef0b',
+        '1': '0x503e1b9e607e32f0d74a93da7261eb603132cf95d5405ee36d14431d3212bd49902445eeb47168e48858e295fd495cfad69f9fc1ea6da0ee3272c016a0bdef0b',
       },
     };
     expect({

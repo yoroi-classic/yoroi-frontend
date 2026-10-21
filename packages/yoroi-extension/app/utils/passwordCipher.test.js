@@ -22,6 +22,12 @@ describe('passwordCipher', () => {
     expect(Array.from(decryptWithPassword(password, ciphertext))).toEqual(Array.from(plaintext));
   });
 
+  it('decrypts a fixed EMIP-3 ciphertext independently of the current encryptor', () => {
+    const legacyCiphertext = `${'a'.repeat(88)}368047ba94f48d80cb8c39e4debfaadcb5d2c4dd5b`;
+
+    expect(Array.from(decryptWithPassword('test-password', legacyCiphertext))).toEqual([5, 6, 7, 8, 9]);
+  });
+
   it('maps a failed CML decryption to WrongPassphraseError', () => {
     expect(() => decryptWithPassword('test-password', 'not-hex')).toThrow(WrongPassphraseError);
   });

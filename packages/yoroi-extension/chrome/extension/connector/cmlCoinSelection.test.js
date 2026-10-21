@@ -1,4 +1,5 @@
 // @flow
+/* global BigInt */
 
 import '../../../app/api/ada/lib/test-config.forTests';
 import { RustModule } from '../../../app/api/ada/lib/cardanoCrypto/rustLoader';
@@ -41,8 +42,6 @@ describe('CML connector UTxO selection', () => {
   test('selects sufficient ADA UTxOs and rejects insufficient funds', async () => {
     const selected = await selectCmlUtxosForValue([adaUtxo('a', '2000000'), adaUtxo('b', '8000000')], '5000000', '4310');
     expect(selected.length).toBeGreaterThan(0);
-    // eslint-disable-next-line no-undef
-    expect(selected.reduce((sum, utxo) => sum + BigInt(utxo.amount), BigInt('0'))).toBeGreaterThanOrEqual(BigInt('5000000'));
     expect(selected.map(utxo => utxo.amount)).toEqual(['8000000']);
     await expect(selectCmlUtxosForValue([adaUtxo('c', '1000000')], '5000000', '4310')).rejects.toThrow(NotEnoughMoneyToSendError);
   });
@@ -78,7 +77,7 @@ describe('CML connector UTxO selection', () => {
     expect(selected.every(utxo => utxo.assets.length === 1)).toBe(true);
   });
 
-  test('CML LargestFirstMultiAsset selects a balanced multiasset target', async () => {
+  test('CML LargestFirstMultiAsset avoids an unnecessary pure-ADA input for the token target', async () => {
     await RustModule.load();
     RustModule.WasmScope(Module => {
       const cml = Module.CML;
@@ -141,15 +140,9 @@ describe('CML connector UTxO selection', () => {
       expect(body.inputs().len()).toBe(2);
       expect(body.outputs().len()).toBeGreaterThanOrEqual(2);
       const outputTotal = Array.from({ length: body.outputs().len() }, (_, index) =>
-        body
-          .outputs()
-          .get(index)
-          .amount()
-          .coin()
+        body.outputs().get(index).amount().coin()
       ).reduce((sum, coin) => sum + coin, BigInt('0'));
-      // eslint-disable-next-line no-undef
       expect(total.coin() - outputTotal).toBeGreaterThanOrEqual(BigInt(body.fee().toString()));
-      // eslint-disable-next-line no-undef
       expect(BigInt(body.fee().toString())).toBeGreaterThanOrEqual(builder.min_fee(false));
     });
   });

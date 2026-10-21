@@ -2,6 +2,8 @@
 
 import typeof * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
 
+type CmlApi = $Exports<'@dcspark/cardano-multiplatform-lib-browser'>;
+
 function isWasmPointer(o: ?any): boolean {
   return o != null && typeof o.__wbg_ptr === 'number' && typeof o.free === 'function';
 }
@@ -84,7 +86,7 @@ function createWasmScope(): {|
           /*
            * A wrapper function is returned instead.
            */
-          return function(...args: any[]): any {
+          return function (...args: any[]): any {
             // Call the actual function bound to the original object.
             const res = realValue.bind(target)(...args);
             if (isWasmPointer(res)) {
@@ -135,21 +137,16 @@ class Module {
   async load(): Promise<void> {
     if (this._messageSigning != null && this._cml != null) return;
     this._messageSigning = await import('@emurgo/cardano-message-signing-browser/cardano_message_signing');
-    // $FlowFixMe[untyped-import]
     this._cml = await import('@dcspark/cardano-multiplatform-lib-browser');
   }
 
-  __WasmScopeInternal<T>(
-    callback: Module => T
-  ): {|
+  __WasmScopeInternal<T>(callback: Module => T): {|
     result: T,
     scopeSize: number,
     scopeIsFree: boolean,
   |} {
     const scope = createWasmScope();
-    function onSuccess(
-      result: T
-    ): {|
+    function onSuccess(result: T): {|
       result: T,
       scopeSize: number,
       scopeIsFree: boolean,
@@ -221,7 +218,7 @@ class Module {
     return InternalMonad<T>(callback);
   }
 
-  get CML(): any {
+  get CML(): CmlApi {
     return this._cml;
   }
   get MessageSigning(): WasmMessageSigning {

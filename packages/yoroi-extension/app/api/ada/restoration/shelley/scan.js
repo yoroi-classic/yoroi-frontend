@@ -34,13 +34,7 @@ export function genKeyhashBatchFunc(accountPublicKeyHex: string, chainIndex: num
     return RustModule.WasmScope(Module => {
       const accountPublicKey = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
       const addressChain = accountPublicKey.derive(chainIndex);
-      return indices.map(i =>
-        addressChain
-          .derive(i)
-          .to_raw_key()
-          .hash()
-          .to_bech32(Bech32Prefix.PAYMENT_KEY_HASH)
-      );
+      return indices.map(i => addressChain.derive(i).to_raw_key().hash().to_bech32(Bech32Prefix.PAYMENT_KEY_HASH));
     });
   };
 }

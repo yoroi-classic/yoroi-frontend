@@ -32,10 +32,7 @@ export const generateShelleyPlate = (
   const accountPublic = accountKey.to_public();
   const chainKey = accountPublic.derive(ChainDerivations.EXTERNAL);
 
-  const stakingKey = accountPublic
-    .derive(ChainDerivations.CHIMERIC_ACCOUNT)
-    .derive(STAKING_KEY_INDEX)
-    .to_raw_key();
+  const stakingKey = accountPublic.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(STAKING_KEY_INDEX).to_raw_key();
 
   const plate = walletChecksum(bytesToHex(accountPublic.to_raw_bytes()));
   const generateAddressFunc = genBaseAddressBatchFunc(chainKey, stakingKey, chainNetworkId);

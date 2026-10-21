@@ -184,9 +184,7 @@ export function toEnterprise(address: string): void | string {
     const paymentKeyHash = paymentCredential?.as_pub_key();
     if (paymentKeyHash == null) return undefined;
     const networkId = wasmAddr.network_id();
-    return Module.CML.EnterpriseAddress.new(networkId, Module.CML.Credential.new_pub_key(paymentKeyHash))
-      .to_address()
-      .to_hex();
+    return Module.CML.EnterpriseAddress.new(networkId, Module.CML.Credential.new_pub_key(paymentKeyHash)).to_address().to_hex();
   });
 }
 

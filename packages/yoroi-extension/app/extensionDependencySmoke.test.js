@@ -1476,10 +1476,7 @@ describe('extension dependency smoke', () => {
       const bootstrapWitnesses = transaction.witness_set().bootstrap_witnesses();
       return {
         bootstrapCount: bootstrapWitnesses?.len() ?? 0,
-        fee: transaction
-          .body()
-          .fee()
-          .toString(),
+        fee: transaction.body().fee().toString(),
       };
     });
 

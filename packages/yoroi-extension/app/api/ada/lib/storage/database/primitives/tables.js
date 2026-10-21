@@ -53,7 +53,7 @@ export type CardanoHaskellConwayBaseConfig = {|
 export type CardanoHaskellBaseConfig = [
   $ReadOnly<CardanoHaskellByronBaseConfig>,
   $ReadOnly<CardanoHaskellShelleyBaseConfig>,
-  $ReadOnly<CardanoHaskellConwayBaseConfig>
+  $ReadOnly<CardanoHaskellConwayBaseConfig>,
 ];
 
 // unfortunate hack to get around the fact tuple spreading is broken in Flow
@@ -62,7 +62,7 @@ export type CardanoHaskellConfig = $ReadOnly<
     ...$ElementType<CardanoHaskellBaseConfig, 0>,
     ...$ElementType<CardanoHaskellBaseConfig, 1>,
     ...$ElementType<CardanoHaskellBaseConfig, 2>,
-  |}>
+  |}>,
 >;
 
 export type NetworkRow = {|

@@ -9,7 +9,7 @@ export const useTxBody = ({
 }: {
   cbor?: string | null;
   unsignedTx?: YoroiUnsignedTx | null;
-}): TransactionBody | undefined => {
+}): TransactionBody | { body: TransactionBody } | undefined => {
   const query = useQuery({
     queryKey: ['useTxBody', cbor, unsignedTx],
     queryFn: async () => {
@@ -18,7 +18,7 @@ export const useTxBody = ({
       }
 
       if (unsignedTx != null) {
-        return getUnsignedTxTxBody(unsignedTx);
+        return getUnsignedTxTxBody(unsignedTx.unsignedTx);
       }
 
       throw new Error('useTxBody: missing both cbor and unsignedTx');
@@ -85,7 +85,11 @@ export const getCborTxBody = async (cbor: string): Promise<TransactionBody> => {
   }
 };
 
-const getUnsignedTxTxBody = async (unsignedTx: any) => {
-  const txBodyjson = await unsignedTx.build_tx().to_json();
-  return JSON.parse(txBodyjson);
+export const getUnsignedTxTxBody = async (unsignedTx: Uint8Array) => {
+  const transactionHex = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const body = cml.TransactionBody.from_cbor_bytes(unsignedTx);
+    return cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true).to_cbor_hex();
+  });
+  return { body: await getCborTxBody(transactionHex) };
 };

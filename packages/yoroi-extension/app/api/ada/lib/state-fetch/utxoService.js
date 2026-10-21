@@ -53,9 +53,7 @@ export class UtxoService {
     await this.storage.appendUtxoDiffToBestBlock(diffToBestBlock);
   }
 
-  async syncSafeStateAndGetDiff(
-    addresses: string[]
-  ): Promise<{|
+  async syncSafeStateAndGetDiff(addresses: string[]): Promise<{|
     safeUtxos: Utxo[],
     diff: UtxoDiff,
     bestBlock: string,

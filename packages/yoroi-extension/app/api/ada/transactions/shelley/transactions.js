@@ -462,69 +462,73 @@ export async function newAdaUnsignedTxFromUtxo(
   await RustModule.load();
   const result = RustModule.WasmScope(Module => {
     const cml = Module.CML;
-    const config = cml.TransactionBuilderConfigBuilder.new()
-      .fee_algo(
-        cml.LinearFee.new(
-          // eslint-disable-next-line no-undef
-          BigInt(protocolParams.linearFeeCoefficient),
-          // eslint-disable-next-line no-undef
-          BigInt(protocolParams.linearFeeConstant),
-          BigInt('0')
+    const createTransactionBuilder = () => {
+      const config = cml.TransactionBuilderConfigBuilder.new()
+        .fee_algo(
+          cml.LinearFee.new(
+            // eslint-disable-next-line no-undef
+            BigInt(protocolParams.linearFeeCoefficient),
+            // eslint-disable-next-line no-undef
+            BigInt(protocolParams.linearFeeConstant),
+            BigInt('0')
+          )
         )
-      )
-      // eslint-disable-next-line no-undef
-      .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte))
-      // eslint-disable-next-line no-undef
-      .pool_deposit(BigInt(protocolParams.poolDeposit))
-      // eslint-disable-next-line no-undef
-      .key_deposit(BigInt(protocolParams.keyDeposit))
-      .max_value_size(MAX_VALUE_SIZE)
-      .max_tx_size(MAX_TRANSACTION_SIZE)
-      .ex_unit_prices(
-        cml.ExUnitPrices.new(
-          cml.Rational.new(BigInt('577'), BigInt('10000')),
-          cml.Rational.new(BigInt('721'), BigInt('10000000'))
+        // eslint-disable-next-line no-undef
+        .coins_per_utxo_byte(BigInt(protocolParams.coinsPerUtxoByte))
+        // eslint-disable-next-line no-undef
+        .pool_deposit(BigInt(protocolParams.poolDeposit))
+        // eslint-disable-next-line no-undef
+        .key_deposit(BigInt(protocolParams.keyDeposit))
+        .max_value_size(MAX_VALUE_SIZE)
+        .max_tx_size(MAX_TRANSACTION_SIZE)
+        .ex_unit_prices(
+          cml.ExUnitPrices.new(
+            cml.Rational.new(BigInt('577'), BigInt('10000')),
+            cml.Rational.new(BigInt('721'), BigInt('10000000'))
+          )
         )
-      )
-      .collateral_percentage(150)
-      .max_collateral_inputs(3)
-      .cost_models(cml.CostModels.from_cbor_hex(COSTMODELS))
-      // The legacy builder keeps ADA and assets together when a single change
-      // output can represent the remainder. Keep that contract for callers.
-      .prefer_pure_change(false)
-      .build();
-    const txBuilder = cml.TransactionBuilder.new(config);
-    // eslint-disable-next-line no-undef
-    txBuilder.set_ttl(BigInt(absSlotNumber.plus(defaultTtlOffset).toFixed(0)));
+        .collateral_percentage(150)
+        .max_collateral_inputs(3)
+        .cost_models(cml.CostModels.from_cbor_hex(COSTMODELS))
+        // The legacy builder keeps ADA and assets together when a single change
+        // output can represent the remainder. Keep that contract for callers.
+        .prefer_pure_change(false)
+        .build();
+      const builder = cml.TransactionBuilder.new(config);
+      // eslint-disable-next-line no-undef
+      builder.set_ttl(BigInt(absSlotNumber.plus(defaultTtlOffset).toFixed(0)));
 
-    for (const certificateHex of certificates) {
-      txBuilder.add_cert(cml.SingleCertificateBuilder.new(cml.Certificate.from_cbor_hex(certificateHex)).skip_witness());
-    }
-    for (const withdrawal of withdrawals) {
-      txBuilder.add_withdrawal(
-        cml.SingleWithdrawalBuilder.new(
-          cml.RewardAddress.from_address(cml.Address.from_hex(withdrawal.address)),
-          // eslint-disable-next-line no-undef
-          BigInt(withdrawal.amount)
-        ).payment_key()
-      );
-    }
-    if (auxiliaryData) txBuilder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(auxiliaryData));
-
-    for (const output of outputs) {
-      let datumOption;
-      if (output.dataHash != null) {
-        datumOption = cml.DatumOption.new_hash(cml.DatumHash.from_hex(output.dataHash));
-      } else if (output.data != null) {
-        datumOption = cml.DatumOption.new_datum(cml.PlutusData.from_cbor_hex(output.data));
+      for (const certificateHex of certificates) {
+        builder.add_cert(cml.SingleCertificateBuilder.new(cml.Certificate.from_cbor_hex(certificateHex)).skip_witness());
       }
-      const transactionOutput = cml.TransactionOutput.new(
-        cml.Address.from_hex(output.address),
-        cmlValueFromMultiToken(cml, output.amount),
-        datumOption
-      );
-      txBuilder.add_output(cml.SingleOutputBuilderResult.new(transactionOutput));
-    }
+      for (const withdrawal of withdrawals) {
+        builder.add_withdrawal(
+          cml.SingleWithdrawalBuilder.new(
+            cml.RewardAddress.from_address(cml.Address.from_hex(withdrawal.address)),
+            // eslint-disable-next-line no-undef
+            BigInt(withdrawal.amount)
+          ).payment_key()
+        );
+      }
+      if (auxiliaryData) builder.set_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(auxiliaryData));
+
+      for (const output of outputs) {
+        let datumOption;
+        if (output.dataHash != null) {
+          datumOption = cml.DatumOption.new_hash(cml.DatumHash.from_hex(output.dataHash));
+        } else if (output.data != null) {
+          datumOption = cml.DatumOption.new_datum(cml.PlutusData.from_cbor_hex(output.data));
+        }
+        const transactionOutput = cml.TransactionOutput.new(
+          cml.Address.from_hex(output.address),
+          cmlValueFromMultiToken(cml, output.amount),
+          datumOption
+        );
+        builder.add_output(cml.SingleOutputBuilderResult.new(transactionOutput));
+      }
+      return builder;
+    };
+    let txBuilder = createTransactionBuilder();
 
     const reservedCollateral = [];
     const spendableUtxos = [];
@@ -550,14 +554,16 @@ export async function newAdaUnsignedTxFromUtxo(
       else txBuilder.add_utxo(inputBuilder);
       utxosByRef.set(`${utxo.tx_hash}${utxo.tx_index}`, utxo);
     };
+    let forcedInput;
     if (outputs.length === 0) {
-      const forcedInput = spendableUtxos.shift() ?? reservedCollateral.shift();
+      forcedInput = spendableUtxos.shift() ?? reservedCollateral.shift();
       if (forcedInput == null) throw new NotEnoughMoneyToSendError();
       addSelectionCandidate(forcedInput, true);
     }
     // Let CIP-2 consider every UTxO. In particular, ADA UTxOs small enough
     // to have been reserved for future collateral can still fund this spend.
-    spendableUtxos.concat(reservedCollateral).forEach(addSelectionCandidate);
+    const selectionCandidates = spendableUtxos.concat(reservedCollateral);
+    selectionCandidates.forEach(utxo => addSelectionCandidate(utxo));
 
     try {
       const hasMultiAssetOutput = outputs.some(output => output.amount.nonDefaultEntries().length > 0);
@@ -585,7 +591,33 @@ export async function newAdaUnsignedTxFromUtxo(
             .checked_add(txBuilder.get_implicit_input())
             .checked_sub(txBuilder.get_total_output())
             .coin() - txBuilder.min_fee(false);
-        if (outputs.length === 0 || remainderAfterFee > BigInt('0')) throw new NotEnoughMoneyToSendError();
+        if (outputs.length === 0 || remainderAfterFee > BigInt('0')) {
+          const previewBody = txBuilder.build(cml.ChangeSelectionAlgo.Default, changeAddress).body();
+          const selectedUtxos = [];
+          const inputs = previewBody.inputs();
+          for (let index = 0; index < inputs.len(); index++) {
+            const input = inputs.get(index);
+            const utxo = utxosByRef.get(`${input.transaction_id().to_hex()}${input.index()}`);
+            if (utxo == null) throw new Error('CML selected an unknown input');
+            selectedUtxos.push(utxo);
+          }
+
+          const selectedRefs = new Set(selectedUtxos.map(utxo => `${utxo.tx_hash}${utxo.tx_index}`));
+          const additionalCandidates = selectionCandidates.filter(
+            utxo => !selectedRefs.has(`${utxo.tx_hash}${utxo.tx_index}`) && utxo !== forcedInput
+          );
+          let foundChange = false;
+          for (const additionalUtxo of additionalCandidates) {
+            selectedUtxos.push(additionalUtxo);
+            txBuilder = createTransactionBuilder();
+            selectedUtxos.forEach(utxo => addSelectionCandidate(utxo, true));
+            if (txBuilder.add_change_if_needed(changeAddress, false)) {
+              foundChange = true;
+              break;
+            }
+          }
+          if (!foundChange) throw new NotEnoughMoneyToSendError();
+        }
       }
     } else {
       const remainder = txBuilder.get_total_input().checked_sub(txBuilder.get_total_output());
@@ -677,7 +709,7 @@ export async function maxSendableADA(request: {|
       token: $ReadOnly<TokenRow>,
       shouldSendAll?: boolean,
       amount?: string,
-    |}>
+    |}>,
   >,
 |}): Promise<BigNumber> {
   try {
@@ -754,10 +786,7 @@ export async function maxSendableADA(request: {|
       for (const input of addressedUtxo) {
         const cmlValue = cmlValueFromRemoteFormat(cml, input);
         try {
-          txBuilder
-            .get_explicit_input()
-            .checked_add(txBuilder.get_implicit_input())
-            .checked_add(cmlValue);
+          txBuilder.get_explicit_input().checked_add(txBuilder.get_implicit_input()).checked_add(cmlValue);
         } catch (_error) {
           throw new AssetOverflowError();
         }
@@ -1126,6 +1155,12 @@ export function signTransaction(
   return signCmlTransaction(senderUtxos, unsignedTx, keyLevel, signingKey, stakingKey, metadata, otherRequiredSigners);
 }
 
+export function transactionWitnessSetHex(signedTransactionBytes: Uint8Array): string {
+  return RustModule.WasmScope(Module =>
+    Module.CML.Transaction.from_cbor_bytes(signedTransactionBytes).witness_set().to_cbor_hex()
+  );
+}
+
 function signCmlTransaction(
   senderUtxos: Array<CardanoAddressedUtxo>,
   bodyBytes: Uint8Array,
@@ -1179,10 +1214,7 @@ function signCmlTransaction(
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
     if (stakingHashes.size > 0 && stakingKey != null) {
       const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey);
-      const stakingKeyHash = cmlStakingKey
-        .to_public()
-        .hash()
-        .to_hex();
+      const stakingKeyHash = cmlStakingKey.to_public().hash().to_hex();
       if (stakingHashes.has(stakingKeyHash)) {
         witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, cmlStakingKey));
       }

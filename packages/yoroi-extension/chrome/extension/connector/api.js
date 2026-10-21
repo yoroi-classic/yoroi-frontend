@@ -30,7 +30,10 @@ import {
   parseTokenList,
 } from '../../../app/api/ada/transactions/utils';
 import type { AccountStateRequest, AccountStateResponse, RemoteUnspentOutput } from '../../../app/api/ada/lib/state-fetch/types';
-import { signTransactionFromWallet as shelleySignTransactionFromWallet } from '../../../app/api/ada/transactions/shelley/transactions';
+import {
+  signTransactionFromWallet as shelleySignTransactionFromWallet,
+  transactionWitnessSetHex,
+} from '../../../app/api/ada/transactions/shelley/transactions';
 import { getCardanoHaskellBaseConfig, getNetworkById } from '../../../app/api/ada/lib/storage/database/prepackaged/networks';
 import TimeUtils from '../../../app/api/ada/lib/storage/bridge/timeUtils';
 import type { CardanoTxRequest, ForeignUtxoFetcher } from '../../../app/api/ada';
@@ -533,7 +536,7 @@ export function getCertificatesRequiredSignKeys(txBody: any): Set<string> {
       return [];
     });
 
-  const votingSigners = iterateLenGet(txBody.voting_procedures()?.get_voters())
+  const votingSigners = iterateLenGet(txBody.voting_procedures()?.keys())
     .nonNull()
     .map(voter => voter.as_d_rep_key_hash())
     .nonNull();
@@ -577,10 +580,7 @@ export async function connectorSignCardanoTxs(
           const addressing = ownAddressMap.get(receiver);
           if (addressing != null) {
             outputs.push({
-              amount: output
-                .amount()
-                .coin()
-                .toString(),
+              amount: output.amount().coin().toString(),
               assets: parseTokenList(output.amount().multi_asset()),
               receiver,
               tx_hash: txHash,
@@ -757,7 +757,7 @@ async function __connectorSignCardanoTx(
     otherRequiredSigners
   );
 
-  return signedTx.witness_set().to_hex();
+  return transactionWitnessSetHex(signedTx);
 }
 
 // <TODO:PENDING_REMOVAL> only used for experimental
@@ -800,7 +800,7 @@ export async function connectorCreateCardanoTx(
     foreignUtxoFetcher
   );
   if (password == null) {
-    return signRequest.unsignedTx.build_tx().to_hex();
+    return signRequest.serializedUnsignedTxHex();
   }
   const signedTx = await shelleySignTransactionFromWallet(
     signRequest.senderUtxos,
@@ -809,7 +809,7 @@ export async function connectorCreateCardanoTx(
     password,
     signRequest.metadata
   );
-  return signedTx.to_hex();
+  return bytesToHex(signedTx);
 }
 
 export async function connectorSendTxCardano(
@@ -873,10 +873,7 @@ export async function connectorRecordSubmittedCardanoTransaction(
       outputs: iterateLenGet(body.outputs())
         .map(output => ({
           address: output.address().to_hex(),
-          amount: output
-            .amount()
-            .coin()
-            .toString(),
+          amount: output.amount().coin().toString(),
           assets: parseTokenList(output.amount().multi_asset()),
         }))
         .toArray(),

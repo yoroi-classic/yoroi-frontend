@@ -9,7 +9,10 @@ import {
   CertificateType,
   TransactionSigningMode,
   TxOutputDestinationType,
+  VoteOption,
+  VoterType,
   CredentialParamsType,
+  DatumType,
   TxOutputFormat,
 } from '@cardano-foundation/ledgerjs-hw-app-cardano';
 import type { DeviceOwnedAddress, SignTransactionRequest } from '@cardano-foundation/ledgerjs-hw-app-cardano';
@@ -180,14 +183,71 @@ test('Generate address parameters', async () => {
   }
 });
 
+test('parses CML DRep voting procedures for Ledger signing', () => {
+  const cml = RustModule.CML;
+  const keyHash = cml.Ed25519KeyHash.from_hex('11'.repeat(28));
+  const voter = cml.Voter.new_d_rep_key_hash(keyHash);
+  // eslint-disable-next-line no-undef
+  const govActionId = cml.GovActionId.new(cml.TransactionHash.from_hex('22'.repeat(32)), BigInt('0'));
+  const anchor = cml.Anchor.from_cbor_hex(`827368747470733a2f2f6578616d706c652e636f6d5820${'33'.repeat(32)}`);
+  const proceduresByAction = cml.MapGovActionIdToVotingProcedure.new();
+  proceduresByAction.insert(govActionId, cml.VotingProcedure.new(cml.Vote.Yes, anchor));
+  const votingProcedures = cml.VotingProcedures.new();
+  votingProcedures.insert(voter, proceduresByAction);
+  const outputs = cml.TransactionOutputList.new();
+  outputs.add(
+    cml.TransactionOutput.new(
+      cml.Address.from_hex(byronAddrToHex('Ae2tdPwUPEZAVDjkPPpwDhXMSAjH53CDmd2xMwuR9tZMAZWxLhFphrHKHXe')),
+      cml.Value.new(BigInt('1000000'), cml.MultiAsset.new())
+    )
+  );
+  const body = cml.TransactionBody.new(cml.TransactionInputList.new(), outputs, BigInt('170000'));
+  body.set_voting_procedures(votingProcedures);
+  const certificate = cml.Certificate.new_reg_drep_cert(
+    cml.Credential.new_pub_key(keyHash),
+    // eslint-disable-next-line no-undef
+    BigInt('500000000'),
+    anchor
+  );
+  const certificates = cml.CertificateList.new();
+  certificates.add(certificate);
+  body.set_certs(certificates);
+
+  const request = toLedgerSignRequest(
+    body.to_cbor_hex(),
+    1,
+    764824073,
+    () => [1852 + HARD_DERIVATION_START, 1815 + HARD_DERIVATION_START, HARD_DERIVATION_START, 3, 0],
+    [],
+    []
+  );
+
+  expect(request.tx.votingProcedures).toEqual([
+    {
+      voter: {
+        type: VoterType.DREP_KEY_PATH,
+        keyPath: [1852 + HARD_DERIVATION_START, 1815 + HARD_DERIVATION_START, HARD_DERIVATION_START, 3, 0],
+      },
+      votes: [
+        {
+          govActionId: { txHashHex: '22'.repeat(32), govActionIndex: BigInt('0') },
+          votingProcedure: {
+            vote: VoteOption.YES,
+            anchor: { url: 'https://example.com', hashHex: '33'.repeat(32) },
+          },
+        },
+      ],
+    },
+  ]);
+  expect(request.tx.certificates[0].type).toBe(CertificateType.DREP_REGISTRATION);
+});
+
 test('Ledger address parameters preserve script stake credentials with CML', () => {
   const addressHex = RustModule.WasmScope(Module => {
     const cml = Module.CML;
     const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
     const stake = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-    return cml.BaseAddress.new(0, payment, stake)
-      .to_address()
-      .to_hex();
+    return cml.BaseAddress.new(0, payment, stake).to_address().to_hex();
   });
   expect(
     toLedgerAddressParameters({
@@ -200,6 +260,55 @@ test('Ledger address parameters preserve script stake credentials with CML', () 
     type: AddressType.BASE_PAYMENT_KEY_STAKE_KEY,
     params: { spendingPath: [1, 2], stakingKeyHashHex: '22'.repeat(28) },
   });
+});
+
+test('Ledger request preserves inline datum and reference script and deduplicates required signers', () => {
+  const fixture = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const paymentHash = '31'.repeat(28);
+    const address = cml.EnterpriseAddress.new(
+      1,
+      cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(paymentHash))
+    ).to_address();
+    const datum = cml.PlutusData.new_integer(cml.BigInteger.from_str('42'));
+    const script = cml.Script.new_native(cml.NativeScript.new_script_pubkey(cml.Ed25519KeyHash.from_hex('32'.repeat(28))));
+    const output = cml.TransactionOutputBuilder.new()
+      .with_address(address)
+      .with_data(cml.DatumOption.new_datum(datum))
+      .with_reference_script(script)
+      .next()
+      .with_value(cml.Value.from_coin(BigInt('5000000')))
+      .build()
+      .output();
+    const outputs = cml.TransactionOutputList.new();
+    outputs.add(output);
+    const signers = cml.Ed25519KeyHashList.new();
+    signers.add(cml.Ed25519KeyHash.from_hex(paymentHash));
+    signers.add(cml.Ed25519KeyHash.from_hex(paymentHash));
+    const body = cml.TransactionBody.new(cml.TransactionInputList.new(), outputs, BigInt('170000'));
+    body.set_required_signers(signers);
+    return {
+      addressHex: address.to_hex(),
+      bodyHex: body.to_cbor_hex(),
+      datumHex: datum.to_cbor_hex(),
+      scriptHex: script.to_cbor_hex(),
+      paymentHash,
+    };
+  });
+
+  const request = toLedgerSignRequest(
+    fixture.bodyHex,
+    1,
+    764824073,
+    address => (address === fixture.addressHex ? [1, 2, 3] : undefined),
+    [],
+    []
+  );
+
+  expect(request.tx.outputs[0].datum).toEqual({ type: DatumType.INLINE, datumHex: fixture.datumHex });
+  expect(request.tx.outputs[0].referenceScriptHex).toBe(fixture.scriptHex);
+  expect(request.tx.requiredSigners).toHaveLength(1);
+  expect(request.additionalWitnessPaths).toEqual([[1, 2, 3]]);
 });
 
 test('Create Ledger transaction', async () => {
@@ -280,12 +389,7 @@ test('Create Ledger transaction', async () => {
       )
     );
     const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-    const stakeCredential = cml.Credential.new_pub_key(
-      stakingKey
-        .to_raw_key()
-        .to_public()
-        .hash()
-    );
+    const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_raw_key().to_public().hash());
     const certificates = cml.CertificateList.new();
     certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
     const body = cml.TransactionBody.new(inputs, outputs, BigInt('2000'));
@@ -467,33 +571,16 @@ test('Create Ledger transaction', async () => {
     return {
       bodyHex: body.to_cbor_hex(),
       txId: cml.hash_transaction(body).to_hex(),
-      vkeyHashes: Array.from({ length: vkeys.len() }, (_, index) =>
-        vkeys
-          .get(index)
-          .vkey()
-          .hash()
-          .to_hex()
-      ),
+      vkeyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
       finalVkeySignatureHex: vkeys
         .get(vkeys.len() - 1)
         .ed25519_signature()
         .to_hex(),
       bootstrapCount: bootstraps.len(),
-      bootstrapPublicKeyHex: bytesToHex(
-        bootstraps
-          .get(0)
-          .public_key()
-          .to_raw_bytes()
-      ),
-      bootstrapSignatureHex: bootstraps
-        .get(0)
-        .signature()
-        .to_hex(),
+      bootstrapPublicKeyHex: bytesToHex(bootstraps.get(0).public_key().to_raw_bytes()),
+      bootstrapSignatureHex: bootstraps.get(0).signature().to_hex(),
       bootstrapChainCodeHex: bytesToHex(bootstraps.get(0).chain_code()),
-      bootstrapAttributesHex: bootstraps
-        .get(0)
-        .attributes()
-        .to_cbor_hex(),
+      bootstrapAttributesHex: bootstraps.get(0).attributes().to_cbor_hex(),
       auxiliaryDataHex: auxiliaryData.to_cbor_hex(),
       auxiliaryDataHash: body.auxiliary_data_hash().to_hex(),
       expectedAuxiliaryDataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata)).to_hex(),
@@ -503,11 +590,7 @@ test('Create Ledger transaction', async () => {
   expect(signedResult.txId).toEqual(signedSummary.txId);
   expect(signedSummary.vkeyHashes).toHaveLength(2);
   expect(signedSummary.vkeyHashes[0]).toEqual(
-    RustModule.WasmScope(Module =>
-      Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1))
-        .hash()
-        .to_hex()
-    )
+    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
   );
   expect(signedSummary.finalVkeySignatureHex).toEqual(
     'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207'
@@ -529,10 +612,7 @@ test('Create Ledger transaction', async () => {
     return {
       publicKeyHex: bytesToHex(bootstrapKey.to_raw_key().to_raw_bytes()),
       chainCodeHex: bytesToHex(bootstrapKey.chaincode()),
-      attributesHex: cml.ByronAddress.from_base58(senderUtxos[0].receiver)
-        .content()
-        .addr_attributes()
-        .to_cbor_hex(),
+      attributesHex: cml.ByronAddress.from_base58(senderUtxos[0].receiver).content().addr_attributes().to_cbor_hex(),
     };
   });
   expect(signedSummary.bootstrapPublicKeyHex).toEqual(expectedBootstrap.publicKeyHex);

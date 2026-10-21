@@ -13,6 +13,7 @@ import {
   genFilterSmallUtxo,
   sendAllUnsignedTxFromUtxo,
   signTransaction,
+  transactionWitnessSetHex,
 } from './transactions';
 import { AssetOverflowError, NoOutputsError, NotEnoughMoneyToSendError } from '../../../common/errors';
 
@@ -57,28 +58,13 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
       certificatesHex:
         body.certs() == null
           ? undefined
-          : Array.from({ length: body.certs().len() }, (_, index) =>
-              bytesToHex(
-                body
-                  .certs()
-                  .get(index)
-                  .to_cbor_bytes()
-              )
-            ),
+          : Array.from({ length: body.certs().len() }, (_, index) => bytesToHex(body.certs().get(index).to_cbor_bytes())),
       withdrawalCount: body.withdrawals()?.len() ?? 0,
       fee: body.fee().toString(),
       outputCount: body.outputs().len(),
       outputCoinTotal: Array.from(
         { length: body.outputs().len() },
-        (_, index) =>
-          new BigNumber(
-            body
-              .outputs()
-              .get(index)
-              .amount()
-              .coin()
-              .toString()
-          )
+        (_, index) => new BigNumber(body.outputs().get(index).amount().coin().toString())
       )
         .reduce((total, amount) => total.plus(amount), new BigNumber(0))
         .toString(),
@@ -93,12 +79,7 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
         witnesses.vkeywitnesses() == null
           ? []
           : Array.from({ length: witnesses.vkeywitnesses().len() }, (_, index) =>
-              witnesses
-                .vkeywitnesses()
-                .get(index)
-                .vkey()
-                .hash()
-                .to_hex()
+              witnesses.vkeywitnesses().get(index).vkey().hash().to_hex()
             ),
       hasNativeScripts: witnesses.native_scripts() != null,
       hasBootstrapWitnesses: witnesses.bootstrap_witnesses() != null,
@@ -106,9 +87,7 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
   });
 }
 
-function inspectCmlBody(
-  bytes: Uint8Array
-): {|
+function inspectCmlBody(bytes: Uint8Array): {|
   auxiliaryDataHash: ?string,
   fee: string,
   inputCount: number,
@@ -118,12 +97,7 @@ function inspectCmlBody(
   return RustModule.WasmScope(Module => {
     const body = Module.CML.TransactionBody.from_cbor_bytes(bytes);
     const outputs = body.outputs();
-    const outputCoins = Array.from({ length: outputs.len() }, (_, index) =>
-      outputs
-        .get(index)
-        .amount()
-        .coin()
-    );
+    const outputCoins = Array.from({ length: outputs.len() }, (_, index) => outputs.get(index).amount().coin());
     return {
       fee: body.fee().toString(),
       auxiliaryDataHash: body.auxiliary_data_hash()?.to_hex(),
@@ -139,10 +113,7 @@ function inspectCmlAssetAmounts(bytes: Uint8Array, assetId: string): Array<strin
   return RustModule.WasmScope(Module => {
     const outputs = Module.CML.TransactionBody.from_cbor_bytes(bytes).outputs();
     return Array.from({ length: outputs.len() }, (_, index) => {
-      const multiAsset = outputs
-        .get(index)
-        .amount()
-        .multi_asset();
+      const multiAsset = outputs.get(index).amount().multi_asset();
       const amount = multiAsset.get(
         Module.CML.ScriptHash.from_hex(asset.policyId),
         Module.CML.AssetName.from_raw_bytes(hexToBytes(asset.name))
@@ -579,6 +550,7 @@ describe('Create unsigned TX from UTXO', () => {
       jest.spyOn(global.Math, 'random').mockRestore();
 
       const body = inspectCmlBody(unsignedTxResponse.txBuilder);
+      expect(unsignedTxResponse.senderUtxos.length).toBeLessThan(4);
       const inputTotal = unsignedTxResponse.senderUtxos.reduce((total, utxo) => total.plus(utxo.amount), new BigNumber(0));
       const outputTotal = body.outputs.reduce((total, amount) => total.plus(amount), new BigNumber(0));
       expect(inputTotal.minus(outputTotal).toString()).toBe(body.fee);
@@ -640,6 +612,19 @@ describe('Create unsigned TX from UTXO', () => {
     expect(new Set(unsignedTxResponse.senderUtxos.map(utxo => utxo.utxo_id)).size).toBe(unsignedTxResponse.senderUtxos.length);
     expect(selectedAda.minus(outputAda).toString()).toBe(body.fee);
     expect(inspectCmlAssetAmounts(unsignedTxResponse.txBuilder, testAssetId).sort()).toEqual(['1000', '234']);
+  });
+
+  it('extracts witnesses from the serialized CML transaction returned by the signer', () => {
+    const signedTransactionBytes = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const body = cml.TransactionBody.from_cbor_hex('a3008001800200');
+      const witnesses = cml.TransactionWitnessSet.new();
+      return cml.Transaction.new(body, witnesses, true).to_cbor_bytes();
+    });
+
+    const witnessSetHex = transactionWitnessSetHex(signedTransactionBytes);
+
+    expect(witnessSetHex).toBe(RustModule.WasmScope(Module => Module.CML.TransactionWitnessSet.new().to_cbor_hex()));
   });
 
   it('Should fail when not enough ADA to avoid burning tokens', async () => {
@@ -826,7 +811,7 @@ describe('Create unsigned TX from UTXO', () => {
     const output = new MultiToken(
       [
         {
-          amount: new BigNumber(10000000),
+          amount: new BigNumber(9000000),
           identifier: defaultIdentifier,
           networkId: network.NetworkId,
         },
@@ -863,6 +848,50 @@ describe('Create unsigned TX from UTXO', () => {
     const outputTotal = body.outputs.reduce((total, amount) => total.plus(amount), new BigNumber(0));
     expect(inputTotal.minus(outputTotal).toString()).toBe(body.fee);
     expect(new BigNumber(body.fee).gt(0)).toBe(true);
+  });
+
+  it('adds another UTxO when selected change is below minimum ADA', async () => {
+    const utxos = [
+      { ...genSampleUtxos()[2], amount: '10000000' },
+      { ...genSampleUtxos()[3], amount: '3000000' },
+    ];
+    const output = new MultiToken(
+      [
+        {
+          amount: new BigNumber(9800000),
+          identifier: defaultIdentifier,
+          networkId: network.NetworkId,
+        },
+      ],
+      {
+        defaultIdentifier,
+        defaultNetworkId: network.NetworkId,
+      }
+    );
+
+    const result = await newAdaUnsignedTxFromUtxo(
+      [
+        {
+          address: byronAddrToHex('Ae2tdPwUPEZKX8N2TjzBXLy5qrecnQUniTd2yxE8mWyrh2djNpUkbAtXtP4'),
+          amount: output,
+        },
+      ],
+      genSampleAdaAddresses()[0],
+      utxos,
+      new BigNumber(0),
+      { ...getProtocolParams(), coinsPerUtxoByte: '4310' },
+      [],
+      [],
+      true,
+      undefined,
+      network.NetworkId
+    );
+
+    const body = inspectCmlBody(result.txBuilder);
+    expect(result.senderUtxos).toHaveLength(2);
+    expect(body.inputCount).toBe(2);
+    expect(new BigNumber(body.fee).lt(200000)).toBe(true);
+    expect(new BigNumber(body.outputs[1]).gt(1000000)).toBe(true);
   });
 });
 
@@ -1094,10 +1123,7 @@ describe('Create signed transactions', () => {
         '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
       )
     );
-    const stakingKey = accountPrivateKey
-      .derive(2)
-      .derive(STAKING_KEY_INDEX)
-      .to_raw_key();
+    const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
 
     const addressedUtxos = genAddressedUtxos();
 
@@ -1128,10 +1154,7 @@ describe('Create signed transactions', () => {
       new BigNumber(0),
       getProtocolParams(),
       createCertificate(
-        stakingKey
-          .to_public()
-          .hash()
-          .to_hex(),
+        stakingKey.to_public().hash().to_hex(),
         false,
         '1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5',
         undefined
@@ -1190,14 +1213,8 @@ describe('Create signed transactions', () => {
         '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
       )
     );
-    const stakingKey = accountPrivateKey
-      .derive(2)
-      .derive(STAKING_KEY_INDEX)
-      .to_raw_key();
-    const stakingKeyHash = stakingKey
-      .to_public()
-      .hash()
-      .to_hex();
+    const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
+    const stakingKeyHash = stakingKey.to_public().hash().to_hex();
 
     if (network.BaseConfig[0].ChainNetworkId == null) {
       throw new Error(`missing network id`);
@@ -1253,21 +1270,14 @@ describe('Create signed transactions', () => {
     expect(getStakingKeyHashesInTransactionBody(cmlReserializedBodyHex).has(stakingKeyHash)).toBe(true);
     expect(
       RustModule.WasmScope(Module =>
-        Module.CML.PrivateKey.from_extended_bytes(stakingKey.to_raw_bytes())
-          .to_public()
-          .hash()
-          .to_hex()
+        Module.CML.PrivateKey.from_extended_bytes(stakingKey.to_raw_bytes()).to_public().hash().to_hex()
       )
     ).toBe(stakingKeyHash);
     const expectedPaymentHashes = unsignedTxResponse.senderUtxos.map(utxo => {
       let derived = accountPrivateKey;
       const firstPathIndex = Bip44DerivationLevels.ACCOUNT.level - utxo.addressing.startLevel + 1;
       for (let i = firstPathIndex; i < utxo.addressing.path.length; i++) derived = derived.derive(utxo.addressing.path[i]);
-      return derived
-        .to_raw_key()
-        .to_public()
-        .hash()
-        .to_hex();
+      return derived.to_raw_key().to_public().hash().to_hex();
     });
     expect(unsignedInfo.certificatesHex).toEqual(expectedCertificateHex);
 
@@ -1424,10 +1434,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
     });
     const inputTokens = multiTokenFromRemote(utxo, network.NetworkId);
     expect(parsedTotalOutput.getDefaultEntry().amount.toString()).toBe(
-      inputTokens
-        .getDefaultEntry()
-        .amount.minus(transactionFee)
-        .toString()
+      inputTokens.getDefaultEntry().amount.minus(transactionFee).toString()
     );
     for (const inputToken of inputTokens.nonDefaultEntries()) {
       expect(parsedTotalOutput.get(inputToken.identifier).amount.toString()).toBe(inputToken.amount.toString());
@@ -1626,11 +1633,7 @@ describe('CML connector transaction construction', () => {
           ),
           BigInt('0')
         ),
-        witnessCount:
-          tx
-            .witness_set()
-            .bootstrap_witnesses()
-            ?.len() ?? 0,
+        witnessCount: tx.witness_set().bootstrap_witnesses()?.len() ?? 0,
       };
     });
     expect(feeCheck.witnessCount).toEqual(2);
@@ -1921,10 +1924,7 @@ describe('CML connector transaction construction', () => {
     );
     const burnedAmount = RustModule.WasmScope(Module => {
       const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
-      return body
-        .mint()
-        .get(Module.CML.ScriptHash.from_hex(script.policy), Module.CML.AssetName.from_hex(assetName))
-        .toString();
+      return body.mint().get(Module.CML.ScriptHash.from_hex(script.policy), Module.CML.AssetName.from_hex(assetName)).toString();
     });
     expect(burnedAmount).toEqual('-1');
   });

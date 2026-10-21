@@ -19,6 +19,7 @@ jest.mock('@yoroi/api', () => ({ CardanoApi: {} }));
 
 const MAINNET_ADDRESS = 'addr1z8dyldfnnpg4w85d32lv64f5ldra02juhnzxdvlyyrpfs0leh7ahm4pdpqxx0mc0wvmu6n025jml40g7pfd0j0vf6aqsl2tlcx';
 const PREPROD_ADDRESS = 'addr_test1wzzfgjazt5ts34cstrhzaac4xav8x7z2m3vg76s8qmaztzglsw8k5';
+const REWARD_ADDRESS = 'stake1az0vrvznk3xya3c7l0fqp6qwkth5emmc37vyaevydah3r0cv6gnpm';
 const success = (data: any) => ({ tag: 'right', value: { data, status: 200 } });
 const failure = (status: number) => ({ tag: 'left', error: { status, message: `HTTP ${status}`, responseData: null } });
 
@@ -30,6 +31,20 @@ test('parses Handle provider response at the mocked HTTP boundary', async () => 
   const request = jest.fn().mockResolvedValue(success({ resolved_addresses: { ada: MAINNET_ADDRESS } }));
   await expect(handleApiGetCryptoAddress({ request, isMainnet: true })('$alice')).resolves.toBe(MAINNET_ADDRESS);
   expect(request).toHaveBeenCalledWith({ url: 'https://api.handle.me/handles/alice' }, undefined);
+});
+
+test('returns reward addresses from Handle and Unstoppable without treating them as payment addresses', async () => {
+  const handleRequest = jest.fn().mockResolvedValue(success({ resolved_addresses: { ada: REWARD_ADDRESS } }));
+  const unstoppableRequest = jest.fn().mockResolvedValue(success({ records: { 'crypto.ADA.address': REWARD_ADDRESS } }));
+  await expect(handleApiGetCryptoAddress({ request: handleRequest })('$stake')).resolves.toBe(REWARD_ADDRESS);
+  await expect(
+    unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request: unstoppableRequest })('stake.crypto')
+  ).resolves.toBe(REWARD_ADDRESS);
+  const cnsRequest = jest.fn().mockResolvedValue(success([REWARD_ADDRESS]));
+  const cnsMetadata = async (_url, [id]) => ({
+    [id]: { mintNftRecordSelected: { expiry: Date.now() + 60_000 } },
+  });
+  await expect(cnsCryptoAddress(cnsRequest, cnsMetadata)('stake.ada')).resolves.toBe(REWARD_ADDRESS);
 });
 
 test('parses Unstoppable response and sends its API token', async () => {
@@ -111,6 +126,31 @@ test('rejects malformed and server-error responses from domain providers', async
     unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request: malformedUnstoppable })('alice.crypto')
   ).rejects.toThrow(Resolver.Errors.InvalidResponse);
 
+  const malformedCns = jest.fn().mockResolvedValue(success([]));
+  const cnsMetadata = async (_url, [id]) => ({
+    [id]: { mintNftRecordSelected: { expiry: Date.now() + 60_000 } },
+  });
+  await expect(cnsCryptoAddress(malformedCns, cnsMetadata)('alice.ada')).rejects.toThrow(Resolver.Errors.NotFound);
+
   const serverFailure = jest.fn().mockResolvedValue(failure(500));
   await expect(handleApiGetCryptoAddress({ request: serverFailure })('$alice')).rejects.toThrow();
+  await expect(
+    unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request: serverFailure })('alice.crypto')
+  ).rejects.toThrow();
+  await expect(
+    cnsCryptoAddress(serverFailure, async (_url, [id]) => ({ [id]: { mintNftRecordSelected: { expiry: Date.now() + 60_000 } } }))(
+      'alice.ada'
+    )
+  ).rejects.toThrow();
+
+  const networkFailure = jest.fn().mockRejectedValue(new TypeError('network unavailable'));
+  await expect(handleApiGetCryptoAddress({ request: networkFailure })('$alice')).rejects.toThrow('network unavailable');
+  await expect(
+    unstoppableApiGetCryptoAddress({ apiKey: 'test-api-key' }, { request: networkFailure })('alice.crypto')
+  ).rejects.toThrow('network unavailable');
+  await expect(
+    cnsCryptoAddress(networkFailure, async (_url, [id]) => ({
+      [id]: { mintNftRecordSelected: { expiry: Date.now() + 60_000 } },
+    }))('alice.ada')
+  ).rejects.toThrow('network unavailable');
 });

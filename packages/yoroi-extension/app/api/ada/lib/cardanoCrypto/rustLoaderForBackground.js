@@ -8,7 +8,8 @@
 // service worker. This module replaces `rustLoader.js` in the background service
 // worker with the help of webpack NormalModuleReplacementPlugin.
 import * as WasmMessageSigning from '@emurgo/cardano-message-signing-browser/cardano_message_signing';
-// $FlowFixMe[untyped-import]
+type CmlApi = $Exports<'@dcspark/cardano-multiplatform-lib-browser'>;
+
 import * as CMLBrowser from '@dcspark/cardano-multiplatform-lib-browser';
 
 // TODO: unmagic the constants
@@ -99,7 +100,7 @@ function createWasmScope(): {|
           /*
            * A wrapper function is returned instead.
            */
-          return function(...args: any[]): any {
+          return function (...args: any[]): any {
             // Call the actual function bound to the original object.
             const res = realValue.bind(target)(...args);
             if (isWasmPointer(res)) {
@@ -148,17 +149,13 @@ class Module {
     // noop because all the modules are synchronously loaded
   }
 
-  __WasmScopeInternal<T>(
-    callback: Module => T
-  ): {|
+  __WasmScopeInternal<T>(callback: Module => T): {|
     result: T,
     scopeSize: number,
     scopeIsFree: boolean,
   |} {
     const scope = createWasmScope();
-    function onSuccess(
-      result: T
-    ): {|
+    function onSuccess(result: T): {|
       result: T,
       scopeSize: number,
       scopeIsFree: boolean,
@@ -221,7 +218,7 @@ class Module {
     return WasmMessageSigning;
   }
 
-  get CML(): any {
+  get CML(): CmlApi {
     return CMLBrowser;
   }
 }

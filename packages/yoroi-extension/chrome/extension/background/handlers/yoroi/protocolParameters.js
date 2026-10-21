@@ -1,6 +1,6 @@
 // @flow
 import type { HandlerType } from './type';
-import type { ProtocolParameters as _ProtocolParameters } from '../../../../../app/api/ada/lib/state-fetch/types';
+import type { ProtocolParameters } from '../../../../../app/api/ada/lib/state-fetch/types';
 import ProtocolParametersApi from '../../../../../app/api/ada/lib/state-fetch/protocolParametersApi';
 import {
   getNetworkById,
@@ -9,9 +9,6 @@ import {
 } from '../../../../../app/api/ada/lib/storage/database/prepackaged/networks';
 import type { CardanoHaskellConfig, NetworkRow } from '../../../../../app/api/ada/lib/storage/database/primitives/tables';
 import { type StorageField, createStorageField } from '../../../../../app/api/localStorage';
-
-// tmp measure before lib update
-type ProtocolParameters = _ProtocolParameters;
 
 // cache protocol parameters of the current epoch
 // also may cache for the future epoch should the backend provides them

@@ -113,9 +113,7 @@ export function generateRegistration(request: {|
     request.slotNumber,
     hashedMetadata =>
       RustModule.WasmScope(Module =>
-        Module.CML.PrivateKey.from_normal_bytes(Buffer.from(request.stakePrivateKeyHex, 'hex'))
-          .sign(hashedMetadata)
-          .to_hex()
+        Module.CML.PrivateKey.from_normal_bytes(Buffer.from(request.stakePrivateKeyHex, 'hex')).sign(hashedMetadata).to_hex()
       )
   );
 }

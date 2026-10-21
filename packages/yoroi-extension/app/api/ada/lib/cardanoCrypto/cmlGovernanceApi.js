@@ -34,9 +34,7 @@ export default class CmlGovernanceApi {
     const address = RustModule.WasmScope(Module => {
       const CML = Module.CML;
       const stakeCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(stakeKeyHashHex));
-      return CML.RewardAddress.new(this.networkId, stakeCredential)
-        .to_address()
-        .to_hex();
+      return CML.RewardAddress.new(this.networkId, stakeCredential).to_address().to_hex();
     });
     const { data } = await axios.post(
       '/api/account/state',
