@@ -714,7 +714,7 @@ export async function maxSendableADA(request: {|
       token: $ReadOnly<TokenRow>,
       shouldSendAll?: boolean,
       amount?: string,
-    |}>
+    |}>,
   >,
 |}): Promise<BigNumber> {
   try {
@@ -796,10 +796,7 @@ export async function maxSendableADA(request: {|
       for (const input of addressedUtxo) {
         const cmlValue = cmlValueFromRemoteFormat(cml, input);
         try {
-          txBuilder
-            .get_explicit_input()
-            .checked_add(txBuilder.get_implicit_input())
-            .checked_add(cmlValue);
+          txBuilder.get_explicit_input().checked_add(txBuilder.get_implicit_input()).checked_add(cmlValue);
         } catch (_error) {
           throw new AssetOverflowError();
         }
@@ -1179,9 +1176,7 @@ export function signTransaction(
 
 export function transactionWitnessSetHex(signedTransactionBytes: Uint8Array): string {
   return RustModule.WasmScope(Module =>
-    Module.CML.Transaction.from_cbor_bytes(signedTransactionBytes)
-      .witness_set()
-      .to_cbor_hex()
+    Module.CML.Transaction.from_cbor_bytes(signedTransactionBytes).witness_set().to_cbor_hex()
   );
 }
 
@@ -1238,10 +1233,7 @@ function signCmlTransaction(
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
     if (stakingHashes.size > 0 && stakingKey != null) {
       const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey);
-      const stakingKeyHash = cmlStakingKey
-        .to_public()
-        .hash()
-        .to_hex();
+      const stakingKeyHash = cmlStakingKey.to_public().hash().to_hex();
       if (stakingHashes.has(stakingKeyHash)) {
         witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, cmlStakingKey));
       }
