@@ -20,9 +20,11 @@ test('parses transaction auxiliary metadata with CML', () => {
 
 test('parses auxiliary metadata bytes for unsigned transaction review', () => {
   const txCbor = '84a3008001800200a0f5a11902a2a1636d736781717b2268656c6c6f223a22776f726c64227d';
-  const metadataBytes = RustModule.WasmScope(Module =>
-    Module.CML.Transaction.from_cbor_hex(txCbor).auxiliary_data().to_cbor_bytes()
-  );
+  const metadataBytes = RustModule.WasmScope(Module => {
+    const auxiliaryData = Module.CML.Transaction.from_cbor_hex(txCbor).auxiliary_data();
+    if (auxiliaryData == null) throw new Error('Expected transaction auxiliary data');
+    return auxiliaryData.to_cbor_bytes();
+  });
 
   expect(formatUnsignedTxMetadata(metadataBytes, { auxiliary_data_hash: 'metadata-hash' } as any)).toEqual({
     hash: 'metadata-hash',
