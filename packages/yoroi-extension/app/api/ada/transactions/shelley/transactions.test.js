@@ -1383,9 +1383,13 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       const utxos: Array<RemoteUnspentOutput> = [sampleUtxos[1], sampleUtxos[2]];
       const changeAddress = genSampleAdaAddresses()[0];
       if (changeAddress == null) throw new Error('Missing change address fixture');
+      const addressedChangeAddress = {
+        ...changeAddress,
+        addressing: changeAddress.addressing ?? { path: [0, 0], startLevel: 0 },
+      };
       const metadata = createMetadata([{ label: '0', data: { value: 1 } }]);
       const sendAllResponse = sendAllUnsignedTxFromUtxo(
-        changeAddress,
+        addressedChangeAddress,
         utxos,
         new BigNumber(0),
         getSendAllProtocolParams(),
@@ -1411,8 +1415,12 @@ describe('Create sendAll unsigned TX from UTXO', () => {
 
   it('extracts swap body, inputs, and metadata with CML', () => {
     const utxo = genSampleUtxos()[1];
-    const receiver = genSampleAdaAddresses()[0];
-    if (utxo == null || receiver == null) throw new Error('Missing send-all fixture');
+    const receiverFixture = genSampleAdaAddresses()[0];
+    if (utxo == null || receiverFixture == null) throw new Error('Missing send-all fixture');
+    const receiver = {
+      ...receiverFixture,
+      addressing: receiverFixture.addressing ?? { path: [0, 0], startLevel: 0 },
+    };
     const metadata = createMetadata([{ label: '0', data: { value: 4 } }]);
     const response = sendAllUnsignedTxFromUtxo(
       receiver,
@@ -1560,8 +1568,8 @@ describe('CML connector transaction construction', () => {
     );
 
     expect(response.txBuilder).toBeInstanceOf(Uint8Array);
-    const auxiliaryData = response.auxiliaryData;
-    if (auxiliaryData == null) throw new Error('Missing connector auxiliary data');
+    const responseAuxiliaryData = response.auxiliaryData;
+    if (responseAuxiliaryData == null) throw new Error('Missing connector auxiliary data');
     expect(response.senderUtxos).toHaveLength(1);
     const bodySummary = RustModule.WasmScope(Module => {
       const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
@@ -1592,7 +1600,7 @@ describe('CML connector transaction construction', () => {
       hasAuxiliaryDataHash: true,
     });
     const expectedAuxiliaryDataHash = RustModule.WasmScope(Module =>
-      Module.CML.hash_auxiliary_data(Module.CML.AuxiliaryData.from_cbor_bytes(auxiliaryData)).to_hex()
+      Module.CML.hash_auxiliary_data(Module.CML.AuxiliaryData.from_cbor_bytes(responseAuxiliaryData)).to_hex()
     );
     const serializedUnsignedTx = new HaskellShelleyTxSignRequest({
       senderUtxos: [],
