@@ -78,6 +78,7 @@ export default (
       'system.display',
     ],
     host_permissions: ['*://connect.trezor.io/*', ...(hostPermissions ?? [])],
+    externally_connectable: { matches: ['https://suite.trezor.io/*'] },
     content_scripts: [
       {
         matches: ['*://connect.trezor.io/*/popup.html*'],
