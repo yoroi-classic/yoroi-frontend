@@ -143,7 +143,7 @@ export function sendAllUnsignedTx(
 }
 
 export function sendAllUnsignedTxFromUtxo(
-  receiver: { ...Address, ...InexactSubset<Addressing>, ... },
+  receiver: { ...Address, +addressing?: AddressingValue, ... },
   allUtxos: Array<RemoteUnspentOutput>,
   absSlotNumber: BigNumber,
   protocolParams: {|
