@@ -142,11 +142,7 @@ describe('CML connector UTxO selection', () => {
       expect(body.inputs().len()).toBe(2);
       expect(body.outputs().len()).toBeGreaterThanOrEqual(2);
       const outputTotal = Array.from({ length: body.outputs().len() }, (_, index) =>
-        body
-          .outputs()
-          .get(index)
-          .amount()
-          .coin()
+        body.outputs().get(index).amount().coin()
       ).reduce((sum, coin) => sum + coin, BigInt('0'));
       expect(total.coin() - outputTotal).toBeGreaterThanOrEqual(BigInt(body.fee().toString()));
       expect(BigInt(body.fee().toString())).toBeGreaterThanOrEqual(builder.min_fee(false));

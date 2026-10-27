@@ -345,12 +345,7 @@ export function getSingleAddressString(mnemonic: string, path: Array<number>, is
     if (path[0] === WalletTypePurpose.CIP1852) {
       return cml.EnterpriseAddress.new(
         Number.parseInt(baseConfig.ChainNetworkId, 10),
-        cml.Credential.new_pub_key(
-          derivedKey
-            .to_public()
-            .to_raw_key()
-            .hash()
-        )
+        cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
       )
         .to_address()
         .to_hex();
@@ -377,12 +372,7 @@ export function getMangledAddressString(
     if (path[0] !== WalletTypePurpose.CIP1852) throw new Error('Unexpected purpose');
     return cml.BaseAddress.new(
       Number.parseInt(baseConfig.ChainNetworkId, 10),
-      cml.Credential.new_pub_key(
-        derivedKey
-          .to_public()
-          .to_raw_key()
-          .hash()
-      ),
+      cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash()),
       cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_raw_bytes(new Uint8Array(stakingKey)))
     )
       .to_address()
@@ -407,18 +397,8 @@ export function getAddressForType(mnemonic: string, path: Array<number>, type: C
         const stakingKey = derivePath(rootKey, newPath);
         const addr = cml.BaseAddress.new(
           Number.parseInt(baseConfig.ChainNetworkId, 10),
-          cml.Credential.new_pub_key(
-            derivedKey
-              .to_public()
-              .to_raw_key()
-              .hash()
-          ),
-          cml.Credential.new_pub_key(
-            stakingKey
-              .to_public()
-              .to_raw_key()
-              .hash()
-          )
+          cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash()),
+          cml.Credential.new_pub_key(stakingKey.to_public().to_raw_key().hash())
         );
         return addr.to_address().to_hex();
       }
@@ -428,24 +408,14 @@ export function getAddressForType(mnemonic: string, path: Array<number>, type: C
       case CoreAddressTypes.CARDANO_ENTERPRISE: {
         const addr = cml.EnterpriseAddress.new(
           Number.parseInt(baseConfig.ChainNetworkId, 10),
-          cml.Credential.new_pub_key(
-            derivedKey
-              .to_public()
-              .to_raw_key()
-              .hash()
-          )
+          cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
         );
         return addr.to_address().to_hex();
       }
       case CoreAddressTypes.CARDANO_REWARD: {
         const addr = cml.RewardAddress.new(
           Number.parseInt(baseConfig.ChainNetworkId, 10),
-          cml.Credential.new_pub_key(
-            derivedKey
-              .to_public()
-              .to_raw_key()
-              .hash()
-          )
+          cml.Credential.new_pub_key(derivedKey.to_public().to_raw_key().hash())
         );
         return addr.to_address().to_hex();
       }
@@ -507,10 +477,7 @@ export function toRemoteByronTx(blockchain: Array<RemoteTransaction>, request: S
       if (!output) throw new Error('Missing Byron transaction output');
       parsedOutputs.push({
         address: toHexOrBase58(output.address().to_hex()),
-        amount: output
-          .amount()
-          .coin()
-          .toString(),
+        amount: output.amount().coin().toString(),
         assets: parseTokenList(output.amount().multi_asset()),
       });
     }
@@ -553,7 +520,7 @@ export function genGetAccountState(blockchain: Array<RemoteTransaction>, getRewa
       {|
         rewards: BigNumber,
         withdrawals: BigNumber,
-      |}
+      |},
     >();
     for (const key of Object.keys(rewardHistory)) {
       for (const reward of rewardHistory[key] ?? []) {
@@ -837,6 +804,10 @@ export class MockUtxoApi implements UtxoApiContract {
           ) {
             return;
           }
+          const blockNum = tx.height;
+          if (blockNum == null) {
+            throw new Error('expect height');
+          }
           const utxoId = `${tx.hash}${outputIndex}`;
           utxoDiffItems.push({
             type: 'output',
@@ -854,7 +825,7 @@ export class MockUtxoApi implements UtxoApiContract {
                 name: asset.name,
                 amount: asset.amount,
               })),
-              blockNum: tx.height ?? 0,
+              blockNum,
             },
           });
         });

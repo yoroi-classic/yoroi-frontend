@@ -96,20 +96,7 @@ test('CML derives restore addresses with the frozen bytes and network IDs', () =
   for (const networkId of [0, 1, 42]) {
     const [payment, stake] = RustModule.WasmScope(Module => {
       const account = Module.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKey));
-      return [
-        account
-          .derive(0)
-          .derive(7)
-          .to_raw_key()
-          .hash()
-          .to_hex(),
-        account
-          .derive(2)
-          .derive(0)
-          .to_raw_key()
-          .hash()
-          .to_hex(),
-      ];
+      return [account.derive(0).derive(7).to_raw_key().hash().to_hex(), account.derive(2).derive(0).to_raw_key().hash().to_hex()];
     });
     const paymentHash = deriveBip32PublicKeyHashHex(accountPublicKey, [0, 7]);
     const stakingHash = deriveBip32PublicKeyHashHex(accountPublicKey, [2, 0]);
@@ -123,15 +110,9 @@ test('CML derives restore addresses with the frozen bytes and network IDs', () =
       const paymentCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(payment));
       const stakeCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex(stake));
       return {
-        enterpriseAddressHex: CML.EnterpriseAddress.new(networkId, paymentCredential)
-          .to_address()
-          .to_hex(),
-        baseAddressHex: CML.BaseAddress.new(networkId, paymentCredential, stakeCredential)
-          .to_address()
-          .to_hex(),
-        rewardAddressHex: CML.RewardAddress.new(networkId, stakeCredential)
-          .to_address()
-          .to_hex(),
+        enterpriseAddressHex: CML.EnterpriseAddress.new(networkId, paymentCredential).to_address().to_hex(),
+        baseAddressHex: CML.BaseAddress.new(networkId, paymentCredential, stakeCredential).to_address().to_hex(),
+        rewardAddressHex: CML.RewardAddress.new(networkId, stakeCredential).to_address().to_hex(),
       };
     });
     expect(actual).toEqual({ enterpriseAddressHex: expected.enterpriseAddressHex, baseAddressHex: expected.baseAddressHex });
@@ -166,28 +147,14 @@ test('default Shelley derivations retain the BIP44 gap reserve and exact initial
   const expected = RustModule.WasmScope(Module => {
     const CML = Module.CML;
     const account = CML.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKeyHex));
-    const stakeKeyHash = account
-      .derive(ChainDerivations.CHIMERIC_ACCOUNT)
-      .derive(STAKING_KEY_INDEX)
-      .to_raw_key()
-      .hash();
-    const paymentKeyHash = account
-      .derive(ChainDerivations.EXTERNAL)
-      .derive(0)
-      .to_raw_key()
-      .hash();
+    const stakeKeyHash = account.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(STAKING_KEY_INDEX).to_raw_key().hash();
+    const paymentKeyHash = account.derive(ChainDerivations.EXTERNAL).derive(0).to_raw_key().hash();
     const paymentCredential = CML.Credential.new_pub_key(paymentKeyHash);
     const stakeCredential = CML.Credential.new_pub_key(stakeKeyHash);
     return [
-      CML.EnterpriseAddress.new(1, paymentCredential)
-        .to_address()
-        .to_hex(),
-      CML.BaseAddress.new(1, paymentCredential, stakeCredential)
-        .to_address()
-        .to_hex(),
-      CML.RewardAddress.new(1, stakeCredential)
-        .to_address()
-        .to_hex(),
+      CML.EnterpriseAddress.new(1, paymentCredential).to_address().to_hex(),
+      CML.BaseAddress.new(1, paymentCredential, stakeCredential).to_address().to_hex(),
+      CML.RewardAddress.new(1, stakeCredential).to_address().to_hex(),
     ];
   });
   expect(inserted.map(({ address }) => address.data)).toEqual([expected[0], expected[1], expected[2]]);

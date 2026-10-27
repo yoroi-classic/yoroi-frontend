@@ -52,11 +52,7 @@ test('builds and signs legacy-wallet transfer summary from the CML send-all tran
       id: Module.CML.hash_transaction(body).to_hex(),
       fee: body.fee().toString(),
       inputCount: body.inputs().len(),
-      bootstrapCount:
-        tx
-          .witness_set()
-          .bootstrap_witnesses()
-          ?.len() ?? 0,
+      bootstrapCount: tx.witness_set().bootstrap_witnesses()?.len() ?? 0,
     };
   });
   expect(summary.id).toBe(details.id);

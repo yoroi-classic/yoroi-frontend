@@ -34,14 +34,8 @@ test('CML connector login address, COSE signature, and generated key match legac
   const actual = await RustModule.WasmScope(async Module => {
     const CML = Module.CML;
     const signingKey = CML.Bip32PrivateKey.from_raw_bytes(root.to_raw_bytes());
-    const paymentKey = signingKey
-      .derive(0)
-      .derive(0)
-      .to_raw_key();
-    const stakeKey = signingKey
-      .derive(2)
-      .derive(0)
-      .to_raw_key();
+    const paymentKey = signingKey.derive(0).derive(0).to_raw_key();
+    const stakeKey = signingKey.derive(2).derive(0).to_raw_key();
     const address = CML.BaseAddress.new(
       0,
       CML.Credential.new_pub_key(paymentKey.to_public().hash()),

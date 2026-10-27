@@ -22,11 +22,7 @@ import type { FilterUsedRequest, FilterUsedResponse } from './lib/state-fetch/ty
 let db: lf$Database;
 
 function inspectUnsignedTxFee(unsignedTx: Uint8Array): string {
-  return RustModule.WasmScope(Module =>
-    Module.CML.TransactionBody.from_cbor_bytes(unsignedTx)
-      .fee()
-      .toString()
-  );
+  return RustModule.WasmScope(Module => Module.CML.TransactionBody.from_cbor_bytes(unsignedTx).fee().toString());
 }
 
 describe('app/api/ada/index', () => {
@@ -75,9 +71,7 @@ describe('app/api/ada/index', () => {
     });
     expect(expectedPaymentKeyHash).not.toBeNull();
     const actualPublicKeyHash = RustModule.WasmScope(Module =>
-      Module.CML.PublicKey.from_bytes(hexToBytes(signedData.pubKey))
-        .hash()
-        .to_hex()
+      Module.CML.PublicKey.from_bytes(hexToBytes(signedData.pubKey)).hash().to_hex()
     );
     expect(actualPublicKeyHash).toBe(expectedPaymentKeyHash);
   });
@@ -400,15 +394,8 @@ describe('app/api/ada/index', () => {
       .derive(CoinTypes.CARDANO)
       .derive(HARD_DERIVATION_START);
     const senderAddress = RustModule.WasmScope(Module => {
-      const paymentKeyHash = accountPrivateKey
-        .derive(0)
-        .derive(0)
-        .to_public()
-        .to_raw_key()
-        .hash();
-      return Module.CML.EnterpriseAddress.new(0, Module.CML.Credential.new_pub_key(paymentKeyHash))
-        .to_address()
-        .to_hex();
+      const paymentKeyHash = accountPrivateKey.derive(0).derive(0).to_public().to_raw_key().hash();
+      return Module.CML.EnterpriseAddress.new(0, Module.CML.Credential.new_pub_key(paymentKeyHash)).to_address().to_hex();
     });
     const createTxRequest = {
       absSlotNumber: new BigNumber('70858976'),
@@ -583,18 +570,10 @@ describe('app/api/ada/index', () => {
       const transaction = Module.CML.Transaction.from_cbor_bytes(signedBytes);
       const witnesses = transaction.witness_set();
       return {
-        fee: transaction
-          .body()
-          .fee()
-          .toString(),
+        fee: transaction.body().fee().toString(),
         size: transaction.to_cbor_bytes().length,
         vkeyCount: witnesses.vkeywitnesses()?.len() ?? 0,
-        vkeyHash: witnesses
-          .vkeywitnesses()
-          ?.get(0)
-          .vkey()
-          .hash()
-          .to_hex(),
+        vkeyHash: witnesses.vkeywitnesses()?.get(0).vkey().hash().to_hex(),
         inputPaymentHash: (() => {
           const paymentCredential = Module.CML.Address.from_hex(response.senderUtxos[0].receiver).payment_cred();
           const paymentKeyHash = paymentCredential?.as_pub_key();
@@ -614,14 +593,7 @@ describe('app/api/ada/index', () => {
       return {
         inputCount: body.inputs().len(),
         outputCount: body.outputs().len(),
-        outputs: Array.from({ length: body.outputs().len() }, (_, index) =>
-          body
-            .outputs()
-            .get(index)
-            .amount()
-            .coin()
-            .toString()
-        ),
+        outputs: Array.from({ length: body.outputs().len() }, (_, index) => body.outputs().get(index).amount().coin().toString()),
       };
     });
     expect(unsignedBody).toEqual({ inputCount: 1, outputCount: 2, outputs: ['1000000', '8829527'] });
