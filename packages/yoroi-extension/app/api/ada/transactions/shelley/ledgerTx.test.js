@@ -308,9 +308,8 @@ test('Ledger request preserves inline datum and reference script and deduplicate
     []
   );
 
-  const output = request.tx.outputs[0];
-  if (output == null || !('datum' in output) || !('referenceScriptHex' in output))
-    throw new Error('Missing Ledger inline output fields');
+  const output = (request.tx.outputs[0]: {| datum: {| type: string, datumHex: string |}, referenceScriptHex: string |} | void);
+  if (output == null) throw new Error('Missing Ledger inline output fields');
   expect(output.datum).toEqual({ type: DatumType.INLINE, datumHex: fixture.datumHex });
   expect(output.referenceScriptHex).toBe(fixture.scriptHex);
   expect(request.tx.requiredSigners).toHaveLength(1);

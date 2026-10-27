@@ -70,13 +70,11 @@ test('propagates a rollback result returned by any address batch', async () => {
     getUtxoAtPoint: jest.fn(),
     getUtxoDiffSincePoint: jest
       .fn()
-      .mockResolvedValueOnce(
-        ({
-          result: UtxoApiResult.SUCCESS,
-          value: { diffItems: [], reference: { lastFoundBestBlock: 'best', lastFoundSafeBlock: 'safe' } },
-        }: any)
-      )
-      .mockResolvedValueOnce({ result: UtxoApiResult.SAFEBLOCK_ROLLBACK }),
+      .mockImplementationOnce(async () => ({
+        result: UtxoApiResult.SUCCESS,
+        value: { diffItems: [], reference: { lastFoundBestBlock: 'best', lastFoundSafeBlock: 'safe' } },
+      }))
+      .mockImplementationOnce(async () => ({ result: UtxoApiResult.SAFEBLOCK_ROLLBACK })),
   };
   const api = new BatchedUtxoApi((base: any), 1);
 

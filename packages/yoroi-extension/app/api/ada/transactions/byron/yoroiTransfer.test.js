@@ -43,10 +43,11 @@ test('builds and signs legacy-wallet transfer summary from the CML send-all tran
     networkId: networks.CardanoMainnet.NetworkId,
   });
 
-  expect(summary.encodedTx).toBeInstanceOf(Uint8Array);
-  if (summary.encodedTx == null) throw new Error('Missing encoded transaction');
+  const encodedTx = summary.encodedTx;
+  expect(encodedTx).toBeInstanceOf(Uint8Array);
+  if (encodedTx == null) throw new Error('Missing encoded transaction');
   const details = RustModule.WasmScope(Module => {
-    const tx = Module.CML.Transaction.from_cbor_bytes(summary.encodedTx);
+    const tx = Module.CML.Transaction.from_cbor_bytes(encodedTx);
     const body = tx.body();
     return {
       id: Module.CML.hash_transaction(body).to_hex(),

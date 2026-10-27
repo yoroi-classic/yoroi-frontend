@@ -140,17 +140,20 @@ export function parseCMLTransactionOutput(
   address: string,
   amount: MultiToken,
   dataHash?: string,
-  data: void,
+  data: string | void,
 |} {
   return RustModule.WasmScope(Module => {
     const output = Module.CML.TransactionOutput.from_cbor_hex(outputCborHex);
-    const parsed: {| address: string, amount: MultiToken, dataHash?: string, data: void |} = {
+    const parsed: {| address: string, amount: MultiToken, dataHash?: string, data: string | void |} = {
       address: output.address().to_hex(),
       amount: multiTokenFromCMLValue(output.amount(), defaults),
       data: undefined,
     };
     const dataHash = output.datum_hash();
     if (dataHash != null) parsed.dataHash = dataHash.to_hex();
+    const datum = output.datum();
+    const inlineDatum = datum?.as_datum();
+    if (inlineDatum != null) parsed.data = inlineDatum.to_cbor_hex();
     return parsed;
   });
 }
@@ -425,7 +428,7 @@ export function cardanoMinAdaRequiredFromAssets(tokens: MultiToken, coinsPerByte
 }
 
 export function cardanoMinAdaRequiredFromRemoteFormat(
-  utxo: RemoteUnspentOutput | CardanoAddressedUtxo,
+  utxo: { ...RemoteUnspentOutput, ... },
   coinsPerByte: BigNumber,
   addressHex: string,
   datumHash?: string

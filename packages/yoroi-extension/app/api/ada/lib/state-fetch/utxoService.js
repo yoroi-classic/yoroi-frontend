@@ -30,10 +30,16 @@ export class UtxoService {
 
   async syncUtxoState(addresses: string[]): Promise<void> {
     const { safeUtxos, diff, bestBlock, localDiff, tipStatus } = await this.syncSafeStateAndGetDiff(addresses);
+    const spentUtxoIds = [];
+    const newUtxos = [];
+    for (const item of diff.diffItems) {
+      if (item.type === 'input') spentUtxoIds.push(item.id);
+      else newUtxos.push(item.utxo);
+    }
     const diffToBestBlock: UtxoDiffToBestBlock = {
       lastBestBlockHash: bestBlock,
-      spentUtxoIds: diff.diffItems.filter(item => item.type === 'input').map(item => item.id),
-      newUtxos: diff.diffItems.filter(item => item.type === 'output').map(item => item.utxo),
+      spentUtxoIds,
+      newUtxos,
     };
 
     if (localDiff.length > 0) {

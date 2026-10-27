@@ -134,21 +134,21 @@ export const mirRewardForRewardAddress = (payloadHex: string, addressHex: string
 
 export const poolRegistrationPayloads = (
   poolParams: $ReadOnly<{|
-    operator: string,
-    vrfKeyHash: string,
-    pledge: string,
-    cost: string,
-    margin: number,
-    rewardAccount: string,
-    poolOwners: $ReadOnlyArray<string>,
-    relays: $ReadOnlyArray<{|
-      ipv4: string | null,
-      ipv6: string | null,
-      dnsName: string | null,
-      dnsSrvName: string | null,
-      port: string | null,
+    +operator: string,
+    +vrfKeyHash: string,
+    +pledge: string,
+    +cost: string,
+    +margin: number,
+    +rewardAccount: string,
+    +poolOwners: $ReadOnlyArray<string>,
+    +relays: $ReadOnlyArray<{|
+      +ipv4: string | null,
+      +ipv6: string | null,
+      +dnsName: string | null,
+      +dnsSrvName: string | null,
+      +port: string | null,
     |}>,
-    poolMetadata: null | {| url: string, metadataHash: string |},
+    +poolMetadata: null | {| +url: string, +metadataHash: string |},
   |}>
 ): {| certificateHex: string, operatorCredentialHex: string, ownerCredentialHexes: Array<string> |} =>
   RustModule.WasmScope(Module => {

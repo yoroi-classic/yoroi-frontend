@@ -1560,7 +1560,8 @@ describe('CML connector transaction construction', () => {
     );
 
     expect(response.txBuilder).toBeInstanceOf(Uint8Array);
-    if (response.auxiliaryData == null) throw new Error('Missing connector auxiliary data');
+    const auxiliaryData = response.auxiliaryData;
+    if (auxiliaryData == null) throw new Error('Missing connector auxiliary data');
     expect(response.senderUtxos).toHaveLength(1);
     const bodySummary = RustModule.WasmScope(Module => {
       const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
@@ -1591,7 +1592,7 @@ describe('CML connector transaction construction', () => {
       hasAuxiliaryDataHash: true,
     });
     const expectedAuxiliaryDataHash = RustModule.WasmScope(Module =>
-      Module.CML.hash_auxiliary_data(Module.CML.AuxiliaryData.from_cbor_bytes(response.auxiliaryData)).to_hex()
+      Module.CML.hash_auxiliary_data(Module.CML.AuxiliaryData.from_cbor_bytes(auxiliaryData)).to_hex()
     );
     const serializedUnsignedTx = new HaskellShelleyTxSignRequest({
       senderUtxos: [],
@@ -1968,7 +1969,11 @@ describe('CML connector transaction construction', () => {
     );
     const burnedAmount = RustModule.WasmScope(Module => {
       const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
-      return body.mint().get(Module.CML.ScriptHash.from_hex(script.policy), Module.CML.AssetName.from_hex(assetName)).toString();
+      const mint = body.mint();
+      if (mint == null) throw new Error('Missing mint field');
+      const amount = mint.get(Module.CML.ScriptHash.from_hex(script.policy), Module.CML.AssetName.from_hex(assetName));
+      if (amount == null) throw new Error('Missing minted asset');
+      return amount.toString();
     });
     expect(burnedAmount).toEqual('-1');
   });
@@ -1991,7 +1996,13 @@ describe('CML maximum send amount', () => {
           },
         ],
         Transaction: { Hash: utxo.tx_hash },
-        UtxoTransactionOutput: { OutputIndex: utxo.tx_index },
+        UtxoTransactionOutput: {
+          OutputIndex: utxo.tx_index,
+          ErgoBoxId: null,
+          ErgoCreationHeight: null,
+          ErgoRegisters: null,
+          ErgoTree: null,
+        },
       },
     };
     const maxAmount = await maxSendableADA({

@@ -67,8 +67,10 @@ export type TxOutput = {|
   ...Address,
   amount: MultiToken,
   dataHash?: string,
-  data?: string,
+  data?: string | void,
 |};
+
+type AddressingValue = {| path: Array<number>, startLevel: number |};
 
 type TxAuxiliaryData = {|
   metadata: ?TxMetadata,
@@ -215,13 +217,15 @@ export function sendAllUnsignedTxFromUtxo(
     }
     const body = txBuilder.build(cml.ChangeSelectionAlgo.Default, address).body();
     const outputs = body.outputs();
-    const changeAddr: Array<{| addressing: Addressing, address: string, values: MultiToken |}> = [];
-    if (receiver.addressing != null) {
+    const changeAddr: Array<{| addressing: AddressingValue, address: string, values: MultiToken |}> = [];
+    const changePath = receiver.addressing?.path;
+    const changeStartLevel = receiver.addressing?.startLevel;
+    if (changePath != null && changeStartLevel != null) {
       for (let index = 0; index < outputs.len(); index++) {
         const output = outputs.get(index);
         if (output.address().to_hex() !== receiver.address) continue;
         changeAddr.push({
-          addressing: receiver.addressing,
+          addressing: { path: changePath, startLevel: changeStartLevel },
           address: receiver.address,
           values: multiTokenFromCMLValue(output.amount(), {
             defaultNetworkId: protocolParams.networkId,
@@ -849,8 +853,7 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     let auxiliaryDataBytes: void | Uint8Array;
     const redeemersByUtxo = new Map();
     for (const [utxo, witness] of mustIncludeUtxos) {
-      if (witness?.plutusScript == null) continue;
-      if (!('redeemer' in witness)) throw new Error('Missing Plutus redeemer');
+      if (witness == null || !('plutusScript' in witness)) continue;
       const redeemer = cml.LegacyRedeemer.from_cbor_hex(witness.redeemer);
       redeemersByUtxo.set(`${utxo.tx_hash}${utxo.tx_index}`, redeemer);
     }
@@ -956,14 +959,18 @@ async function newAdaUnsignedTxFromUtxoForConnector(
       const value = cmlValueFromRemoteFormat(cml, utxo);
       const output = cml.TransactionOutput.new(cml.Address.from_hex(utxo.receiver), value);
       const inputBuilder = cml.SingleInputBuilder.new(input, output);
-      if (witness != null && 'nativeScript' in witness) {
+      if (witness == null) {
+        txBuilder.add_input(inputBuilder.payment_key());
+        continue;
+      }
+      if ('nativeScript' in witness) {
         txBuilder.add_input(
           inputBuilder.native_script(
             cml.NativeScript.from_cbor_hex(witness.nativeScript),
             cml.NativeScriptWitnessInfo.assume_signature_count()
           )
         );
-      } else if (witness != null && 'plutusScript' in witness) {
+      } else {
         const redeemer = redeemersByUtxo.get(`${utxo.tx_hash}${utxo.tx_index}`);
         if (redeemer == null) throw new Error('Missing parsed Plutus redeemer');
         const script = cml.PlutusScript.from_v1(cml.PlutusV1Script.from_cbor_hex(witness.plutusScript));
@@ -972,10 +979,6 @@ async function newAdaUnsignedTxFromUtxoForConnector(
           inputBuilder.plutus_script(partialWitness, cml.Ed25519KeyHashList.new(), cml.PlutusData.from_cbor_hex(witness.datum))
         );
         txBuilder.set_exunits(cml.RedeemerWitnessKey.from_redeemer(redeemer), redeemer.ex_units());
-      } else if (witness == null) {
-        txBuilder.add_input(inputBuilder.payment_key());
-      } else {
-        throw new Error('Unexpected script witness value');
       }
     }
 
@@ -1085,8 +1088,6 @@ async function newAdaUnsignedTxFromUtxoForConnector(
   };
 }
 
-type UtxoOrAddressing = CardanoAddressedUtxo | {| ...Address, ...Addressing |};
-
 export async function signTransactionFromWallet(
   senderUtxos: Array<CardanoAddressedUtxo>,
   unsignedTx: Uint8Array,
@@ -1175,10 +1176,9 @@ function signCmlTransaction(
   metadata: ?Uint8Array,
   otherRequiredSigners: Array<{| ...Address, ...Addressing |}>
 ): Uint8Array {
-  const uniqueAddressings: Array<UtxoOrAddressing> = [];
+  const uniqueAddressings: Array<{| address: string, addressing: AddressingValue |}> = [];
   const seen = new Set();
-  for (const item of [...senderUtxos, ...otherRequiredSigners]) {
-    const address = 'receiver' in item ? item.receiver : item.address;
+  const addSigningAddress = (address: string, addressing: AddressingValue) => {
     if (address == null) throw new Error('Missing address for signing');
     const addressHex = normalizeAddressToHex(address);
     const keyHash = getCardanoSpendingKeyHash(addressHex);
@@ -1186,9 +1186,11 @@ function signCmlTransaction(
     const uniqueKey = keyHash == null ? addressHex : keyHash;
     if (!seen.has(uniqueKey)) {
       seen.add(uniqueKey);
-      uniqueAddressings.push(item);
+      uniqueAddressings.push({ address, addressing });
     }
-  }
+  };
+  for (const utxo of senderUtxos) addSigningAddress(utxo.receiver, utxo.addressing);
+  for (const signer of otherRequiredSigners) addSigningAddress(signer.address, signer.addressing);
 
   return RustModule.WasmScope(Module => {
     const cml = Module.CML;
@@ -1209,8 +1211,7 @@ function signCmlTransaction(
         if (index == null) throw new Error(`${nameof(signTransaction)} invalid key derivation path`);
         derived = derived.derive(index);
       }
-      const address = item.receiver ?? item.address;
-      const cmlAddress = parseCmlAddress(cml, address);
+      const cmlAddress = parseCmlAddress(cml, item.address);
       const byronAddress = cml.ByronAddress.from_address(cmlAddress);
       if (byronAddress == null) witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, derived.to_raw_key()));
       else witnessBuilder.add_bootstrap(cml.make_icarus_bootstrap_witness(txHash, byronAddress, derived));
