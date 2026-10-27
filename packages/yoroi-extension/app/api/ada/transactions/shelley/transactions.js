@@ -68,6 +68,7 @@ export type TxOutput = {|
   amount: MultiToken,
   dataHash?: string,
   data?: string | void,
+  referenceScript?: string,
 |};
 
 type AddressingValue = {| +path: Array<number>, +startLevel: number |};
@@ -505,7 +506,8 @@ export async function newAdaUnsignedTxFromUtxo(
         const transactionOutput = cml.TransactionOutput.new(
           cml.Address.from_hex(output.address),
           cmlValueFromMultiToken(cml, output.amount),
-          datumOption
+          datumOption,
+          output.referenceScript == null ? undefined : cml.Script.from_cbor_hex(output.referenceScript)
         );
         try {
           builder.add_output(cml.SingleOutputBuilderResult.new(transactionOutput));
@@ -854,7 +856,8 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     const redeemersByUtxo = new Map();
     for (const [utxo, witness] of mustIncludeUtxos) {
       if (witness == null || !('plutusScript' in witness)) continue;
-      // Flow 0.142 does not narrow this exact union by the `in` check above.
+      if (!('redeemer' in witness)) throw new Error('Missing Plutus redeemer');
+      // Flow 0.142 does not narrow this exact union by the `in` checks above.
       // $FlowFixMe[prop-missing]
       const redeemer = cml.LegacyRedeemer.from_cbor_hex(witness.redeemer);
       redeemersByUtxo.set(`${utxo.tx_hash}${utxo.tx_index}`, redeemer);
@@ -991,14 +994,21 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     }
 
     for (const output of outputs) {
-      const datumOption = output.dataHash == null ? undefined : cml.DatumOption.new_hash(cml.DatumHash.from_hex(output.dataHash));
+      let datumOption;
+      if (output.dataHash != null) {
+        datumOption = cml.DatumOption.new_hash(cml.DatumHash.from_hex(output.dataHash));
+      } else if (output.data != null) {
+        datumOption = cml.DatumOption.new_datum(cml.PlutusData.from_cbor_hex(output.data));
+      }
+      const referenceScript = output.referenceScript == null ? undefined : cml.Script.from_cbor_hex(output.referenceScript);
       try {
         txBuilder.add_output(
           cml.SingleOutputBuilderResult.new(
             cml.TransactionOutput.new(
               cml.Address.from_hex(output.address),
               cmlValueFromMultiToken(cml, output.amount),
-              datumOption
+              datumOption,
+              referenceScript
             )
           )
         );

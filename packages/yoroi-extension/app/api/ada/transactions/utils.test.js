@@ -183,6 +183,35 @@ test('parses Byron outputs, datum hashes, and unknown assets for connector displ
   ]);
 });
 
+test('preserves inline datums and reference scripts when parsing connector outputs', () => {
+  const defaults = { defaultIdentifier: '.', defaultNetworkId: networks.CardanoMainnet.NetworkId };
+  const fixture = RustModule.WasmScope(Module => {
+    const cml = Module.CML;
+    const address = cml.EnterpriseAddress.new(
+      1,
+      cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('77'.repeat(28)))
+    ).to_address();
+    const datum = cml.PlutusData.new_integer(cml.BigInteger.from_str('42'));
+    const scriptRef = cml.Script.new_native(cml.NativeScript.new_script_pubkey(cml.Ed25519KeyHash.from_hex('88'.repeat(28))));
+    const referenceScriptHex = scriptRef.to_cbor_hex();
+    const output = cml.TransactionOutput.new(
+      address,
+      cml.Value.from_coin(BigInt('2000000')),
+      cml.DatumOption.new_datum(datum),
+      scriptRef
+    );
+    return {
+      outputHex: output.to_cbor_hex(),
+      datumHex: datum.to_cbor_hex(),
+      referenceScriptHex,
+    };
+  });
+
+  const parsed = parseCMLTransactionOutput(fixture.outputHex, defaults);
+  expect(parsed.data).toBe(fixture.datumHex);
+  expect(parsed.referenceScript).toBe(fixture.referenceScriptHex);
+});
+
 const cardanoToken = {
   TokenId: 0,
   Digest: 0,

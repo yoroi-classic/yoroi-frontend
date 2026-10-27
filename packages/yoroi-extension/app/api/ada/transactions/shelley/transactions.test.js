@@ -1541,12 +1541,28 @@ describe('CML connector transaction construction', () => {
   it('builds a required native-script spend with mint, metadata, signer hashes, and serializable body bytes', async () => {
     const utxo = genAddressedUtxos()[3];
     const change = genSampleAdaAddresses()[3];
+    if (utxo == null || change == null) throw new Error('Missing connector output fixtures');
     const scriptBytes = RustModule.WasmScope(Module => {
       const script = Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('11'.repeat(28)));
-      return { script: script.to_cbor_hex(), hash: script.hash().to_hex() };
+      const outputReferenceScript = Module.CML.Script.new_native(
+        Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('22'.repeat(28)))
+      );
+      const datum = Module.CML.PlutusData.new_integer(Module.CML.BigInteger.from_str('42'));
+      return {
+        script: script.to_cbor_hex(),
+        hash: script.hash().to_hex(),
+        outputReferenceScript: outputReferenceScript.to_cbor_hex(),
+        outputDatum: datum.to_cbor_hex(),
+      };
     });
     const response = await newAdaUnsignedTxForConnector(
-      [makeOutput(change.address, '2000000', '1', `${scriptBytes.hash}.74657374`)],
+      [
+        {
+          ...makeOutput(change.address, '2000000', '1', `${scriptBytes.hash}.74657374`),
+          data: scriptBytes.outputDatum,
+          referenceScript: scriptBytes.outputReferenceScript,
+        },
+      ],
       [{ policyScript: scriptBytes.script, assetName: '74657374', amount: '1' }],
       { metadata: { '721': '{"version":"1.0","sample":"yes"}' }, nativeScripts: [scriptBytes.script] },
       change,
@@ -1575,6 +1591,8 @@ describe('CML connector transaction construction', () => {
       const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
       const mint = body.mint();
       const outputs = body.outputs();
+      const firstOutput = outputs.get(0);
+      if (firstOutput == null) throw new Error('Missing connector output');
       const signers = body.required_signers();
       const metadata = body.auxiliary_data_hash();
       return {
@@ -1582,6 +1600,8 @@ describe('CML connector transaction construction', () => {
         validityStart: body.validity_interval_start()?.toString(),
         fee: body.fee().toString(),
         outputCount: outputs.len(),
+        inlineDatum: firstOutput.datum()?.as_datum()?.to_cbor_hex(),
+        referenceScript: firstOutput.script_ref()?.to_cbor_hex(),
         minted: (() => {
           const amount = mint?.get(Module.CML.ScriptHash.from_hex(scriptBytes.hash), Module.CML.AssetName.from_hex('74657374'));
           return amount?.toString();
@@ -1595,6 +1615,8 @@ describe('CML connector transaction construction', () => {
       validityStart: '4999990',
       fee: expect.any(String),
       outputCount: 2,
+      inlineDatum: scriptBytes.outputDatum,
+      referenceScript: scriptBytes.outputReferenceScript,
       minted: '1',
       signerCount: 2,
       hasAuxiliaryDataHash: true,
