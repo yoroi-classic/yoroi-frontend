@@ -129,7 +129,6 @@ async function getWalletState(publicDeriver: PublicDeriver<>): Promise<WalletSta
       return new BigNumber(
         // `u` is an addressed UTxO; the minimum-ADA helper only reads the
         // remote fields, so its additional `addressing` property is irrelevant.
-        // $FlowFixMe[incompatible-exact]
         cardanoMinAdaRequiredFromRemoteFormat(
           u,
           new BigNumber(protocolParameters.coinsPerUtxoByte),
