@@ -3,6 +3,8 @@ import { wrapWithFrame } from '../lib/TrezorWrapper';
 
 jest.mock('../../components/widgets/ProgressSteps', () => ({ StepState: { PROCESS: 'PROCESS', ERROR: 'ERROR', LOAD: 'LOAD' } }));
 jest.mock('../../utils/logging', () => ({ Logger: { debug: jest.fn(), info: jest.fn(), error: jest.fn() }, stringifyError: String }));
+jest.mock('../../api/thunk', () => ({ createHardwareWallet: jest.fn() }));
+jest.mock('../../../posthog', () => ({ captureEvent: jest.fn() }));
 
 jest.mock('../lib/TrezorWrapper', () => ({
   wrapWithFrame: jest.fn(),
