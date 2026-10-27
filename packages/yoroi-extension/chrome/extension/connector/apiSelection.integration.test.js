@@ -62,7 +62,12 @@ describe('connectorGetUtxosCardano CML selection', () => {
       };
     });
     const { connectorGetUtxosCardano } = require('./api');
-    const result = await connectorGetUtxosCardano({ publicDeriverId: 1, testUtxos: dbUtxos }, fixture.valueHex, null, '4310');
+    const result = await connectorGetUtxosCardano(
+      ({ publicDeriverId: 1, testUtxos: dbUtxos }: any),
+      fixture.valueHex,
+      null,
+      '4310'
+    );
 
     expect(result).toHaveLength(2);
     expect(result.every(utxo => utxo.assets.some(asset => asset.assetId === tokenId))).toBe(true);
@@ -109,7 +114,7 @@ describe('connectorGetUtxosCardano CML selection', () => {
 
     for (const tx of [txHex, txBodyHex]) {
       const parsed = RustModule.WasmScope(Module => {
-        const result = resolveTxOrTxBody({ tx }, Module);
+        const result = resolveTxOrTxBody(({ tx }: any), Module);
         return { bodyHex: result.txBody.to_cbor_hex(), rawBodyHex: result.rawTxBody.toString('hex') };
       });
       expect(parsed.bodyHex).toBe(txBodyHex);

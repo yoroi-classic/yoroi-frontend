@@ -2,7 +2,6 @@
 
 import type { CoreAddressT } from '../database/primitives/enums';
 import { CoreAddressTypes } from '../database/primitives/enums';
-import { StoredCertificateKind } from '../database/primitives/storedCertificateKinds';
 import { RustModule } from '../../cardanoCrypto/rustLoader';
 import { normalizeAddressToHex, stakingKeyHashFromRewardAddress } from '../../cardanoCrypto/cmlAddress';
 import type { NetworkRow } from '../database/primitives/tables';
@@ -184,7 +183,9 @@ export function toEnterprise(address: string): void | string {
     const paymentKeyHash = paymentCredential?.as_pub_key();
     if (paymentKeyHash == null) return undefined;
     const networkId = wasmAddr.network_id();
-    return Module.CML.EnterpriseAddress.new(networkId, Module.CML.Credential.new_pub_key(paymentKeyHash)).to_address().to_hex();
+    return Module.CML.EnterpriseAddress.new(networkId, Module.CML.Credential.new_pub_key(paymentKeyHash))
+      .to_address()
+      .to_hex();
   });
 }
 
@@ -276,10 +277,11 @@ export function unwrapStakingKey(stakingAddress: string): string {
 }
 
 export function isCertificateKindDrepDelegation(kind: number): boolean {
+  const certificateKind = RustModule.CML.CertificateKind;
   return (
-    kind === StoredCertificateKind.VoteDelegation ||
-    kind === StoredCertificateKind.StakeAndVoteDelegation ||
-    kind === StoredCertificateKind.VoteRegistrationAndDelegation ||
-    kind === StoredCertificateKind.StakeVoteRegistrationAndDelegation
+    kind === certificateKind.VoteDelegCert ||
+    kind === certificateKind.StakeVoteDelegCert ||
+    kind === certificateKind.VoteRegDelegCert ||
+    kind === certificateKind.StakeVoteRegDelegCert
   );
 }

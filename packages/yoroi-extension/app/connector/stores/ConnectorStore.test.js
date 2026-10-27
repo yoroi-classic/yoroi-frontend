@@ -118,7 +118,7 @@ test('includes an owned chained input when creating the transaction summary', as
     gov_action_index: () => BigInt('0'),
   };
   const voter = {
-    kind: () => 1,
+    kind: () => 2,
     as_constitutional_committee_hot_script_hash: () => undefined,
     as_constitutional_committee_hot_key_hash: () => undefined,
     as_d_rep_script_hash: () => undefined,
@@ -174,7 +174,7 @@ test('includes an owned chained input when creating the transaction summary', as
     { type: 'StakeRegistrationCert', coin: '2000000' },
     {
       type: 'VotingProcedure',
-      voterType: 1,
+      voterType: 2,
       voterHash: '11'.repeat(28),
       govActionTxId: '22'.repeat(32),
       govActionIndex: 0,

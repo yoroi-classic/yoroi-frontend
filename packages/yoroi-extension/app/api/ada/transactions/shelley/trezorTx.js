@@ -224,7 +224,10 @@ export function toTrezorSignRequest(
       const encodedOutput = output.to_cbor_bytes();
       const isPostAlonzoTransactionOutput = encodedOutput.length > 0 && (encodedOutput[0] & 0xe0) === 0xa0;
 
-      const amount = output.amount().coin().toString();
+      const amount = output
+        .amount()
+        .coin()
+        .toString();
       const { tokenBundle } = toTrezorTokenBundle(cml, output.amount().multi_asset());
       const outputDataHash = output.datum_hash();
 
@@ -262,12 +265,16 @@ export function toTrezorSignRequest(
 
       const baseAddr = cml.BaseAddress.from_address(addr);
       if (baseAddr) {
-        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment()).to_address().to_hex();
+        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment())
+          .to_address()
+          .to_hex();
         const ownPaymentPath =
           ownAddressMap(paymentAddress) || changeAddrs.find(({ address }) => address === addr.to_hex())?.addressing.path;
         if (ownPaymentPath) {
           const stake = baseAddr.stake();
-          const stakeAddr = cml.RewardAddress.new(networkId, stake).to_address().to_hex();
+          const stakeAddr = cml.RewardAddress.new(networkId, stake)
+            .to_address()
+            .to_hex();
           const ownStakePath = ownAddressMap(stakeAddr);
           if (ownStakePath) {
             // stake address is ours
@@ -347,7 +354,9 @@ export function toTrezorSignRequest(
       return result;
     }
 
-    const outputs = iterateLenGet(txBody.outputs()).map(formatOutput).toArray();
+    const outputs = iterateLenGet(txBody.outputs())
+      .map(formatOutput)
+      .toArray();
 
     const formattedRequiredSigners = [];
     const additionalWitnessRequests = [];
@@ -355,8 +364,12 @@ export function toTrezorSignRequest(
     if (requiredSigners) {
       for (const hash of iterateLenGet(requiredSigners)) {
         const credential = cml.Credential.new_pub_key(hash);
-        const enterpriseAddress = cml.EnterpriseAddress.new(networkId, credential).to_address().to_hex();
-        const stakeAddress = cml.RewardAddress.new(networkId, credential).to_address().to_hex();
+        const enterpriseAddress = cml.EnterpriseAddress.new(networkId, credential)
+          .to_address()
+          .to_hex();
+        const stakeAddress = cml.RewardAddress.new(networkId, credential)
+          .to_address()
+          .to_hex();
         const ownAddressPath = ownAddressMap(enterpriseAddress) || ownAddressMap(stakeAddress);
         if (ownAddressPath) {
           formattedRequiredSigners.push({
@@ -555,7 +568,10 @@ export function buildConnectorSignedTransaction(
     const tx = cml.Transaction.from_cbor_hex(rawTxHex);
     const body = tx.body();
     const auxiliaryData = metadata == null ? tx.auxiliary_data() : cml.AuxiliaryData.from_cbor_bytes(metadata);
-    if (metadata != null) body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
+    if (metadata != null) {
+      if (auxiliaryData == null) throw new Error('Invalid auxiliary data');
+      body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
+    }
     const witnessSet = tx.witness_set();
     const vkeyWitnesses = witnessSet.vkeywitnesses() ?? cml.VkeywitnessList.new();
 

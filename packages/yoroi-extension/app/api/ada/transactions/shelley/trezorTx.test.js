@@ -87,7 +87,9 @@ test('address parameters preserve script stake credentials with CML', () => {
     const cml = Module.CML;
     const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
     const stake = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-    return cml.BaseAddress.new(0, payment, stake).to_address().to_hex();
+    return cml.BaseAddress.new(0, payment, stake)
+      .to_address()
+      .to_hex();
   });
   expect(toTrezorAddressParameters(addressHex, [1, 2])).toEqual({
     addressType: CardanoAddressType.BASE,
@@ -139,12 +141,27 @@ test('Assemble Trezor witnesses and metadata with CML', () => {
     const transaction = cml.Transaction.from_cbor_hex(signed.txHex);
     const body = transaction.body();
     const vkeys = transaction.witness_set().vkeywitnesses();
+    const auxiliaryData = transaction.auxiliary_data();
+    const auxiliaryDataHash = body.auxiliary_data_hash();
+    if (vkeys == null || auxiliaryData == null || auxiliaryDataHash == null)
+      throw new Error('Missing signed transaction witnesses or metadata');
     return {
       txId: cml.hash_transaction(body).to_hex(),
-      keyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
-      signatures: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).ed25519_signature().to_hex()),
-      metadataHex: transaction.auxiliary_data().to_cbor_hex(),
-      metadataHash: body.auxiliary_data_hash().to_hex(),
+      keyHashes: Array.from({ length: vkeys.len() }, (_, index) =>
+        vkeys
+          .get(index)
+          .vkey()
+          .hash()
+          .to_hex()
+      ),
+      signatures: Array.from({ length: vkeys.len() }, (_, index) =>
+        vkeys
+          .get(index)
+          .ed25519_signature()
+          .to_hex()
+      ),
+      metadataHex: auxiliaryData.to_cbor_hex(),
+      metadataHash: auxiliaryDataHash.to_hex(),
       expectedMetadataHex: cml.AuxiliaryData.from_cbor_bytes(metadata).to_cbor_hex(),
       expectedMetadataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata)).to_hex(),
     };
@@ -153,10 +170,18 @@ test('Assemble Trezor witnesses and metadata with CML', () => {
   expect(signed.txId).toEqual(summary.txId);
   expect(summary.keyHashes).toHaveLength(2);
   expect(summary.keyHashes[0]).toEqual(
-    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
+    RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1))
+        .hash()
+        .to_hex()
+    )
   );
   expect(summary.keyHashes[1]).toEqual(
-    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(2)).hash().to_hex())
+    RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(2))
+        .hash()
+        .to_hex()
+    )
   );
   expect(summary.signatures).toEqual([existingSignatureHex, incomingSignatureHex]);
   expect(summary.metadataHex).toEqual(summary.expectedMetadataHex);
@@ -242,7 +267,12 @@ test('Create Trezor transaction', async () => {
       )
     );
     const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-    const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_raw_key().to_public().hash());
+    const stakeCredential = cml.Credential.new_pub_key(
+      stakingKey
+        .to_raw_key()
+        .to_public()
+        .hash()
+    );
     const certificates = cml.CertificateList.new();
     certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
     certificates.add(

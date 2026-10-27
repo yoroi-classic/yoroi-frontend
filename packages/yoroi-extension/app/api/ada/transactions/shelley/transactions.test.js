@@ -11,6 +11,7 @@ import {
   newAdaUnsignedTxForConnector,
   newAdaUnsignedTxFromUtxo,
   genFilterSmallUtxo,
+  isMinimumUtxoValueError,
   sendAllUnsignedTxFromUtxo,
   signTransaction,
   transactionWitnessSetHex,
@@ -54,17 +55,27 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
     const transaction = Module.CML.Transaction.from_cbor_bytes(bytes);
     const body = transaction.body();
     const witnesses = transaction.witness_set();
+    const certificates = body.certs();
+    const vkeyWitnesses = witnesses.vkeywitnesses();
     return {
       certificatesHex:
-        body.certs() == null
+        certificates == null
           ? undefined
-          : Array.from({ length: body.certs().len() }, (_, index) => bytesToHex(body.certs().get(index).to_cbor_bytes())),
+          : Array.from({ length: certificates.len() }, (_, index) => bytesToHex(certificates.get(index).to_cbor_bytes())),
       withdrawalCount: body.withdrawals()?.len() ?? 0,
       fee: body.fee().toString(),
       outputCount: body.outputs().len(),
       outputCoinTotal: Array.from(
         { length: body.outputs().len() },
-        (_, index) => new BigNumber(body.outputs().get(index).amount().coin().toString())
+        (_, index) =>
+          new BigNumber(
+            body
+              .outputs()
+              .get(index)
+              .amount()
+              .coin()
+              .toString()
+          )
       )
         .reduce((total, amount) => total.plus(amount), new BigNumber(0))
         .toString(),
@@ -74,12 +85,16 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
         .amount()
         .coin()
         .toString(),
-      vkeyWitnessCount: witnesses.vkeywitnesses()?.len() ?? 0,
+      vkeyWitnessCount: vkeyWitnesses?.len() ?? 0,
       vkeyHashes:
-        witnesses.vkeywitnesses() == null
+        vkeyWitnesses == null
           ? []
-          : Array.from({ length: witnesses.vkeywitnesses().len() }, (_, index) =>
-              witnesses.vkeywitnesses().get(index).vkey().hash().to_hex()
+          : Array.from({ length: vkeyWitnesses.len() }, (_, index) =>
+              vkeyWitnesses
+                .get(index)
+                .vkey()
+                .hash()
+                .to_hex()
             ),
       hasNativeScripts: witnesses.native_scripts() != null,
       hasBootstrapWitnesses: witnesses.bootstrap_witnesses() != null,
@@ -87,7 +102,9 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
   });
 }
 
-function inspectCmlBody(bytes: Uint8Array): {|
+function inspectCmlBody(
+  bytes: Uint8Array
+): {|
   auxiliaryDataHash: ?string,
   fee: string,
   inputCount: number,
@@ -97,7 +114,12 @@ function inspectCmlBody(bytes: Uint8Array): {|
   return RustModule.WasmScope(Module => {
     const body = Module.CML.TransactionBody.from_cbor_bytes(bytes);
     const outputs = body.outputs();
-    const outputCoins = Array.from({ length: outputs.len() }, (_, index) => outputs.get(index).amount().coin());
+    const outputCoins = Array.from({ length: outputs.len() }, (_, index) =>
+      outputs
+        .get(index)
+        .amount()
+        .coin()
+    );
     return {
       fee: body.fee().toString(),
       auxiliaryDataHash: body.auxiliary_data_hash()?.to_hex(),
@@ -113,7 +135,10 @@ function inspectCmlAssetAmounts(bytes: Uint8Array, assetId: string): Array<strin
   return RustModule.WasmScope(Module => {
     const outputs = Module.CML.TransactionBody.from_cbor_bytes(bytes).outputs();
     return Array.from({ length: outputs.len() }, (_, index) => {
-      const multiAsset = outputs.get(index).amount().multi_asset();
+      const multiAsset = outputs
+        .get(index)
+        .amount()
+        .multi_asset();
       const amount = multiAsset.get(
         Module.CML.ScriptHash.from_hex(asset.policyId),
         Module.CML.AssetName.from_raw_bytes(hexToBytes(asset.name))
@@ -284,6 +309,12 @@ function getSendAllProtocolParams(): {|
     networkId: network.NetworkId,
   };
 }
+
+test('recognizes CML minimum UTxO errors including its reported spelling', () => {
+  expect(isMinimumUtxoValueError(new Error('Value 500000 less tan the minimum UTXO value 969750'))).toBe(true);
+  expect(isMinimumUtxoValueError(new Error('Value 500000 less than the minimum UTXO value 969750'))).toBe(true);
+  expect(isMinimumUtxoValueError(new Error('Insufficient funds'))).toBe(false);
+});
 
 describe('Create unsigned TX from UTXO', () => {
   it('preserves ADA change and charges only the transaction fee', async () => {
@@ -1093,12 +1124,13 @@ describe('Create signed transactions', () => {
       const witnessSet = Module.CML.Transaction.from_cbor_bytes(signedTx).witness_set();
       const bootstraps = witnessSet.bootstrap_witnesses();
       const bootstrap = bootstraps?.get(0);
+      if (bootstrap == null) throw new Error('Missing bootstrap witness');
       const bodyHash = Module.CML.hash_transaction(Module.CML.Transaction.from_cbor_bytes(signedTx).body());
       return {
         vkeyCount: witnessSet.vkeywitnesses()?.len() ?? 0,
         nativeScriptCount: witnessSet.native_scripts()?.len() ?? 0,
         bootstrapHex: bootstrap?.to_cbor_hex(),
-        signatureValid: bootstrap?.public_key().verify(bodyHash.to_raw_bytes(), bootstrap.signature()),
+        signatureValid: bootstrap.public_key().verify(bodyHash.to_raw_bytes(), bootstrap.signature()),
         chainCodeLength: bootstrap?.chain_code().length,
         attributesHex: bootstrap?.attributes().to_cbor_hex(),
         bootstrapCount: bootstraps?.len() ?? 0,
@@ -1123,7 +1155,10 @@ describe('Create signed transactions', () => {
         '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
       )
     );
-    const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
+    const stakingKey = accountPrivateKey
+      .derive(2)
+      .derive(STAKING_KEY_INDEX)
+      .to_raw_key();
 
     const addressedUtxos = genAddressedUtxos();
 
@@ -1154,7 +1189,10 @@ describe('Create signed transactions', () => {
       new BigNumber(0),
       getProtocolParams(),
       createCertificate(
-        stakingKey.to_public().hash().to_hex(),
+        stakingKey
+          .to_public()
+          .hash()
+          .to_hex(),
         false,
         '1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5',
         undefined
@@ -1213,8 +1251,14 @@ describe('Create signed transactions', () => {
         '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
       )
     );
-    const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
-    const stakingKeyHash = stakingKey.to_public().hash().to_hex();
+    const stakingKey = accountPrivateKey
+      .derive(2)
+      .derive(STAKING_KEY_INDEX)
+      .to_raw_key();
+    const stakingKeyHash = stakingKey
+      .to_public()
+      .hash()
+      .to_hex();
 
     if (network.BaseConfig[0].ChainNetworkId == null) {
       throw new Error(`missing network id`);
@@ -1270,14 +1314,21 @@ describe('Create signed transactions', () => {
     expect(getStakingKeyHashesInTransactionBody(cmlReserializedBodyHex).has(stakingKeyHash)).toBe(true);
     expect(
       RustModule.WasmScope(Module =>
-        Module.CML.PrivateKey.from_extended_bytes(stakingKey.to_raw_bytes()).to_public().hash().to_hex()
+        Module.CML.PrivateKey.from_extended_bytes(stakingKey.to_raw_bytes())
+          .to_public()
+          .hash()
+          .to_hex()
       )
     ).toBe(stakingKeyHash);
     const expectedPaymentHashes = unsignedTxResponse.senderUtxos.map(utxo => {
       let derived = accountPrivateKey;
       const firstPathIndex = Bip44DerivationLevels.ACCOUNT.level - utxo.addressing.startLevel + 1;
       for (let i = firstPathIndex; i < utxo.addressing.path.length; i++) derived = derived.derive(utxo.addressing.path[i]);
-      return derived.to_raw_key().to_public().hash().to_hex();
+      return derived
+        .to_raw_key()
+        .to_public()
+        .hash()
+        .to_hex();
     });
     expect(unsignedInfo.certificatesHex).toEqual(expectedCertificateHex);
 
@@ -1327,6 +1378,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       },
     });
     for (const source of [genSampleUtxos()[1], genSampleUtxos()[3], genSampleUtxos()[4]]) {
+      if (source == null) throw new Error('Missing UTxO fixture');
       const utxo = {
         ...source,
         amount: '0',
@@ -1373,6 +1425,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       const sampleUtxos = genSampleUtxos();
       const utxos: Array<RemoteUnspentOutput> = [sampleUtxos[1], sampleUtxos[2]];
       const changeAddress = genSampleAdaAddresses()[0];
+      if (changeAddress == null) throw new Error('Missing change address fixture');
       const metadata = createMetadata([{ label: '0', data: { value: 1 } }]);
       const sendAllResponse = sendAllUnsignedTxFromUtxo(
         changeAddress,
@@ -1402,6 +1455,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
   it('extracts swap body, inputs, and metadata with CML', () => {
     const utxo = genSampleUtxos()[1];
     const receiver = genSampleAdaAddresses()[0];
+    if (utxo == null || receiver == null) throw new Error('Missing send-all fixture');
     const metadata = createMetadata([{ label: '0', data: { value: 4 } }]);
     const response = sendAllUnsignedTxFromUtxo(
       receiver,
@@ -1434,11 +1488,17 @@ describe('Create sendAll unsigned TX from UTXO', () => {
     });
     const inputTokens = multiTokenFromRemote(utxo, network.NetworkId);
     expect(parsedTotalOutput.getDefaultEntry().amount.toString()).toBe(
-      inputTokens.getDefaultEntry().amount.minus(transactionFee).toString()
+      inputTokens
+        .getDefaultEntry()
+        .amount.minus(transactionFee)
+        .toString()
     );
     for (const inputToken of inputTokens.nonDefaultEntries()) {
-      expect(parsedTotalOutput.get(inputToken.identifier).amount.toString()).toBe(inputToken.amount.toString());
+      const parsedTokenAmount = parsedTotalOutput.get(inputToken.identifier);
+      if (parsedTokenAmount == null) throw new Error('Missing parsed token amount');
+      expect(parsedTokenAmount.toString()).toBe(inputToken.amount.toString());
     }
+    if (extracted.metadataBytes == null) throw new Error('Missing extracted metadata');
 
     const signRequest = new HaskellShelleyTxSignRequest({
       senderUtxos: [],
@@ -1459,9 +1519,11 @@ describe('Create sendAll unsigned TX from UTXO', () => {
     const serializedSignRequestHex = signRequest.serializedUnsignedTxHex();
     const signRequestSummary = RustModule.WasmScope(Module => {
       const serializedSignRequest = Module.CML.Transaction.from_cbor_hex(serializedSignRequestHex);
+      const serializedAuxiliaryData = serializedSignRequest.auxiliary_data();
+      if (serializedAuxiliaryData == null) throw new Error('Missing serialized auxiliary data');
       return {
         bodyBytes: serializedSignRequest.body().to_cbor_bytes(),
-        metadataBytes: serializedSignRequest.auxiliary_data().to_cbor_bytes(),
+        metadataBytes: serializedAuxiliaryData.to_cbor_bytes(),
         vkeyWitnesses: serializedSignRequest.witness_set().vkeywitnesses(),
       };
     });
@@ -1544,6 +1606,7 @@ describe('CML connector transaction construction', () => {
     );
 
     expect(response.txBuilder).toBeInstanceOf(Uint8Array);
+    if (response.auxiliaryData == null) throw new Error('Missing connector auxiliary data');
     expect(response.senderUtxos).toHaveLength(1);
     const bodySummary = RustModule.WasmScope(Module => {
       const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
@@ -1556,9 +1619,10 @@ describe('CML connector transaction construction', () => {
         validityStart: body.validity_interval_start()?.toString(),
         fee: body.fee().toString(),
         outputCount: outputs.len(),
-        minted: mint
-          ?.get(Module.CML.ScriptHash.from_hex(scriptBytes.hash), Module.CML.AssetName.from_hex('74657374'))
-          ?.toString(),
+        minted: (() => {
+          const amount = mint?.get(Module.CML.ScriptHash.from_hex(scriptBytes.hash), Module.CML.AssetName.from_hex('74657374'));
+          return amount?.toString();
+        })(),
         signerCount: signers?.len() ?? 0,
         hasAuxiliaryDataHash: metadata != null,
       };
@@ -1572,11 +1636,36 @@ describe('CML connector transaction construction', () => {
       signerCount: 2,
       hasAuxiliaryDataHash: true,
     });
+    const expectedAuxiliaryDataHash = RustModule.WasmScope(Module =>
+      Module.CML.hash_auxiliary_data(Module.CML.AuxiliaryData.from_cbor_bytes(response.auxiliaryData)).to_hex()
+    );
+    const serializedUnsignedTx = new HaskellShelleyTxSignRequest({
+      senderUtxos: [],
+      unsignedTx: response.txBuilder,
+      changeAddr: [],
+      metadata: response.auxiliaryData,
+      networkSettingSnapshot: {
+        NetworkId: network.NetworkId,
+        ChainNetworkId: 1,
+        PoolDeposit: new BigNumber('500000000'),
+        KeyDeposit: new BigNumber('2000000'),
+      },
+    }).serializedUnsignedTxHex();
+    const serializedAuxiliaryData = RustModule.WasmScope(Module => {
+      const transaction = Module.CML.Transaction.from_cbor_hex(serializedUnsignedTx);
+      const auxiliaryData = transaction.auxiliary_data();
+      const auxiliaryDataHash = transaction.body().auxiliary_data_hash();
+      if (auxiliaryData == null || auxiliaryDataHash == null) throw new Error('Missing serialized connector auxiliary data');
+      return { bytes: auxiliaryData.to_cbor_bytes(), hash: auxiliaryDataHash.to_hex() };
+    });
+    expect(serializedAuxiliaryData.bytes).toEqual(response.auxiliaryData);
+    expect(serializedAuxiliaryData.hash).toEqual(expectedAuxiliaryDataHash);
   });
 
   it('keeps the fee above the serialized minimum for two Byron/bootstrap inputs', async () => {
     const [first, second] = [genAddressedUtxos()[0], genAddressedUtxos()[2]];
     const change = genSampleAdaAddresses()[3];
+    if (change == null) throw new Error('Missing change address fixture');
     const protocolParams = {
       linearFeeCoefficient: '44',
       linearFeeConstant: '155381',
@@ -1608,6 +1697,7 @@ describe('CML connector transaction construction', () => {
       const witnesses = cml.TransactionWitnessSetBuilder.new();
       [first, second].forEach((utxo, index) => {
         const byron = cml.ByronAddress.from_address(cml.Address.from_hex(utxo.receiver));
+        if (byron == null) throw new Error('Invalid Byron UTxO address');
         const publicKey = new Uint8Array(32);
         publicKey[0] = index + 1;
         const signature = new Uint8Array(64);
@@ -1633,7 +1723,11 @@ describe('CML connector transaction construction', () => {
           ),
           BigInt('0')
         ),
-        witnessCount: tx.witness_set().bootstrap_witnesses()?.len() ?? 0,
+        witnessCount:
+          tx
+            .witness_set()
+            .bootstrap_witnesses()
+            ?.len() ?? 0,
       };
     });
     expect(feeCheck.witnessCount).toEqual(2);
@@ -1924,7 +2018,10 @@ describe('CML connector transaction construction', () => {
     );
     const burnedAmount = RustModule.WasmScope(Module => {
       const body = Module.CML.TransactionBody.from_cbor_bytes(response.txBuilder);
-      return body.mint().get(Module.CML.ScriptHash.from_hex(script.policy), Module.CML.AssetName.from_hex(assetName)).toString();
+      return body
+        .mint()
+        .get(Module.CML.ScriptHash.from_hex(script.policy), Module.CML.AssetName.from_hex(assetName))
+        .toString();
     });
     expect(burnedAmount).toEqual('-1');
   });
@@ -1933,7 +2030,9 @@ describe('CML connector transaction construction', () => {
 describe('CML maximum send amount', () => {
   it('matches frozen fixed-input fee and change for an ADA-only transaction', async () => {
     const utxo = genSampleUtxos()[3];
-    const receiver = genSampleAdaAddresses()[0].address;
+    const receiverAddress = genSampleAdaAddresses()[0];
+    if (utxo == null || receiverAddress == null) throw new Error('Missing maximum-send fixture');
+    const receiver = receiverAddress.address;
     const queriedUtxo = {
       address: utxo.receiver,
       output: {
@@ -1947,16 +2046,18 @@ describe('CML maximum send amount', () => {
         UtxoTransactionOutput: { OutputIndex: utxo.tx_index },
       },
     };
-    const maxAmount = await maxSendableADA({
-      publicDeriver: {
-        networkId: network.NetworkId,
-        utxos: [queriedUtxo],
-        defaultTokenId: defaultIdentifier,
-      },
-      absSlotNumber: new BigNumber(0),
-      tokens: [],
-      receiver,
-    });
+    const maxAmount = await maxSendableADA(
+      ({
+        publicDeriver: {
+          networkId: network.NetworkId,
+          utxos: [queriedUtxo],
+          defaultTokenId: defaultIdentifier,
+        },
+        absSlotNumber: new BigNumber(0),
+        tokens: [],
+        receiver,
+      }: any)
+    );
 
     // Golden result from the former fixed-input builder using production mainnet params.
     const legacyMaxAmount = new BigNumber('29834983');

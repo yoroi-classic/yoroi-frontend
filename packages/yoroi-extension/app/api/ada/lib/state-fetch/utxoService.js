@@ -1,7 +1,6 @@
 // @flow
 
 import {
-  DiffType,
   UtxoApiResult,
   type UtxoApiContract,
   type UtxoAtSafePoint,
@@ -33,8 +32,8 @@ export class UtxoService {
     const { safeUtxos, diff, bestBlock, localDiff, tipStatus } = await this.syncSafeStateAndGetDiff(addresses);
     const diffToBestBlock: UtxoDiffToBestBlock = {
       lastBestBlockHash: bestBlock,
-      spentUtxoIds: diff.diffItems.filter(item => item.type === DiffType.INPUT).map(item => item.id),
-      newUtxos: diff.diffItems.filter(item => item.type === DiffType.OUTPUT).map(item => item.utxo),
+      spentUtxoIds: diff.diffItems.filter(item => item.type === 'input').map(item => item.id),
+      newUtxos: diff.diffItems.filter(item => item.type === 'output').map(item => item.utxo),
     };
 
     if (localDiff.length > 0) {
@@ -53,7 +52,9 @@ export class UtxoService {
     await this.storage.appendUtxoDiffToBestBlock(diffToBestBlock);
   }
 
-  async syncSafeStateAndGetDiff(addresses: string[]): Promise<{|
+  async syncSafeStateAndGetDiff(
+    addresses: string[]
+  ): Promise<{|
     safeUtxos: Utxo[],
     diff: UtxoDiff,
     bestBlock: string,

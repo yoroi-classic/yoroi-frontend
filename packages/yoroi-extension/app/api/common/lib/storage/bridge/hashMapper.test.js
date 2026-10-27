@@ -23,17 +23,17 @@ test('maps base and pointer address hashes through their canonical enterprise ad
     const stakeCredential = CML.Credential.new_pub_key(CML.Ed25519KeyHash.from_hex('22'.repeat(28)));
     const baseAddress = CML.BaseAddress.new(1, paymentCredential, stakeCredential).to_address();
     const pointerAddress = CML.Address.from_raw_bytes(Uint8Array.from([0x41, ...new Uint8Array(28).fill(0x11), 1, 2, 3]));
+    const parsedBaseAddress = CML.BaseAddress.from_address(baseAddress);
+    const parsedPointerAddress = CML.PointerAddress.from_address(pointerAddress);
+    if (parsedBaseAddress == null || parsedPointerAddress == null) throw new Error('Invalid address fixtures');
 
     return {
       baseAddressHex: baseAddress.to_hex(),
       pointerAddressHex: pointerAddress.to_hex(),
-      baseEnterpriseHex: CML.EnterpriseAddress.new(baseAddress.network_id(), CML.BaseAddress.from_address(baseAddress).payment())
+      baseEnterpriseHex: CML.EnterpriseAddress.new(baseAddress.network_id(), parsedBaseAddress.payment())
         .to_address()
         .to_hex(),
-      pointerEnterpriseHex: CML.EnterpriseAddress.new(
-        pointerAddress.network_id(),
-        CML.PointerAddress.from_address(pointerAddress).payment()
-      )
+      pointerEnterpriseHex: CML.EnterpriseAddress.new(pointerAddress.network_id(), parsedPointerAddress.payment())
         .to_address()
         .to_hex(),
     };

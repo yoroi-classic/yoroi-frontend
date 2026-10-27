@@ -13862,6 +13862,11 @@ declare module '@dcspark/cardano-multiplatform-lib-browser' {
     outputs(): TransactionOutputList;
 
     /**
+     * @returns {{ len: () => number }}
+     */
+    voting_proposals(): { len(): number, ... } | void;
+
+    /**
      * @returns {BigIntValue}
      */
     fee(): BigIntValue;

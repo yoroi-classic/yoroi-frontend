@@ -22,7 +22,8 @@ describe('passwordCipher', () => {
     expect(Array.from(decryptWithPassword(password, ciphertext))).toEqual(Array.from(plaintext));
   });
 
-  it('decrypts a fixed EMIP-3 ciphertext independently of the current encryptor', () => {
+  it('decrypts a fixed CSL 14.1.2 EMIP-3 ciphertext', () => {
+    // Captured from the pre-migration CSL 14.1.2 encrypt_with_password implementation.
     const legacyCiphertext = `${'a'.repeat(88)}368047ba94f48d80cb8c39e4debfaadcb5d2c4dd5b`;
 
     expect(Array.from(decryptWithPassword('test-password', legacyCiphertext))).toEqual([5, 6, 7, 8, 9]);

@@ -132,15 +132,25 @@ export const mirRewardForRewardAddress = (payloadHex: string, addressHex: string
     return mirRewardForCredential(payloadHex, address.payment().to_cbor_hex());
   });
 
-export const poolRegistrationPayloads = (poolParams: {|
-  operator: string,
-  vrfKeyHash: string,
-  pledge: string,
-  cost: string,
-  rewardAccount: string,
-  poolOwners: Array<string>,
-  poolMetadata: null | {| url: string, metadataHash: string |},
-|}): {| certificateHex: string, operatorCredentialHex: string, ownerCredentialHexes: Array<string> |} =>
+export const poolRegistrationPayloads = (
+  poolParams: $ReadOnly<{|
+    operator: string,
+    vrfKeyHash: string,
+    pledge: string,
+    cost: string,
+    margin: number,
+    rewardAccount: string,
+    poolOwners: $ReadOnlyArray<string>,
+    relays: $ReadOnlyArray<{|
+      ipv4: string | null,
+      ipv6: string | null,
+      dnsName: string | null,
+      dnsSrvName: string | null,
+      port: string | null,
+    |}>,
+    poolMetadata: null | {| url: string, metadataHash: string |},
+  |}>
+): {| certificateHex: string, operatorCredentialHex: string, ownerCredentialHexes: Array<string> |} =>
   RustModule.WasmScope(Module => {
     const CML = Module.CML;
     const rewardAddress = CML.RewardAddress.from_address(CML.Address.from_raw_bytes(hexToBytes(poolParams.rewardAccount)));
@@ -174,7 +184,8 @@ export const poolRegistrationPayloads = (poolParams: {|
       CML.VRFKeyHash.from_hex(poolParams.vrfKeyHash),
       pledge,
       cost,
-      // db-sync does not expose the pool margin in this API; preserve the prior 1/1 placeholder.
+      // The current db-sync endpoint only exposes a numeric margin; preserve the
+      // prior behavior of storing a 1/1 placeholder rather than rounding it.
       CML.UnitInterval.new(one, one),
       rewardAddress,
       owners,

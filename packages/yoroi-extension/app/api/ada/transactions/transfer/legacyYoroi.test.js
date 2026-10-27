@@ -103,8 +103,9 @@ describe('Haskell Shelley era tx format tests', () => {
 
     // check tx itself
     if (!transferInfo.encodedTx) throw new Error(`Tx not signed`);
+    const encodedTx = transferInfo.encodedTx;
     const signedTxDetails = RustModule.WasmScope(Module => {
-      const signedTx = Module.CML.Transaction.from_cbor_bytes(transferInfo.encodedTx);
+      const signedTx = Module.CML.Transaction.from_cbor_bytes(encodedTx);
       const body = signedTx.body();
       const input = body.inputs().get(0);
       const output = body.outputs().get(0);
@@ -116,7 +117,10 @@ describe('Haskell Shelley era tx format tests', () => {
         inputIndex: input.index().toString(),
         outputCount: body.outputs().len(),
         outputAddress: Module.CML.ByronAddress.from_address(output.address())?.to_base58(),
-        outputAmount: output.amount().coin().toString(),
+        outputAmount: output
+          .amount()
+          .coin()
+          .toString(),
         witnessCount: witnesses.len(),
         witness: witnesses.get(0).to_cbor_hex(),
       };

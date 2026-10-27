@@ -131,7 +131,9 @@ describe('CML connector UTxO selection', () => {
       // two smaller inputs already cover the asset target.
       expect(total.coin().toString()).toBe('10000000');
       const selectedAssets = total.multi_asset().get_assets(cml.ScriptHash.from_hex(policyId));
-      expect(selectedAssets.get(cml.AssetName.from_hex(assetName)).toString()).toBe('2');
+      const assetAmount = selectedAssets?.get(cml.AssetName.from_hex(assetName));
+      if (assetAmount == null) throw new Error('Missing selected asset');
+      expect(assetAmount.toString()).toBe('2');
       const minAda = cml.min_ada_required(target, BigInt('4310'));
       expect(target.amount().coin()).toBeGreaterThanOrEqual(minAda);
       expect(builder.add_change_if_needed(address, false)).toBe(true);
@@ -140,7 +142,11 @@ describe('CML connector UTxO selection', () => {
       expect(body.inputs().len()).toBe(2);
       expect(body.outputs().len()).toBeGreaterThanOrEqual(2);
       const outputTotal = Array.from({ length: body.outputs().len() }, (_, index) =>
-        body.outputs().get(index).amount().coin()
+        body
+          .outputs()
+          .get(index)
+          .amount()
+          .coin()
       ).reduce((sum, coin) => sum + coin, BigInt('0'));
       expect(total.coin() - outputTotal).toBeGreaterThanOrEqual(BigInt(body.fee().toString()));
       expect(BigInt(body.fee().toString())).toBeGreaterThanOrEqual(builder.min_fee(false));

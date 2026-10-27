@@ -39,6 +39,7 @@ export type V4UnsignedTxUtxoResponse = {|
   senderUtxos: Array<RemoteUnspentOutput>,
   txBuilder: Uint8Array,
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
+  auxiliaryData?: Uint8Array,
   implicitInputValue?: Uint8Array,
   depositAmount?: string,
 |};
@@ -46,6 +47,7 @@ export type V4UnsignedTxAddressedUtxoResponse = {|
   senderUtxos: Array<CardanoAddressedUtxo>,
   txBuilder: Uint8Array,
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
+  auxiliaryData?: Uint8Array,
   implicitInputValue?: Uint8Array,
   depositAmount?: string,
   certificates: $ReadOnlyArray<string>,

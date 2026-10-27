@@ -42,7 +42,7 @@ function resolveAsciiName(assetNameHex: string): {| isAscii: boolean, asciiName:
 }
 
 export const AssetNameUtils = Object.freeze({
-  resolveProperties(assetNameHex: string) {
+  resolveProperties(assetNameHex: string): {| hexName: string, asciiName: ?string, cip67Tag: ?number |} {
     const tagged = resolveCip67Tag(assetNameHex);
     const ascii = resolveAsciiName(tagged.hexName);
     return { hexName: ascii.hexName, asciiName: ascii.asciiName, cip67Tag: tagged.tag };

@@ -36,8 +36,14 @@ export const _createAuthEntry: (
   });
   const CML = WasmScope.CML;
   const signingKey = CML.Bip32PrivateKey.from_raw_bytes(hexToBytes(normalizedKey.prvKeyHex));
-  const derivedSignKey = signingKey.derive(0).derive(0).to_raw_key();
-  const stakingKey = signingKey.derive(2).derive(0).to_raw_key();
+  const derivedSignKey = signingKey
+    .derive(0)
+    .derive(0)
+    .to_raw_key();
+  const stakingKey = signingKey
+    .derive(2)
+    .derive(0)
+    .to_raw_key();
 
   const address = CML.BaseAddress.new(
     deriver.getParent().networkInfo.NetworkId,
@@ -53,7 +59,7 @@ export const _createAuthEntry: (
   );
   const entropy = coseSign1.signature();
 
-  const appPrivKey = CML.Bip32PrivateKey.from_bip39_entropy(entropy, new Uint8Array()).to_raw_key();
+  const appPrivKey = CML.Bip32PrivateKey.from_bip39_entropy(entropy, new Uint8Array(0)).to_raw_key();
   const appPubKey = appPrivKey.to_public();
 
   return {
@@ -68,6 +74,8 @@ export const authSignHexPayload: ({| privKey: string, payloadHex: string |}) => 
   payloadHex,
 }) => {
   return RustModule.WasmScope(Module =>
-    Module.CML.PrivateKey.from_extended_bytes(hexToBytes(privKey)).sign(hexToBytes(payloadHex)).to_hex()
+    Module.CML.PrivateKey.from_extended_bytes(hexToBytes(privKey))
+      .sign(hexToBytes(payloadHex))
+      .to_hex()
   );
 };

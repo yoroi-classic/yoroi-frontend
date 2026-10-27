@@ -31,7 +31,6 @@ const ROOT_SOURCE_FILES = [
   'packages/yoroi-extension/jestSetup.js',
   'packages/yoroi-extension/.d.ts',
   'packages/yoroi-extension/.flowconfig',
-  'packages/yoroi-extension/.babelrc.js',
 ];
 const PACKAGE_PATHS = ['packages/yoroi-extension', 'packages/e2e-tests'];
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);

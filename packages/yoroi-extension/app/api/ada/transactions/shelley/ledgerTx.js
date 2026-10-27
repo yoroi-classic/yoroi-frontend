@@ -304,7 +304,9 @@ export function toLedgerAddressParameters(request: {|
     }
     const baseAddr = cml.BaseAddress.from_address(address);
     if (baseAddr != null) {
-      const addressPayload = cml.RewardAddress.new(request.networkId, baseAddr.stake()).to_address().to_hex();
+      const addressPayload = cml.RewardAddress.new(request.networkId, baseAddr.stake())
+        .to_address()
+        .to_hex();
       const addressing = request.addressingMap(addressPayload);
       if (addressing == null) {
         const stakeCred = baseAddr.stake();
@@ -434,12 +436,16 @@ export function toLedgerSignRequest(
 
       const baseAddr = cml.BaseAddress.from_address(addr);
       if (baseAddr) {
-        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment()).to_address().to_hex();
+        const paymentAddress = cml.EnterpriseAddress.new(networkId, baseAddr.payment())
+          .to_address()
+          .to_hex();
         const ownPaymentPath =
           ownAddressMap(paymentAddress) || changeAddrs.find(({ address }) => address === addr.to_hex())?.addressing.path;
         if (ownPaymentPath) {
           const stake = baseAddr.stake();
-          const stakeAddr = cml.RewardAddress.new(networkId, stake).to_address().to_hex();
+          const stakeAddr = cml.RewardAddress.new(networkId, stake)
+            .to_address()
+            .to_hex();
           const ownStakePath = ownAddressMap(stakeAddr);
           if (ownStakePath) {
             // stake address is ours
@@ -502,7 +508,10 @@ export function toLedgerSignRequest(
         throw new Error('not expecting to pay to reward address');
       }
 
-      const amount = output.amount().coin().toString();
+      const amount = output
+        .amount()
+        .coin()
+        .toString();
       const tokenBundle = toLedgerTokenBundle(output.amount().multi_asset());
       const outputDataHash = output.datum_hash();
       const plutusData = output.datum()?.as_datum();
@@ -552,8 +561,12 @@ export function toLedgerSignRequest(
     const formattedRequiredSigners = [];
     function hashHexToOwnAddressPath(hashHex: string): ?Array<number> {
       const hash = cml.Ed25519KeyHash.from_hex(hashHex);
-      const enterpriseAddress = cml.EnterpriseAddress.new(networkId, cml.Credential.new_pub_key(hash)).to_address().to_hex();
-      const stakeAddress = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(hash)).to_address().to_hex();
+      const enterpriseAddress = cml.EnterpriseAddress.new(networkId, cml.Credential.new_pub_key(hash))
+        .to_address()
+        .to_hex();
+      const stakeAddress = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(hash))
+        .to_address()
+        .to_hex();
       return ownAddressMap(enterpriseAddress) || ownAddressMap(stakeAddress);
     }
 
@@ -840,7 +853,10 @@ export function buildConnectorSignedTransaction(
     const tx = cml.Transaction.from_cbor_hex(rawTxHex);
     const body = tx.body();
     const auxiliaryData = metadata == null ? tx.auxiliary_data() : cml.AuxiliaryData.from_cbor_bytes(metadata);
-    if (metadata != null) body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
+    if (metadata != null) {
+      if (auxiliaryData == null) throw new Error('Invalid auxiliary data');
+      body.set_auxiliary_data_hash(cml.hash_auxiliary_data(auxiliaryData));
+    }
     const witnessSet = tx.witness_set();
     const vkeyWitnesses = witnessSet.vkeywitnesses() ?? cml.VkeywitnessList.new();
     const bootstrapWitnesses = witnessSet.bootstrap_witnesses() ?? cml.BootstrapWitnessList.new();

@@ -29,7 +29,7 @@ export type UtxoDiffItemInput = { type: 'input', id: string, amount: BigNumber, 
 export type UtxoDiffItemOutput = { type: 'output', id: string, amount: BigNumber, utxo: Utxo, ... };
 export type UtxoDiffItem = UtxoDiffItemInput | UtxoDiffItemOutput;
 export type UtxoDiff = {
-  diffItems: Array<UtxoDiffItem | UtxoDiffItemOutput>,
+  diffItems: Array<UtxoDiffItem>,
   reference: { lastFoundBestBlock: string, lastFoundSafeBlock?: string, ... },
   ...
 };

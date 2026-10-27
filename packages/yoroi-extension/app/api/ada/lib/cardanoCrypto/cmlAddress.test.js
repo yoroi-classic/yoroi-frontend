@@ -59,7 +59,9 @@ test('extracts enterprise payment key hashes for wallet transaction requests', (
         kind === 'key'
           ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)))
           : cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-      const address = cml.EnterpriseAddress.new(1, payment).to_address().to_hex();
+      const address = cml.EnterpriseAddress.new(1, payment)
+        .to_address()
+        .to_hex();
       const keyHash = payment.as_pub_key();
       return { address, expected: keyHash?.to_bech32('addr_vkh') ?? null };
     });
@@ -102,8 +104,10 @@ test('creates pool registration and genesis delegation payloads with historical 
     vrfKeyHash: '55'.repeat(32),
     pledge: '123456',
     cost: '789',
+    margin: 0,
     rewardAccount: rewardAddressHex,
     poolOwners: ['33'.repeat(28)],
+    relays: [],
     poolMetadata: { url: 'https://pool.example', metadataHash: '44'.repeat(32) },
   });
   expect(pool.certificateHex).toEqual(
@@ -159,8 +163,12 @@ test('derives canonical enterprise addresses from base and pointer addresses wit
             ? cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)))
             : cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
         const stakeCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('33'.repeat(28)));
-        const expectedEnterpriseHex = cml.EnterpriseAddress.new(networkId, paymentCredential).to_address().to_hex();
-        const baseAddressHex = cml.BaseAddress.new(networkId, paymentCredential, stakeCredential).to_address().to_hex();
+        const expectedEnterpriseHex = cml.EnterpriseAddress.new(networkId, paymentCredential)
+          .to_address()
+          .to_hex();
+        const baseAddressHex = cml.BaseAddress.new(networkId, paymentCredential, stakeCredential)
+          .to_address()
+          .to_hex();
         const paymentBytes = credentialKind === 'key' ? new Array(28).fill(0x11) : new Array(28).fill(0x22);
         const pointerType = (credentialKind === 'key' ? 0x40 : 0x50) | networkId;
         const pointerAddressHex = cml.Address.from_raw_bytes(Uint8Array.from([pointerType, ...paymentBytes, 1, 2, 3])).to_hex();
@@ -267,7 +275,10 @@ test('derives staking public-key bytes with CML', () => {
   const path = [2, 0];
   const expected = RustModule.WasmScope(Module => {
     const account = Module.CML.Bip32PublicKey.from_raw_bytes(Buffer.from(accountPublicKeyHex, 'hex'));
-    const publicKey = account.derive(path[0]).derive(path[1]).to_raw_key();
+    const publicKey = account
+      .derive(path[0])
+      .derive(path[1])
+      .to_raw_key();
     return {
       bytes: bytesToHex(publicKey.to_raw_bytes()),
       hash: publicKey.hash().to_hex(),
@@ -283,7 +294,9 @@ test('reconstructs base addresses from payment and stake key hashes', () => {
     keyHashes.map(({ payment, stake }) => {
       const paymentCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(payment));
       const stakeCredential = Module.CML.Credential.new_pub_key(Module.CML.Ed25519KeyHash.from_hex(stake));
-      return Module.CML.BaseAddress.new(1, paymentCredential, stakeCredential).to_address().to_bech32();
+      return Module.CML.BaseAddress.new(1, paymentCredential, stakeCredential)
+        .to_address()
+        .to_bech32();
     })
   );
 
@@ -298,9 +311,15 @@ test('constructs enterprise, base, and reward addresses with CML', () => {
     const paymentCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(payment));
     const stakeCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex(stake));
     return {
-      enterpriseAddressHex: cml.EnterpriseAddress.new(1, paymentCredential).to_address().to_hex(),
-      baseAddressHex: cml.BaseAddress.new(1, paymentCredential, stakeCredential).to_address().to_hex(),
-      rewardAddressHex: cml.RewardAddress.new(1, stakeCredential).to_address().to_hex(),
+      enterpriseAddressHex: cml.EnterpriseAddress.new(1, paymentCredential)
+        .to_address()
+        .to_hex(),
+      baseAddressHex: cml.BaseAddress.new(1, paymentCredential, stakeCredential)
+        .to_address()
+        .to_hex(),
+      rewardAddressHex: cml.RewardAddress.new(1, stakeCredential)
+        .to_address()
+        .to_hex(),
     };
   });
 
@@ -322,6 +341,7 @@ test('extracts staking credential and key hashes from reward addresses with CML'
       keyHashHex: credential?.as_pub_key()?.to_hex(),
     };
   });
+  if (expected.credentialCborHex == null || expected.keyHashHex == null) throw new Error('Invalid reward address fixture');
 
   expect(stakingCredentialCborHexFromRewardAddress(rewardAddressHex)).toEqual(expected.credentialCborHex);
   expect(stakingKeyHashFromRewardAddress(rewardAddressHex)).toEqual(expected.keyHashHex);
@@ -331,8 +351,11 @@ test('extracts staking credential and key hashes from reward addresses with CML'
 test('matches base-address stake credentials for hex, bech32, and non-base address forms', () => {
   const baseAddress = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
   const stakeCredential = RustModule.WasmScope(Module =>
-    Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(baseAddress))?.stake().to_cbor_hex()
+    Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(baseAddress))
+      ?.stake()
+      .to_cbor_hex()
   );
+  if (stakeCredential == null) throw new Error('Invalid base address fixture');
   const baseAddressHex = RustModule.WasmScope(Module => Module.CML.Address.from_bech32(baseAddress).to_hex());
 
   expect(addressHasStakeCredential(baseAddress, stakeCredential)).toBe(true);
@@ -351,7 +374,10 @@ test('extracts the stake credential hash and encodes pool IDs with CML', () => {
   const baseAddress = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
   const poolKeyHash = 'ab'.repeat(28);
   const expected = RustModule.WasmScope(Module => ({
-    stakeHash: Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(baseAddress))?.stake().as_pub_key()?.to_hex(),
+    stakeHash: Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(baseAddress))
+      ?.stake()
+      .as_pub_key()
+      ?.to_hex(),
     poolId: Module.CML.Ed25519KeyHash.from_hex(poolKeyHash).to_bech32('pool'),
   }));
 
@@ -364,10 +390,15 @@ test('extracts script stake credential hashes from base addresses', () => {
   const scriptHash = 'cd'.repeat(28);
   const scriptAddress = RustModule.WasmScope(Module => {
     const credential = Module.CML.Credential.new_script(Module.CML.ScriptHash.from_hex(scriptHash));
-    return Module.CML.BaseAddress.new(1, credential, credential).to_address().to_bech32();
+    return Module.CML.BaseAddress.new(1, credential, credential)
+      .to_address()
+      .to_bech32();
   });
   const expectedScriptHash = RustModule.WasmScope(Module =>
-    Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(scriptAddress))?.stake().as_script()?.to_hex()
+    Module.CML.BaseAddress.from_address(Module.CML.Address.from_bech32(scriptAddress))
+      ?.stake()
+      .as_script()
+      ?.to_hex()
   );
 
   expect(stakeCredentialHashFromAddress(scriptAddress)).toEqual(expectedScriptHash);

@@ -44,6 +44,7 @@ test('builds and signs legacy-wallet transfer summary from the CML send-all tran
   });
 
   expect(summary.encodedTx).toBeInstanceOf(Uint8Array);
+  if (summary.encodedTx == null) throw new Error('Missing encoded transaction');
   const details = RustModule.WasmScope(Module => {
     const tx = Module.CML.Transaction.from_cbor_bytes(summary.encodedTx);
     const body = tx.body();
@@ -51,7 +52,11 @@ test('builds and signs legacy-wallet transfer summary from the CML send-all tran
       id: Module.CML.hash_transaction(body).to_hex(),
       fee: body.fee().toString(),
       inputCount: body.inputs().len(),
-      bootstrapCount: tx.witness_set().bootstrap_witnesses()?.len() ?? 0,
+      bootstrapCount:
+        tx
+          .witness_set()
+          .bootstrap_witnesses()
+          ?.len() ?? 0,
     };
   });
   expect(summary.id).toBe(details.id);

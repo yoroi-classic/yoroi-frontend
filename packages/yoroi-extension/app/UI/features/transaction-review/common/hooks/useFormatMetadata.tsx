@@ -26,7 +26,7 @@ export const formatUnsignedTxMetadata = (metadataBytes: Uint8Array, txBody: Tran
 
 type FormattedMetadata = { hash: string | null; metadata: unknown | null };
 
-export const formatCborMetadata = (cbor: string, txBody: TransactionBody): FormattedMetadata => {
+export const formatCborMetadata = (cbor: string, txBody?: TransactionBody | null): FormattedMetadata => {
   const hash = txBody?.auxiliary_data_hash ?? null;
   try {
     const aux = RustModule.WasmScope(Module => {
@@ -48,44 +48,42 @@ export const formatCborMetadata = (cbor: string, txBody: TransactionBody): Forma
   }
 };
 
+const parse674Fragments = (key: string, rawList: string[]) => {
+  const jsonString = rawList.join('').replace(/\\/g, '');
+  const jsonFragments: object[] = [];
+  let braceCount = 0;
+  let currentFragment = '';
+
+  for (const char of jsonString) {
+    if (char === '{') braceCount++;
+    if (braceCount > 0) currentFragment += char;
+    if (char === '}') {
+      braceCount--;
+      if (braceCount === 0) {
+        try {
+          jsonFragments.push(JSON.parse(currentFragment));
+        } catch (error) {
+          console.error('Error parsing JSON fragment:', currentFragment, error);
+        }
+        currentFragment = '';
+      }
+    }
+  }
+
+  const mergedObject = jsonFragments.reduce((acc, obj) => ({ ...acc, ...obj }), {} as Record<string, unknown>);
+  Object.keys(mergedObject).forEach(field => {
+    if (mergedObject[field] === '') mergedObject[field] = '.';
+  });
+  return { [key]: [mergedObject] };
+};
+
 export const parseMetadata = (metadata: Record<string, string>) => {
   try {
     const parsed = metadata['674'] ? JSON.parse(metadata['674']) : {};
     const mapArray = parsed.map[0];
     const key = mapArray.k.string;
-
     const rawList = mapArray.v.list.map((item: any) => item.string);
-    let jsonString = rawList.join('').replace(/\\/g, '');
-
-    const jsonFragments: object[] = [];
-    let braceCount = 0;
-    let currentFragment = '';
-
-    for (const char of jsonString) {
-      if (char === '{') braceCount++;
-      if (braceCount > 0) currentFragment += char;
-      if (char === '}') {
-        braceCount--;
-        if (braceCount === 0) {
-          try {
-            jsonFragments.push(JSON.parse(currentFragment));
-          } catch (e) {
-            console.error('Error parsing JSON fragment:', currentFragment, e);
-          }
-          currentFragment = '';
-        }
-      }
-    }
-
-    const mergedObject = jsonFragments.reduce((acc, obj) => ({ ...acc, ...obj }), {} as any);
-
-    Object.keys(mergedObject).forEach(key => {
-      if (mergedObject[key] === '') {
-        mergedObject[key] = '.';
-      }
-    });
-
-    return { [key]: [mergedObject] };
+    return parse674Fragments(key, rawList);
   } catch (error) {
     console.error('Error parsing metadata:', error);
     return {};
@@ -99,16 +97,20 @@ export const useFormattedMetadata = ({
 }: {
   metadata: Uint8Array | null;
   cbor: string | null;
-  txBody: TransactionBody;
+  txBody?: TransactionBody | null;
 }) => {
   const hasCbor = typeof cbor === 'string' && cbor.length > 0;
-  const canUnsigned = metadata != null;
+  const canUnsigned = metadata != null && txBody != null;
 
   const { data } = useQuery({
     queryKey: ['useFormattedMetadata', hasCbor ? cbor : metadata, txBody?.auxiliary_data_hash],
     enabled: hasCbor || canUnsigned,
     throwOnError: true,
-    queryFn: () => (hasCbor && cbor ? formatCborMetadata(cbor, txBody) : formatUnsignedTxMetadata(metadata!, txBody)),
+    queryFn: () => {
+      if (hasCbor && cbor) return formatCborMetadata(cbor, txBody);
+      if (metadata != null && txBody != null) return formatUnsignedTxMetadata(metadata, txBody);
+      return { hash: null, metadata: null };
+    },
   });
 
   return data;
@@ -156,8 +158,14 @@ const format674 = (raw: any) => {
     const key = entry?.k?.string ?? entry?.k;
     let val = entry?.v;
 
-    if (val?.list) val = val.list.map((x: any) => x?.string ?? x);
-    else if (val?.string) val = val.string;
+    if (val?.list) {
+      const parts = val.list.map((x: any) => x?.string ?? x);
+      if (typeof key === 'string' && parts.every((part: any) => typeof part === 'string')) {
+        val = parse674Fragments(key, parts)[key];
+      } else {
+        val = parts;
+      }
+    } else if (val?.string) val = val.string;
 
     if (key != null) out[key] = val;
   }

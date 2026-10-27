@@ -8,7 +8,9 @@ jest.mock('axios', () => ({ get: jest.fn(), post: jest.fn() }));
 
 const mockedAxios: any = axios;
 
-beforeEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  jest.resetAllMocks();
+});
 
 test('paginates UTxOs and converts amounts without losing asset or identity fields', async () => {
   mockedAxios.post
@@ -68,10 +70,12 @@ test('propagates a rollback result returned by any address batch', async () => {
     getUtxoAtPoint: jest.fn(),
     getUtxoDiffSincePoint: jest
       .fn()
-      .mockResolvedValueOnce({
-        result: UtxoApiResult.SUCCESS,
-        value: { diffItems: [], reference: { lastFoundBestBlock: 'best', lastFoundSafeBlock: 'safe' } },
-      })
+      .mockResolvedValueOnce(
+        ({
+          result: UtxoApiResult.SUCCESS,
+          value: { diffItems: [], reference: { lastFoundBestBlock: 'best', lastFoundSafeBlock: 'safe' } },
+        }: any)
+      )
       .mockResolvedValueOnce({ result: UtxoApiResult.SAFEBLOCK_ROLLBACK }),
   };
   const api = new BatchedUtxoApi((base: any), 1);

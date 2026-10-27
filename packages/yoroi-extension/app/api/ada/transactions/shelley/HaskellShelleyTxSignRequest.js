@@ -139,9 +139,10 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
       })
     );
     if (this.implicitInputValue != null) {
+      const implicitInputValue = this.implicitInputValue;
       values.joinAddMutable(
         RustModule.WasmScope(Module =>
-          multiTokenFromCMLValue(Module.CML.Value.from_cbor_bytes(this.implicitInputValue), {
+          multiTokenFromCMLValue(Module.CML.Value.from_cbor_bytes(implicitInputValue), {
             defaultIdentifier: PRIMARY_ASSET_CONSTANTS.Cardano,
             defaultNetworkId: this.networkSettingSnapshot.NetworkId,
           })
@@ -188,7 +189,11 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     values.add({
       identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
       amount: new BigNumber(
-        RustModule.WasmScope(Module => Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes()).fee().toString())
+        RustModule.WasmScope(Module =>
+          Module.CML.TransactionBody.from_cbor_bytes(this.bodyBytes())
+            .fee()
+            .toString()
+        )
       ).plus(this.depositAmount ?? '0'),
       networkId: this.networkSettingSnapshot.NetworkId,
     });
@@ -206,13 +211,15 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
       const rewardAccounts = withdrawals.keys();
       return Array.from({ length: rewardAccounts.len() }, (_, index) => {
         const rewardAddress = rewardAccounts.get(index);
+        const amount = withdrawals.get(rewardAddress);
+        if (amount == null) throw new Error('Missing withdrawal amount');
         return {
           address: rewardAddress.to_address().to_hex(),
           amount: new MultiToken(
             [
               {
                 identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-                amount: new BigNumber(withdrawals.get(rewardAddress).toString()),
+                amount: new BigNumber(amount.toString()),
                 networkId: this.networkSettingSnapshot.NetworkId,
               },
             ],

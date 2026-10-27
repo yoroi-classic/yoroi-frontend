@@ -111,6 +111,7 @@ test('maps not-found errors and validates returned network addresses', async () 
   await expect(handleApiGetCryptoAddress({ request })('$alice')).rejects.toThrow(Resolver.Errors.NotFound);
   expect(handleCnsApiError(new Api.Errors.NotFound())).toBeInstanceOf(Resolver.Errors.NotFound);
   expect(isValidMainnetPaymentAddress(MAINNET_ADDRESS)).toBe(true);
+  expect(isValidMainnetPaymentAddress(REWARD_ADDRESS)).toBe(false);
   expect(isValidMainnetPaymentAddress(PREPROD_ADDRESS)).toBe(false);
   expect(isValidMainnetPaymentAddress('not-an-address')).toBe(false);
 });

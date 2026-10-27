@@ -3,7 +3,9 @@
 import axios from 'axios';
 import { FlagsApi, flagStorageKey } from './flags';
 
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 test('reads and persists a network feature flag from the backend', async () => {
   const storage = { get: jest.fn(async () => null), set: jest.fn(async () => {}) };
