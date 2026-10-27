@@ -70,7 +70,7 @@ export type TxOutput = {|
   data?: string | void,
 |};
 
-type AddressingValue = {| path: Array<number>, startLevel: number |};
+type AddressingValue = {| +path: Array<number>, +startLevel: number |};
 
 type TxAuxiliaryData = {|
   metadata: ?TxMetadata,
@@ -88,7 +88,7 @@ type TxMint = {|
 |};
 
 export function sendAllUnsignedTx(
-  receiver: { ...Address, ...InexactSubset<Addressing>, ... },
+  receiver: { ...Address, +addressing?: AddressingValue, ... },
   allUtxos: Array<CardanoAddressedUtxo>,
   absSlotNumber: BigNumber,
   protocolParams: {|
@@ -854,6 +854,8 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     const redeemersByUtxo = new Map();
     for (const [utxo, witness] of mustIncludeUtxos) {
       if (witness == null || !('plutusScript' in witness)) continue;
+      // Flow 0.142 does not narrow this exact union by the `in` check above.
+      // $FlowFixMe[prop-missing]
       const redeemer = cml.LegacyRedeemer.from_cbor_hex(witness.redeemer);
       redeemersByUtxo.set(`${utxo.tx_hash}${utxo.tx_index}`, redeemer);
     }
@@ -964,19 +966,25 @@ async function newAdaUnsignedTxFromUtxoForConnector(
         continue;
       }
       if ('nativeScript' in witness) {
+        // $FlowFixMe[prop-missing]
+        const nativeScript = witness.nativeScript;
         txBuilder.add_input(
           inputBuilder.native_script(
-            cml.NativeScript.from_cbor_hex(witness.nativeScript),
+            cml.NativeScript.from_cbor_hex(nativeScript),
             cml.NativeScriptWitnessInfo.assume_signature_count()
           )
         );
       } else {
         const redeemer = redeemersByUtxo.get(`${utxo.tx_hash}${utxo.tx_index}`);
         if (redeemer == null) throw new Error('Missing parsed Plutus redeemer');
-        const script = cml.PlutusScript.from_v1(cml.PlutusV1Script.from_cbor_hex(witness.plutusScript));
+        // $FlowFixMe[prop-missing]
+        const plutusScript = witness.plutusScript;
+        // $FlowFixMe[prop-missing]
+        const datum = witness.datum;
+        const script = cml.PlutusScript.from_v1(cml.PlutusV1Script.from_cbor_hex(plutusScript));
         const partialWitness = cml.PartialPlutusWitness.new(cml.PlutusScriptWitness.new_script(script), redeemer.data());
         txBuilder.add_input(
-          inputBuilder.plutus_script(partialWitness, cml.Ed25519KeyHashList.new(), cml.PlutusData.from_cbor_hex(witness.datum))
+          inputBuilder.plutus_script(partialWitness, cml.Ed25519KeyHashList.new(), cml.PlutusData.from_cbor_hex(datum))
         );
         txBuilder.set_exunits(cml.RedeemerWitnessKey.from_redeemer(redeemer), redeemer.ex_units());
       }

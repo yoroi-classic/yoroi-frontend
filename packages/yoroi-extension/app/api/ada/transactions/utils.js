@@ -428,7 +428,7 @@ export function cardanoMinAdaRequiredFromAssets(tokens: MultiToken, coinsPerByte
 }
 
 export function cardanoMinAdaRequiredFromRemoteFormat(
-  utxo: { ...RemoteUnspentOutput, ... },
+  utxo: RemoteUnspentOutput | CardanoAddressedUtxo,
   coinsPerByte: BigNumber,
   addressHex: string,
   datumHash?: string
@@ -436,7 +436,19 @@ export function cardanoMinAdaRequiredFromRemoteFormat(
   return RustModule.WasmScope(Module => {
     const CML = Module.CML;
     const datumOption = datumHash == null ? undefined : CML.DatumOption.new_hash(CML.DatumHash.from_hex(datumHash));
-    const output = CML.TransactionOutput.new(CML.Address.from_hex(addressHex), cardanoValueFromRemoteFormat(utxo), datumOption);
+    const remoteUtxo: RemoteUnspentOutput = {
+      utxo_id: utxo.utxo_id,
+      tx_hash: utxo.tx_hash,
+      tx_index: utxo.tx_index,
+      receiver: utxo.receiver,
+      amount: utxo.amount,
+      assets: utxo.assets,
+    };
+    const output = CML.TransactionOutput.new(
+      CML.Address.from_hex(addressHex),
+      cardanoValueFromRemoteFormat(remoteUtxo),
+      datumOption
+    );
     // eslint-disable-next-line no-undef
     return new BigNumber(CML.min_ada_required(output, BigInt(coinsPerByte.toString())).toString());
   });
