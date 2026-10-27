@@ -1,7 +1,7 @@
 // @flow
 
-// Flow 0.142 has no primitive bigint type. Keep values nominal so numbers
-// cannot accidentally be passed to CML APIs that require native BigInts.
-declare opaque type BigIntValue: { toString(): string };
+// Flow 0.142 cannot model the native BigInt primitive or its arithmetic.
+// Keep this boundary explicit; never convert these values through Number.
+declare function BigInt(value: string | number): any;
 
-declare function BigInt(value: string | number): BigIntValue;
+declare type BigIntValue = any;

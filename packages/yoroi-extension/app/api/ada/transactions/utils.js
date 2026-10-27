@@ -140,12 +140,14 @@ export function parseCMLTransactionOutput(
   address: string,
   amount: MultiToken,
   dataHash?: string,
+  data: void,
 |} {
   return RustModule.WasmScope(Module => {
     const output = Module.CML.TransactionOutput.from_cbor_hex(outputCborHex);
-    const parsed: {| address: string, amount: MultiToken, dataHash?: string |} = {
+    const parsed: {| address: string, amount: MultiToken, dataHash?: string, data: void |} = {
       address: output.address().to_hex(),
       amount: multiTokenFromCMLValue(output.amount(), defaults),
+      data: undefined,
     };
     const dataHash = output.datum_hash();
     if (dataHash != null) parsed.dataHash = dataHash.to_hex();

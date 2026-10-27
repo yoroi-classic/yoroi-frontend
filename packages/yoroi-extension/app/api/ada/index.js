@@ -1042,7 +1042,7 @@ export default class AdaApi {
       addressing: receiveAddress.addressing,
     };
 
-    const outputs = [];
+    const outputs: Array<TxOutput> = [];
     const mint = [];
     const mintMetadata = {};
     const nativeScripts = [];
