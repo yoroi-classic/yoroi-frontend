@@ -1627,6 +1627,7 @@ describe('CML connector transaction construction', () => {
     const serializedUnsignedTx = new HaskellShelleyTxSignRequest({
       senderUtxos: [],
       unsignedTx: response.txBuilder,
+      witnessSet: response.witnessSet,
       changeAddr: [],
       metadata: response.auxiliaryData,
       networkSettingSnapshot: {
@@ -1641,10 +1642,75 @@ describe('CML connector transaction construction', () => {
       const auxiliaryData = transaction.auxiliary_data();
       const auxiliaryDataHash = transaction.body().auxiliary_data_hash();
       if (auxiliaryData == null || auxiliaryDataHash == null) throw new Error('Missing serialized connector auxiliary data');
-      return { bytes: auxiliaryData.to_cbor_bytes(), hash: auxiliaryDataHash.to_hex() };
+      return {
+        bytes: auxiliaryData.to_cbor_bytes(),
+        hash: auxiliaryDataHash.to_hex(),
+        nativeScriptCount: transaction.witness_set().native_scripts()?.len() ?? 0,
+      };
     });
     expect(serializedAuxiliaryData.bytes).toEqual(response.auxiliaryData);
     expect(serializedAuxiliaryData.hash).toEqual(expectedAuxiliaryDataHash);
+    expect(serializedAuxiliaryData.nativeScriptCount).toBe(1);
+  });
+
+  it('selects wallet UTxOs for minted targets and keeps the policy script in the sign request', async () => {
+    const utxo = genAddressedUtxos()[3];
+    const change = genSampleAdaAddresses()[3];
+    if (utxo == null || change == null) throw new Error('Missing connector output fixtures');
+    const policyScript = RustModule.WasmScope(Module =>
+      Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('33'.repeat(28))).to_cbor_hex()
+    );
+    const policyId = RustModule.WasmScope(Module =>
+      Module.CML.NativeScript.from_cbor_hex(policyScript).hash().to_hex()
+    );
+    const response = await newAdaUnsignedTxForConnector(
+      [makeOutput(change.address, '2000000', '1', `${policyId}.74657374`)],
+      [{ policyScript, assetName: '74657374', amount: '1' }],
+      { metadata: {}, nativeScripts: [] },
+      change,
+      [],
+      [utxo],
+      new BigNumber(5000000),
+      null,
+      null,
+      [],
+      {
+        linearFeeCoefficient: '44',
+        linearFeeConstant: '155381',
+        coinsPerUtxoByte: '4310',
+        poolDeposit: '500000000',
+        keyDeposit: '2000000',
+        networkId: network.NetworkId,
+      },
+      network.NetworkId
+    );
+    expect(response.senderUtxos).toHaveLength(1);
+
+    const request = new HaskellShelleyTxSignRequest({
+      senderUtxos: response.senderUtxos,
+      unsignedTx: response.txBuilder,
+      witnessSet: response.witnessSet,
+      changeAddr: response.changeAddr,
+      metadata: response.auxiliaryData,
+      networkSettingSnapshot: {
+        NetworkId: network.NetworkId,
+        ChainNetworkId: 1,
+        PoolDeposit: new BigNumber('500000000'),
+        KeyDeposit: new BigNumber('2000000'),
+      },
+    });
+    const summary = RustModule.WasmScope(Module => {
+      const transaction = Module.CML.Transaction.from_cbor_hex(request.serializedUnsignedTxHex());
+      const mint = transaction.body().mint();
+      const quantity = mint?.get(Module.CML.ScriptHash.from_hex(policyId), Module.CML.AssetName.from_hex('74657374'));
+      const nativeScripts = transaction.witness_set().native_scripts();
+      return {
+        quantity: quantity?.toString(),
+        nativeScriptCount: nativeScripts?.len() ?? 0,
+        nativeScriptHash: nativeScripts?.get(0)?.hash().to_hex(),
+      };
+    });
+    expect(summary).toEqual({ quantity: '1', nativeScriptCount: 1, nativeScriptHash: policyId });
   });
 
   it('keeps the fee above the serialized minimum for two Byron/bootstrap inputs', async () => {

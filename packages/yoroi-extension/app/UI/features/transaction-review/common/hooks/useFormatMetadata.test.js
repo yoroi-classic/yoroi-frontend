@@ -54,6 +54,29 @@ test('joins label 674 JSON fragments split across list entries', () => {
   });
 });
 
+test.each([
+  ['single comment', ['A payment for dinner']],
+  ['invoice lines', ['Invoice-No: 123', 'Invoice-No: 456', 'Invoice-No: 789']],
+])('preserves plain-text CIP-20 %s in CBOR and unsigned metadata', (_name, lines) => {
+  const encodeText = (value: string) => `${(0x60 + value.length).toString(16)}${Buffer.from(value).toString('hex')}`;
+  const list = lines.map(encodeText).join('');
+  const cbor = `84a3008001800200a0f5a11902a2a1636d7367${(0x80 + lines.length).toString(16)}${list}`;
+  const metadataBytes = RustModule.WasmScope(Module => {
+    const auxiliaryData = Module.CML.Transaction.from_cbor_hex(cbor).auxiliary_data();
+    if (auxiliaryData == null) throw new Error('Expected transaction auxiliary data');
+    return auxiliaryData.to_cbor_bytes();
+  });
+
+  expect(formatCborMetadata(cbor, mockTxBody('metadata-hash'))).toEqual({
+    hash: 'metadata-hash',
+    metadata: { msg: lines },
+  });
+  expect(formatUnsignedTxMetadata(metadataBytes, mockTxBody('metadata-hash'))).toEqual({
+    hash: 'metadata-hash',
+    metadata: { msg: lines },
+  });
+});
+
 test('returns null metadata for malformed transaction CBOR', () => {
   expect(formatCborMetadata('not-cbor', mockTxBody(null))).toEqual({ hash: null, metadata: null });
 });

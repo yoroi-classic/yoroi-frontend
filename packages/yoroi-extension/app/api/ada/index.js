@@ -871,6 +871,7 @@ export default class AdaApi {
       return new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTxResponse.senderUtxos,
         unsignedTx: unsignedTxResponse.txBuilder,
+        witnessSet: unsignedTxResponse.witnessSet,
         implicitInputValue: unsignedTxResponse.implicitInputValue,
         depositAmount: unsignedTxResponse.depositAmount,
         changeAddr: unsignedTxResponse.changeAddr,
@@ -1197,6 +1198,7 @@ export default class AdaApi {
     return new HaskellShelleyTxSignRequest({
       senderUtxos: unsignedTxResponse.senderUtxos,
       unsignedTx: unsignedTxResponse.txBuilder,
+      witnessSet: unsignedTxResponse.witnessSet,
       changeAddr: unsignedTxResponse.changeAddr,
       metadata: unsignedTxResponse.auxiliaryData,
       networkSettingSnapshot: {

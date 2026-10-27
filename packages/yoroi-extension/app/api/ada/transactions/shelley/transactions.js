@@ -137,6 +137,7 @@ export function sendAllUnsignedTx(
   return {
     senderUtxos: addressedUtxos,
     txBuilder: unsignedTxResponse.txBuilder,
+    witnessSet: unsignedTxResponse.witnessSet,
     changeAddr: unsignedTxResponse.changeAddr,
     auxiliaryData: unsignedTxResponse.auxiliaryData,
     certificates: [],
@@ -306,6 +307,7 @@ export async function newAdaUnsignedTx(
   return {
     senderUtxos: addressedUtxos,
     txBuilder: unsignedTxResponse.txBuilder,
+    witnessSet: unsignedTxResponse.witnessSet,
     changeAddr: unsignedTxResponse.changeAddr,
     implicitInputValue: unsignedTxResponse.implicitInputValue,
     depositAmount: unsignedTxResponse.depositAmount,
@@ -379,6 +381,7 @@ export async function newAdaUnsignedTxForConnector(
   return {
     senderUtxos: addressedUtxos,
     txBuilder: unsignedTxResponse.txBuilder,
+    witnessSet: unsignedTxResponse.witnessSet,
     changeAddr: unsignedTxResponse.changeAddr,
     auxiliaryData: unsignedTxResponse.auxiliaryData,
     certificates: [],
@@ -669,6 +672,7 @@ export async function newAdaUnsignedTxFromUtxo(
     }
     return {
       bodyBytes,
+      witnessSetBytes: witnesses.to_cbor_bytes(),
       implicitInputBytes: txBuilder.get_implicit_input().to_cbor_bytes(),
       deposit: txBuilder.get_deposit().toString(),
       selectedUtxos,
@@ -679,6 +683,7 @@ export async function newAdaUnsignedTxFromUtxo(
   return {
     senderUtxos: result.selectedUtxos,
     txBuilder: result.bodyBytes,
+    witnessSet: result.witnessSetBytes,
     changeAddr: result.changeAddresses,
     implicitInputValue: result.implicitInputBytes,
     depositAmount: result.deposit,
@@ -1035,7 +1040,7 @@ async function newAdaUnsignedTxFromUtxoForConnector(
         const hasMultiAssetOutput = outputs.some(output => output.amount.nonDefaultEntries().length > 0);
         txBuilder.select_utxos(
           hasMultiAssetOutput
-            ? cml.CoinSelectionStrategyCIP2.RandomImproveMultiAsset
+            ? cml.CoinSelectionStrategyCIP2.LargestFirstMultiAsset
             : cml.CoinSelectionStrategyCIP2.RandomImprove
         );
       } catch (error) {
@@ -1071,6 +1076,7 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     }
 
     const body = signedBuilder.body();
+    const witnessSetBytes = signedBuilder.witness_set().build().to_cbor_bytes();
     const selectedUtxos = [];
     const inputs = body.inputs();
     for (let index = 0; index < inputs.len(); index++) {
@@ -1095,12 +1101,13 @@ async function newAdaUnsignedTxFromUtxoForConnector(
         });
       }
     }
-    return { bodyBytes: body.to_cbor_bytes(), selectedUtxos, changeAddresses, auxiliaryDataBytes };
+    return { bodyBytes: body.to_cbor_bytes(), witnessSetBytes, selectedUtxos, changeAddresses, auxiliaryDataBytes };
   });
 
   return {
     senderUtxos: result.selectedUtxos,
     txBuilder: result.bodyBytes,
+    witnessSet: result.witnessSetBytes,
     changeAddr: result.changeAddresses,
     auxiliaryData: result.auxiliaryDataBytes,
   };

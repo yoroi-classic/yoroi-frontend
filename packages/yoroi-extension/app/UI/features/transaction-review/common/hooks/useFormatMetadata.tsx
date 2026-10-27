@@ -70,6 +70,8 @@ const parse674Fragments = (key: string, rawList: string[]) => {
     }
   }
 
+  if (jsonFragments.length === 0) return { [key]: rawList };
+
   const mergedObject = jsonFragments.reduce((acc, obj) => ({ ...acc, ...obj }), {} as Record<string, unknown>);
   Object.keys(mergedObject).forEach(field => {
     if (mergedObject[field] === '') mergedObject[field] = '.';

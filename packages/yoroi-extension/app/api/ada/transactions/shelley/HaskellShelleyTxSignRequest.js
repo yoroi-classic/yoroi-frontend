@@ -47,6 +47,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   receiver: ?{| address: string, handle: {| handle: string, nameServer: string |} | void |};
   senderUtxos: Array<CardanoAddressedUtxo>;
   unsignedTx: UnsignedTx;
+  witnessSet: void | Uint8Array;
   implicitInputValue: void | Uint8Array;
   depositAmount: void | string;
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>;
@@ -58,6 +59,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   constructor(data: {|
     senderUtxos: Array<CardanoAddressedUtxo>,
     unsignedTx: UnsignedTx,
+    witnessSet?: void | Uint8Array,
     implicitInputValue?: void | Uint8Array,
     depositAmount?: void | string,
     changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
@@ -69,6 +71,7 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
   |}) {
     this.senderUtxos = data.senderUtxos;
     this.unsignedTx = data.unsignedTx;
+    this.witnessSet = data.witnessSet;
     this.implicitInputValue = data.implicitInputValue;
     this.depositAmount = data.depositAmount;
     this.changeAddr = data.changeAddr;
@@ -89,7 +92,9 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     return RustModule.WasmScope(Module => {
       const cml = Module.CML;
       const body = cml.TransactionBody.from_cbor_bytes(this.unsignedTx);
-      const witnesses = cml.TransactionWitnessSet.new();
+      const witnesses = this.witnessSet == null
+        ? cml.TransactionWitnessSet.new()
+        : cml.TransactionWitnessSet.from_cbor_bytes(this.witnessSet);
       const metadata = this.metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(this.metadata);
       return cml.Transaction.new(body, witnesses, true, metadata).to_cbor_hex();
     });
