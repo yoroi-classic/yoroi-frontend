@@ -92,9 +92,8 @@ export class HaskellShelleyTxSignRequest implements ISignRequest<UnsignedTx> {
     return RustModule.WasmScope(Module => {
       const cml = Module.CML;
       const body = cml.TransactionBody.from_cbor_bytes(this.unsignedTx);
-      const witnesses = this.witnessSet == null
-        ? cml.TransactionWitnessSet.new()
-        : cml.TransactionWitnessSet.from_cbor_bytes(this.witnessSet);
+      const witnesses =
+        this.witnessSet == null ? cml.TransactionWitnessSet.new() : cml.TransactionWitnessSet.from_cbor_bytes(this.witnessSet);
       const metadata = this.metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(this.metadata);
       return cml.Transaction.new(body, witnesses, true, metadata).to_cbor_hex();
     });
