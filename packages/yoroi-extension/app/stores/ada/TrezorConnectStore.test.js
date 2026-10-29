@@ -2,7 +2,10 @@ import TrezorConnectStore from './TrezorConnectStore';
 import { wrapWithFrame } from '../lib/TrezorWrapper';
 
 jest.mock('../../components/widgets/ProgressSteps', () => ({ StepState: { PROCESS: 'PROCESS', ERROR: 'ERROR', LOAD: 'LOAD' } }));
-jest.mock('../../utils/logging', () => ({ Logger: { debug: jest.fn(), info: jest.fn(), error: jest.fn() }, stringifyError: String }));
+jest.mock('../../utils/logging', () => ({
+  Logger: { debug: jest.fn(), info: jest.fn(), error: jest.fn() },
+  stringifyError: String,
+}));
 jest.mock('../../api/thunk', () => ({ createHardwareWallet: jest.fn() }));
 jest.mock('../../../posthog', () => ({ captureEvent: jest.fn() }));
 
@@ -23,7 +26,10 @@ describe('TrezorConnectStore', () => {
     wrapWithFrame.mockImplementation(async callback =>
       callback({
         cardanoGetPublicKey: async () => ({ success: true, payload: { publicKey: 'pubkey' } }),
-        getFeatures: async () => ({ success: true, payload: { vendor: 'Vendor', model: 'Model', device_id: 'DeviceId', label: 'Wallet' } }),
+        getFeatures: async () => ({
+          success: true,
+          payload: { vendor: 'Vendor', model: 'Model', device_id: 'DeviceId', label: 'Wallet' },
+        }),
       })
     );
 

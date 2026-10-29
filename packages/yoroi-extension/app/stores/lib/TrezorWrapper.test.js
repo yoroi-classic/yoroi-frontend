@@ -6,7 +6,11 @@ describe('wrapWithFrame', () => {
     const error = new Error('callback failed');
     const dispose = jest.spyOn(TrezorConnect, 'dispose').mockResolvedValue(undefined);
 
-    await expect(wrapWithFrame(async () => { throw error; })).rejects.toBe(error);
+    await expect(
+      wrapWithFrame(async () => {
+        throw error;
+      })
+    ).rejects.toBe(error);
     expect(dispose).toHaveBeenCalledTimes(1);
 
     dispose.mockRestore();
