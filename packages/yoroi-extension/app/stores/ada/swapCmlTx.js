@@ -6,6 +6,7 @@ export type SwapCmlTransaction = {|
   bodyBytes: Uint8Array,
   inputRefs: Array<{| txHash: string, index: number |}>,
   metadataBytes: void | Uint8Array,
+  witnessSetBytes: Uint8Array,
 |};
 
 export function extractSwapCmlTransaction(cborHex: string): SwapCmlTransaction {
@@ -22,6 +23,7 @@ export function extractSwapCmlTransaction(cborHex: string): SwapCmlTransaction {
       bodyBytes: body.to_cbor_bytes(),
       inputRefs,
       metadataBytes: auxiliaryData == null ? undefined : auxiliaryData.to_cbor_bytes(),
+      witnessSetBytes: tx.witness_set().to_cbor_bytes(),
     };
   });
 }

@@ -58,7 +58,11 @@ test.each([
   ['single comment', ['A payment for dinner']],
   ['invoice lines', ['Invoice-No: 123', 'Invoice-No: 456', 'Invoice-No: 789']],
 ])('preserves plain-text CIP-20 %s in CBOR and unsigned metadata', (_name, lines) => {
-  const encodeText = (value: string) => `${(0x60 + value.length).toString(16)}${Buffer.from(value).toString('hex')}`;
+  const encodeText = (value: string) => {
+    const bytes = Buffer.from(value);
+    const header = bytes.length < 24 ? [0x60 + bytes.length] : [0x78, bytes.length];
+    return `${Buffer.from(header).toString('hex')}${bytes.toString('hex')}`;
+  };
   const list = lines.map(encodeText).join('');
   const cbor = `84a3008001800200a0f5a11902a2a1636d7367${(0x80 + lines.length).toString(16)}${list}`;
   const metadataBytes = RustModule.WasmScope(Module => {

@@ -260,6 +260,7 @@ export default class SwapStore extends Store<StoresMap> {
     return new HaskellShelleyTxSignRequest({
       senderUtxos,
       unsignedTx: swapTx.bodyBytes,
+      witnessSet: swapTx.witnessSetBytes,
       changeAddr: [], // no used
       metadata: swapTx.metadataBytes,
       networkSettingSnapshot: {

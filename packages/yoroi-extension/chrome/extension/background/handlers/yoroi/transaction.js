@@ -56,6 +56,7 @@ export type SignAndBroadcastTransactionRequestType = {|
   publicDeriverId: number,
   senderUtxos: Array<CardanoAddressedUtxo>,
   unsignedTx: string,
+  witnessSet: ?string,
   metadata: ?string,
   password: string,
 |};
@@ -68,7 +69,7 @@ export const SignAndBroadcastTransaction: HandlerType<
   handle: async (request) => {
     return RustModule.WasmScope(async (Scope) => {
       const publicDeriver = await getPublicDeriverById(request.publicDeriverId);
-      const { senderUtxos, unsignedTx, metadata, password, } = request;
+      const { senderUtxos, unsignedTx, witnessSet, metadata, password, } = request;
 
       try {
         const unsignedTxBody = Scope.CML.Transaction.from_cbor_hex(unsignedTx).body().to_cbor_bytes();
@@ -79,6 +80,9 @@ export const SignAndBroadcastTransaction: HandlerType<
         const signRequest = {
           senderUtxos,
           unsignedTx: unsignedTxBody,
+          witnessSet: witnessSet == null
+            ? Scope.CML.Transaction.from_cbor_hex(unsignedTx).witness_set().to_cbor_bytes()
+            : Scope.CML.TransactionWitnessSet.from_cbor_hex(witnessSet).to_cbor_bytes(),
           metadata: metadataBytes,
         };
         const stateFetcher = await getCardanoStateFetcher(new LocalStorageApi());

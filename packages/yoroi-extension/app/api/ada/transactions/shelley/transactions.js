@@ -704,7 +704,7 @@ export async function maxSendableADA(request: {|
       token: $ReadOnly<TokenRow>,
       shouldSendAll?: boolean,
       amount?: string,
-    |}>,
+    |}>
   >,
 |}): Promise<BigNumber> {
   try {
@@ -787,7 +787,10 @@ export async function maxSendableADA(request: {|
       for (const input of addressedUtxo) {
         const cmlValue = cmlValueFromRemoteFormat(cml, input);
         try {
-          txBuilder.get_explicit_input().checked_add(txBuilder.get_implicit_input()).checked_add(cmlValue);
+          txBuilder
+            .get_explicit_input()
+            .checked_add(txBuilder.get_implicit_input())
+            .checked_add(cmlValue);
         } catch (_error) {
           throw new AssetOverflowError();
         }
@@ -1039,9 +1042,7 @@ async function newAdaUnsignedTxFromUtxoForConnector(
       try {
         const hasMultiAssetOutput = outputs.some(output => output.amount.nonDefaultEntries().length > 0);
         txBuilder.select_utxos(
-          hasMultiAssetOutput
-            ? cml.CoinSelectionStrategyCIP2.LargestFirstMultiAsset
-            : cml.CoinSelectionStrategyCIP2.RandomImprove
+          hasMultiAssetOutput ? cml.CoinSelectionStrategyCIP2.LargestFirstMultiAsset : cml.CoinSelectionStrategyCIP2.RandomImprove
         );
       } catch (error) {
         if (/Not enough ADA|Insufficient/.test(String(error))) throw new NotEnoughMoneyToSendError();
@@ -1076,7 +1077,10 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     }
 
     const body = signedBuilder.body();
-    const witnessSetBytes = signedBuilder.witness_set().build().to_cbor_bytes();
+    const witnessSetBytes = signedBuilder
+      .witness_set()
+      .build()
+      .to_cbor_bytes();
     const selectedUtxos = [];
     const inputs = body.inputs();
     for (let index = 0; index < inputs.len(); index++) {
@@ -1119,7 +1123,8 @@ export async function signTransactionFromWallet(
   wallet: PublicDeriver<>,
   password: string,
   metadata: ?Uint8Array,
-  otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
+  otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = [],
+  existingWitnessSet?: Uint8Array
 ): Promise<Uint8Array> {
   const withSigning = asGetSigningKey(wallet);
   if (withSigning == null) {
@@ -1170,7 +1175,8 @@ export async function signTransactionFromWallet(
     hexToBytes(normalizedKey.prvKeyHex),
     stakingKey,
     metadata,
-    otherRequiredSigners
+    otherRequiredSigners,
+    existingWitnessSet
   );
 }
 
@@ -1181,14 +1187,26 @@ export function signTransaction(
   signingKey: Uint8Array,
   stakingKey: ?Uint8Array,
   metadata: ?Uint8Array,
-  otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = []
+  otherRequiredSigners: Array<{| ...Address, ...Addressing |}> = [],
+  existingWitnessSet?: Uint8Array
 ): Uint8Array {
-  return signCmlTransaction(senderUtxos, unsignedTx, keyLevel, signingKey, stakingKey, metadata, otherRequiredSigners);
+  return signCmlTransaction(
+    senderUtxos,
+    unsignedTx,
+    keyLevel,
+    signingKey,
+    stakingKey,
+    metadata,
+    otherRequiredSigners,
+    existingWitnessSet
+  );
 }
 
 export function transactionWitnessSetHex(signedTransactionBytes: Uint8Array): string {
   return RustModule.WasmScope(Module =>
-    Module.CML.Transaction.from_cbor_bytes(signedTransactionBytes).witness_set().to_cbor_hex()
+    Module.CML.Transaction.from_cbor_bytes(signedTransactionBytes)
+      .witness_set()
+      .to_cbor_hex()
   );
 }
 
@@ -1199,7 +1217,8 @@ function signCmlTransaction(
   signingKeyBytes: Uint8Array,
   stakingKey: ?Uint8Array,
   metadata: ?Uint8Array,
-  otherRequiredSigners: Array<{| ...Address, ...Addressing |}>
+  otherRequiredSigners: Array<{| ...Address, ...Addressing |}>,
+  existingWitnessSet?: Uint8Array
 ): Uint8Array {
   const uniqueAddressings: Array<{| address: string, addressing: AddressingValue |}> = [];
   const seen = new Set();
@@ -1222,6 +1241,9 @@ function signCmlTransaction(
     const body = cml.TransactionBody.from_cbor_bytes(bodyBytes);
     const txHash = cml.hash_transaction(body);
     const witnessBuilder = cml.TransactionWitnessSetBuilder.new();
+    if (existingWitnessSet != null) {
+      witnessBuilder.add_existing(cml.TransactionWitnessSet.from_cbor_bytes(existingWitnessSet));
+    }
     const cmlSigningKey = cml.Bip32PrivateKey.from_raw_bytes(signingKeyBytes);
     for (const item of uniqueAddressings) {
       const lastLevelSpecified = item.addressing.startLevel + item.addressing.path.length - 1;
@@ -1245,7 +1267,10 @@ function signCmlTransaction(
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
     if (stakingHashes.size > 0 && stakingKey != null) {
       const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey);
-      const stakingKeyHash = cmlStakingKey.to_public().hash().to_hex();
+      const stakingKeyHash = cmlStakingKey
+        .to_public()
+        .hash()
+        .to_hex();
       if (stakingHashes.has(stakingKeyHash)) {
         witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, cmlStakingKey));
       }

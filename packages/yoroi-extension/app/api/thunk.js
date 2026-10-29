@@ -106,9 +106,8 @@ export function callBackground<R>(message: {| type: string, request?: Object |})
       if (window.chrome.runtime.lastError) {
         // eslint-disable-next-line prefer-promise-reject-errors
         reject(
-          `Error ${window.chrome.runtime.lastError} when calling the background with: ${
-            JSON.stringify(sanitizeForLog(message)) ?? 'undefined'
-          }`
+          `Error ${window.chrome.runtime.lastError} when calling the background with: ${JSON.stringify(sanitizeForLog(message)) ??
+            'undefined'}`
         );
         return;
       }
@@ -223,6 +222,7 @@ export async function signAndBroadcastTransaction(request: {|
   const serializableRequest: SignAndBroadcastTransactionRequestType = {
     senderUtxos: request.signRequest.senderUtxos,
     unsignedTx: request.signRequest.serializedUnsignedTxHex(),
+    witnessSet: request.signRequest.witnessSet == null ? undefined : bytesToHex(request.signRequest.witnessSet),
     metadata: request.signRequest.metadata == null ? undefined : bytesToHex(request.signRequest.metadata),
     password: request.password,
     publicDeriverId: request.publicDeriverId,
@@ -336,8 +336,8 @@ export async function getSelectedExplorer(): Promise<
     {|
       backup: $ReadOnly<ExplorerRow>,
       selected: $ReadOnly<ExplorerRow>,
-    |},
-  >,
+    |}
+  >
 > {
   return new Map(await callBackground({ type: GetSelectedExplorer.typeTag }));
 }

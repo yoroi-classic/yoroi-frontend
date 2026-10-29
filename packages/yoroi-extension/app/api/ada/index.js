@@ -215,6 +215,7 @@ export type SignAndBroadcastRequest = {|
   signRequest: {
     senderUtxos: Array<CardanoAddressedUtxo>,
     +unsignedTx: Uint8Array,
+    witnessSet?: void | Uint8Array,
     metadata: void | Uint8Array,
     ...
   },
@@ -682,7 +683,9 @@ export default class AdaApi {
           request.signRequest.unsignedTx,
           request.publicDeriver,
           password,
-          request.signRequest.metadata
+          request.signRequest.metadata,
+          [],
+          request.signRequest.witnessSet
         );
         const cmlTx = Scope.CML.Transaction.from_cbor_bytes(signedTx);
         return {
@@ -798,19 +801,16 @@ export default class AdaApi {
           request.network.NetworkId
         );
       } else {
-        const changeAddresses = request.receivers.reduce(
-          (arr, next) => {
-            if (next.addressing != null) {
-              arr.push({
-                address: next.address,
-                addressing: next.addressing,
-              });
-              return arr;
-            }
+        const changeAddresses = request.receivers.reduce((arr, next) => {
+          if (next.addressing != null) {
+            arr.push({
+              address: next.address,
+              addressing: next.addressing,
+            });
             return arr;
-          },
-          ([]: Array<{| ...Address, ...Addressing |}>)
-        );
+          }
+          return arr;
+        }, ([]: Array<{| ...Address, ...Addressing |}>));
         if (changeAddresses.length !== 1) {
           throw new Error(`${nameof(this.createUnsignedTxForUtxos)} needs exactly one change address`);
         }
@@ -818,16 +818,13 @@ export default class AdaApi {
         const otherAddresses: Array<{|
           ...Address,
           +addressHandle?: {| handle: string, nameServer: string |},
-        |}> = request.receivers.reduce(
-          (arr, next) => {
-            if (next.addressing == null) {
-              arr.push({ address: next.address, addressHandle: next.addressHandle });
-              return arr;
-            }
+        |}> = request.receivers.reduce((arr, next) => {
+          if (next.addressing == null) {
+            arr.push({ address: next.address, addressHandle: next.addressHandle });
             return arr;
-          },
-          ([]: Array<{| ...Address, +addressHandle?: {| handle: string, nameServer: string |} |}>)
-        );
+          }
+          return arr;
+        }, ([]: Array<{| ...Address, +addressHandle?: {| handle: string, nameServer: string |} |}>));
         if (otherAddresses.length > 1) {
           throw new Error(`${nameof(this.createUnsignedTxForUtxos)} can't send to more than one address`);
         }
@@ -1059,13 +1056,19 @@ export default class AdaApi {
       }
     }
 
-    function mintEntryToIdentifier(mintEntry: CardanoTxRequestMint): {|
+    function mintEntryToIdentifier(
+      mintEntry: CardanoTxRequestMint
+    ): {|
       policyId: string,
       assetId: string,
     |} {
       const { script, assetName } = mintEntry;
       const policyId = RustModule.WasmScope(Scope => {
-        return bytesToHex(Scope.CML.NativeScript.from_cbor_bytes(hexToBytes(script)).hash().to_raw_bytes());
+        return bytesToHex(
+          Scope.CML.NativeScript.from_cbor_bytes(hexToBytes(script))
+            .hash()
+            .to_raw_bytes()
+        );
       });
 
       const assetId = `${policyId}.${assetName}`;
@@ -1294,6 +1297,7 @@ export default class AdaApi {
       const signTxRequest = new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTx.senderUtxos,
         unsignedTx: unsignedTx.txBuilder,
+        witnessSet: unsignedTx.witnessSet,
         implicitInputValue: unsignedTx.implicitInputValue,
         depositAmount: unsignedTx.depositAmount,
         changeAddr: unsignedTx.changeAddr,
@@ -1347,38 +1351,35 @@ export default class AdaApi {
         network,
         addresses: request.withdrawals.map(withdrawal => withdrawal.rewardAddress),
       });
-      const finalWithdrawals = Object.keys(accountStates).reduce(
-        (list, address) => {
-          const rewardForAddress = accountStates[address];
-          // if key is not registered, we just skip this withdrawal
-          if (rewardForAddress == null) {
-            return list;
-          }
-
-          const rewardBalance = new BigNumber(rewardForAddress.remainingAmount);
-
-          // if the reward address is empty, we filter it out of the withdrawal list
-          // although the protocol allows withdrawals of 0 ADA, it's pointless to do
-          // recall: you may want to undelegate the ADA even if there is 0 ADA in the reward address
-          // since you may want to get back your deposit
-          if (rewardBalance.eq(0)) {
-            return list;
-          }
-
-          const isRewardAddress = RustModule.WasmScope(
-            Module => Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(address)) != null
-          );
-          if (!isRewardAddress) {
-            throw new Error(`${nameof(AdaApi)}::${nameof(this.createUnsignedTx)} withdrawal not a reward address`);
-          }
-          list.push({
-            address,
-            amount: rewardForAddress.remainingAmount,
-          });
+      const finalWithdrawals = Object.keys(accountStates).reduce((list, address) => {
+        const rewardForAddress = accountStates[address];
+        // if key is not registered, we just skip this withdrawal
+        if (rewardForAddress == null) {
           return list;
-        },
-        ([]: Array<{| address: string, amount: string |}>)
-      );
+        }
+
+        const rewardBalance = new BigNumber(rewardForAddress.remainingAmount);
+
+        // if the reward address is empty, we filter it out of the withdrawal list
+        // although the protocol allows withdrawals of 0 ADA, it's pointless to do
+        // recall: you may want to undelegate the ADA even if there is 0 ADA in the reward address
+        // since you may want to get back your deposit
+        if (rewardBalance.eq(0)) {
+          return list;
+        }
+
+        const isRewardAddress = RustModule.WasmScope(
+          Module => Module.CML.RewardAddress.from_address(Module.CML.Address.from_hex(address)) != null
+        );
+        if (!isRewardAddress) {
+          throw new Error(`${nameof(AdaApi)}::${nameof(this.createUnsignedTx)} withdrawal not a reward address`);
+        }
+        list.push({
+          address,
+          amount: rewardForAddress.remainingAmount,
+        });
+        return list;
+      }, ([]: Array<{| address: string, amount: string |}>));
       // if the end result is no withdrawals and no deregistrations, throw an error
       if (finalWithdrawals.length === 0 && certificates.length === 0) {
         throw new RewardAddressEmptyError();
@@ -1407,6 +1408,7 @@ export default class AdaApi {
       const result = new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTxResponse.senderUtxos,
         unsignedTx: unsignedTxResponse.txBuilder,
+        witnessSet: unsignedTxResponse.witnessSet,
         implicitInputValue: unsignedTxResponse.implicitInputValue,
         depositAmount: unsignedTxResponse.depositAmount,
         changeAddr: unsignedTxResponse.changeAddr,
@@ -1464,6 +1466,7 @@ export default class AdaApi {
       return new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTx.senderUtxos,
         unsignedTx: unsignedTx.txBuilder,
+        witnessSet: unsignedTx.witnessSet,
         implicitInputValue: unsignedTx.implicitInputValue,
         depositAmount: unsignedTx.depositAmount,
         changeAddr: unsignedTx.changeAddr,
@@ -1544,6 +1547,7 @@ export default class AdaApi {
       return new HaskellShelleyTxSignRequest({
         senderUtxos: unsignedTx.senderUtxos,
         unsignedTx: unsignedTx.txBuilder,
+        witnessSet: unsignedTx.witnessSet,
         implicitInputValue: unsignedTx.implicitInputValue,
         depositAmount: unsignedTx.depositAmount,
         changeAddr: unsignedTx.changeAddr,
@@ -1818,8 +1822,16 @@ export default class AdaApi {
         network: request.network,
       });
 
-      const firstInternalPayment = request.cip1852AccountPubKey.derive(ChainDerivations.INTERNAL).derive(0).to_raw_key().hash();
-      const stakingKey = request.cip1852AccountPubKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0).to_raw_key().hash();
+      const firstInternalPayment = request.cip1852AccountPubKey
+        .derive(ChainDerivations.INTERNAL)
+        .derive(0)
+        .to_raw_key()
+        .hash();
+      const stakingKey = request.cip1852AccountPubKey
+        .derive(ChainDerivations.CHIMERIC_ACCOUNT)
+        .derive(0)
+        .to_raw_key()
+        .hash();
 
       const config = getCardanoHaskellBaseConfig(request.network).reduce((acc, next) => Object.assign(acc, next), {});
 
