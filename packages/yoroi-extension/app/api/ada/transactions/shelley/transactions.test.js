@@ -1438,8 +1438,8 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       const body = cml.TransactionBody.from_cbor_bytes(response.txBuilder);
       const auxiliaryData = cml.AuxiliaryData.from_cbor_bytes(metadata);
       const sourceAuxiliaryDataHex = auxiliaryData.to_cbor_hex();
-      const witnessSetBytes = Uint8Array.from([0xa1, 0x04, 0x9f, 0x01, 0xff]);
-      const sourceWitnessSet = cml.TransactionWitnessSet.from_cbor_bytes(witnessSetBytes);
+      const sourceWitnessSetBytes = Uint8Array.from([0xa1, 0x04, 0x9f, 0x01, 0xff]);
+      const sourceWitnessSet = cml.TransactionWitnessSet.from_cbor_bytes(sourceWitnessSetBytes);
       const scriptDataHash = cml.hash_script_data(
         cml.Redeemers.from_cbor_hex('80'),
         cml.CostModels.from_cbor_hex('a0'),
@@ -1448,13 +1448,13 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       body.set_script_data_hash(scriptDataHash);
       const bodyBytes = body.to_cbor_bytes();
       const auxiliaryDataBytes = auxiliaryData.to_cbor_bytes();
-      const fullTxBytes = new Uint8Array(1 + bodyBytes.length + witnessSetBytes.length + 1 + auxiliaryDataBytes.length);
+      const fullTxBytes = new Uint8Array(1 + bodyBytes.length + sourceWitnessSetBytes.length + 1 + auxiliaryDataBytes.length);
       let offset = 0;
       fullTxBytes[offset++] = 0x84;
       fullTxBytes.set(bodyBytes, offset);
       offset += bodyBytes.length;
-      fullTxBytes.set(witnessSetBytes, offset);
-      offset += witnessSetBytes.length;
+      fullTxBytes.set(sourceWitnessSetBytes, offset);
+      offset += sourceWitnessSetBytes.length;
       fullTxBytes[offset++] = 0xf5;
       fullTxBytes.set(auxiliaryDataBytes, offset);
       return {
@@ -1462,7 +1462,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
         auxiliaryDataHex: sourceAuxiliaryDataHex,
         scriptDataHashHex: scriptDataHash.to_hex(),
         sourceBodyBytes: bodyBytes,
-        witnessSetBytes,
+        witnessSetBytes: sourceWitnessSetBytes,
       };
     });
 
