@@ -1242,8 +1242,7 @@ function signCmlTransaction(
       witnesses.set_vkeywitnesses(vkeyWitnesses);
     };
     const addBootstrapWitness = witness => {
-      const bootstrapWitnesses =
-        witnesses.bootstrap_witnesses() ?? cml.BootstrapWitnessList.new();
+      const bootstrapWitnesses = witnesses.bootstrap_witnesses() ?? cml.BootstrapWitnessList.new();
       bootstrapWitnesses.add(witness);
       witnesses.set_bootstrap_witnesses(bootstrapWitnesses);
     };

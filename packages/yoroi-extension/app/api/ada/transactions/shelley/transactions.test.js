@@ -79,10 +79,7 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
         .toString(),
       vkeyWitnessCount: vkeyWitnesses?.len() ?? 0,
       plutusDatumCount: witnesses.plutus_datums()?.len() ?? 0,
-      plutusDatumHex: witnesses
-        .plutus_datums()
-        ?.get(0)
-        ?.to_cbor_hex(),
+      plutusDatumHex: witnesses.plutus_datums()?.get(0)?.to_cbor_hex(),
       witnessSetHex: witnesses.to_cbor_hex(),
       vkeyHashes:
         vkeyWitnesses == null
@@ -1518,16 +1515,8 @@ describe('Create sendAll unsigned TX from UTXO', () => {
         scriptDataHashHex: serializedSignRequest.body().script_data_hash()?.to_hex(),
         metadataBytes: serializedAuxiliaryData.to_cbor_bytes(),
         vkeyWitnesses: serializedSignRequest.witness_set().vkeywitnesses(),
-        plutusDatumCount:
-          serializedSignRequest
-            .witness_set()
-            .plutus_datums()
-            ?.len() ?? 0,
-        plutusDatumHex: serializedSignRequest
-          .witness_set()
-          .plutus_datums()
-          ?.get(0)
-          ?.to_cbor_hex(),
+        plutusDatumCount: serializedSignRequest.witness_set().plutus_datums()?.len() ?? 0,
+        plutusDatumHex: serializedSignRequest.witness_set().plutus_datums()?.get(0)?.to_cbor_hex(),
         witnessSetHex: serializedSignRequest.witness_set().to_cbor_hex(),
       };
     });
