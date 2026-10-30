@@ -20,6 +20,7 @@ jest.mock('../../api/thunk', () => ({
 jest.mock('../../assets/images/ada.inline.svg', () => 'ada-logo');
 
 let db;
+const mockedGetProtocolParameters: any = getProtocolParameters;
 
 const recoveryPhrase = 'prevent company field green slot measure chief hero apple task eagle sunset endorse dress seed';
 
@@ -29,7 +30,7 @@ beforeAll(async () => {
 });
 
 test('preserves swap datum bytes through sign request and transaction submission', async () => {
-  getProtocolParameters.mockResolvedValue({
+  mockedGetProtocolParameters.mockResolvedValue({
     keyDeposit: '2000000',
     poolDeposit: '500000000',
   });
@@ -121,17 +122,12 @@ test('preserves swap datum bytes through sign request and transaction submission
       const transaction = Module.CML.Transaction.from_cbor_bytes(submittedTransactions[0]);
       return {
         witnessSetHex: transaction.witness_set().to_cbor_hex(),
-        scriptDataHash: transaction
-          .body()
-          .script_data_hash()
-          ?.to_hex(),
+        scriptDataHash: transaction.body().script_data_hash()?.to_hex(),
       };
     })
   ).toMatchObject({ scriptDataHash: expectedScriptDataHash });
   const signedWitnessSetHex = RustModule.WasmScope(Module =>
-    Module.CML.Transaction.from_cbor_bytes(submittedTransactions[0])
-      .witness_set()
-      .to_cbor_hex()
+    Module.CML.Transaction.from_cbor_bytes(submittedTransactions[0]).witness_set().to_cbor_hex()
   );
   expect(signedWitnessSetHex.endsWith('049f01ff')).toBe(true);
   expect(signRequest.networkSettingSnapshot.KeyDeposit).toEqual(new BigNumber('2000000'));

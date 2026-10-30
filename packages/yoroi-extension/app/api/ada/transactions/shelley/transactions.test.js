@@ -67,15 +67,7 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
       outputCount: body.outputs().len(),
       outputCoinTotal: Array.from(
         { length: body.outputs().len() },
-        (_, index) =>
-          new BigNumber(
-            body
-              .outputs()
-              .get(index)
-              .amount()
-              .coin()
-              .toString()
-          )
+        (_, index) => new BigNumber(body.outputs().get(index).amount().coin().toString())
       )
         .reduce((total, amount) => total.plus(amount), new BigNumber(0))
         .toString(),
@@ -87,30 +79,19 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
         .toString(),
       vkeyWitnessCount: vkeyWitnesses?.len() ?? 0,
       plutusDatumCount: witnesses.plutus_datums()?.len() ?? 0,
-      plutusDatumHex: witnesses
-        .plutus_datums()
-        ?.get(0)
-        ?.to_cbor_hex(),
+      plutusDatumHex: witnesses.plutus_datums()?.get(0)?.to_cbor_hex(),
       witnessSetHex: witnesses.to_cbor_hex(),
       vkeyHashes:
         vkeyWitnesses == null
           ? []
-          : Array.from({ length: vkeyWitnesses.len() }, (_, index) =>
-              vkeyWitnesses
-                .get(index)
-                .vkey()
-                .hash()
-                .to_hex()
-            ),
+          : Array.from({ length: vkeyWitnesses.len() }, (_, index) => vkeyWitnesses.get(index).vkey().hash().to_hex()),
       hasNativeScripts: witnesses.native_scripts() != null,
       hasBootstrapWitnesses: witnesses.bootstrap_witnesses() != null,
     };
   });
 }
 
-function inspectCmlBody(
-  bytes: Uint8Array
-): {|
+function inspectCmlBody(bytes: Uint8Array): {|
   auxiliaryDataHash: ?string,
   fee: string,
   inputCount: number,
@@ -120,12 +101,7 @@ function inspectCmlBody(
   return RustModule.WasmScope(Module => {
     const body = Module.CML.TransactionBody.from_cbor_bytes(bytes);
     const outputs = body.outputs();
-    const outputCoins = Array.from({ length: outputs.len() }, (_, index) =>
-      outputs
-        .get(index)
-        .amount()
-        .coin()
-    );
+    const outputCoins = Array.from({ length: outputs.len() }, (_, index) => outputs.get(index).amount().coin());
     return {
       fee: body.fee().toString(),
       auxiliaryDataHash: body.auxiliary_data_hash()?.to_hex(),
@@ -141,10 +117,7 @@ function inspectCmlAssetAmounts(bytes: Uint8Array, assetId: string): Array<strin
   return RustModule.WasmScope(Module => {
     const outputs = Module.CML.TransactionBody.from_cbor_bytes(bytes).outputs();
     return Array.from({ length: outputs.len() }, (_, index) => {
-      const multiAsset = outputs
-        .get(index)
-        .amount()
-        .multi_asset();
+      const multiAsset = outputs.get(index).amount().multi_asset();
       const amount = multiAsset.get(
         Module.CML.ScriptHash.from_hex(asset.policyId),
         Module.CML.AssetName.from_raw_bytes(hexToBytes(asset.name))
@@ -1128,9 +1101,7 @@ describe('Create signed transactions', () => {
       undefined
     );
     const existingWitnessSet = RustModule.WasmScope(Module =>
-      Module.CML.Transaction.from_cbor_bytes(firstSignedTx)
-        .witness_set()
-        .to_cbor_bytes()
+      Module.CML.Transaction.from_cbor_bytes(firstSignedTx).witness_set().to_cbor_bytes()
     );
     const signedTx = signTransaction(
       senderUtxos,
@@ -1180,10 +1151,7 @@ describe('Create signed transactions', () => {
     const paymentKey = accountPrivateKey.derive(0).derive(0);
     const { bodyBytes, senderUtxo, requiredSigners, keyHash } = RustModule.WasmScope(Module => {
       const cml = Module.CML;
-      const paymentKeyHash = paymentKey
-        .to_public()
-        .to_raw_key()
-        .hash();
+      const paymentKeyHash = paymentKey.to_public().to_raw_key().hash();
       const credential = cml.Credential.new_pub_key(paymentKeyHash);
       const address = cml.EnterpriseAddress.new(network.NetworkId, credential).to_address();
       const rewardAddress = cml.RewardAddress.new(network.NetworkId, credential).to_address();
@@ -1226,9 +1194,7 @@ describe('Create signed transactions', () => {
       requiredSigners
     );
     const existingWitnessSet = RustModule.WasmScope(Module =>
-      Module.CML.Transaction.from_cbor_bytes(firstSignature)
-        .witness_set()
-        .to_cbor_bytes()
+      Module.CML.Transaction.from_cbor_bytes(firstSignature).witness_set().to_cbor_bytes()
     );
 
     const signedTransaction = signTransaction(
@@ -1254,10 +1220,7 @@ describe('Create signed transactions', () => {
         '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
       )
     );
-    const stakingKey = accountPrivateKey
-      .derive(2)
-      .derive(STAKING_KEY_INDEX)
-      .to_raw_key();
+    const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
 
     const addressedUtxos = genAddressedUtxos();
 
@@ -1288,10 +1251,7 @@ describe('Create signed transactions', () => {
       new BigNumber(0),
       getProtocolParams(),
       createCertificate(
-        stakingKey
-          .to_public()
-          .hash()
-          .to_hex(),
+        stakingKey.to_public().hash().to_hex(),
         false,
         '1b268f4cba3faa7e36d8a0cc4adca2096fb856119412ee7330f692b5',
         undefined
@@ -1350,14 +1310,8 @@ describe('Create signed transactions', () => {
         '408a1cb637d615c49e8696c30dd54883302a20a7b9b8a9d1c307d2ed3cd50758c9402acd000461a8fc0f25728666e6d3b86d031b8eea8d2f69b21e8aa6ba2b153e3ec212cc8a36ed9860579dfe1e3ef4d6de778c5dbdd981623b48727cd96247'
       )
     );
-    const stakingKey = accountPrivateKey
-      .derive(2)
-      .derive(STAKING_KEY_INDEX)
-      .to_raw_key();
-    const stakingKeyHash = stakingKey
-      .to_public()
-      .hash()
-      .to_hex();
+    const stakingKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
+    const stakingKeyHash = stakingKey.to_public().hash().to_hex();
 
     if (network.BaseConfig[0].ChainNetworkId == null) {
       throw new Error(`missing network id`);
@@ -1413,21 +1367,14 @@ describe('Create signed transactions', () => {
     expect(getStakingKeyHashesInTransactionBody(cmlReserializedBodyHex).has(stakingKeyHash)).toBe(true);
     expect(
       RustModule.WasmScope(Module =>
-        Module.CML.PrivateKey.from_extended_bytes(stakingKey.to_raw_bytes())
-          .to_public()
-          .hash()
-          .to_hex()
+        Module.CML.PrivateKey.from_extended_bytes(stakingKey.to_raw_bytes()).to_public().hash().to_hex()
       )
     ).toBe(stakingKeyHash);
     const expectedPaymentHashes = unsignedTxResponse.senderUtxos.map(utxo => {
       let derived = accountPrivateKey;
       const firstPathIndex = Bip44DerivationLevels.ACCOUNT.level - utxo.addressing.startLevel + 1;
       for (let i = firstPathIndex; i < utxo.addressing.path.length; i++) derived = derived.derive(utxo.addressing.path[i]);
-      return derived
-        .to_raw_key()
-        .to_public()
-        .hash()
-        .to_hex();
+      return derived.to_raw_key().to_public().hash().to_hex();
     });
     expect(unsignedInfo.certificatesHex).toEqual(expectedCertificateHex);
 
@@ -1618,10 +1565,7 @@ describe('Create sendAll unsigned TX from UTXO', () => {
     });
     const inputTokens = multiTokenFromRemote(utxo, network.NetworkId);
     expect(parsedTotalOutput.getDefaultEntry().amount.toString()).toBe(
-      inputTokens
-        .getDefaultEntry()
-        .amount.minus(transactionFee)
-        .toString()
+      inputTokens.getDefaultEntry().amount.minus(transactionFee).toString()
     );
     for (const inputToken of inputTokens.nonDefaultEntries()) {
       const parsedTokenAmount = parsedTotalOutput.get(inputToken.identifier);
@@ -1654,22 +1598,11 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       if (serializedAuxiliaryData == null) throw new Error('Missing serialized auxiliary data');
       return {
         bodyBytes: serializedSignRequest.body().to_cbor_bytes(),
-        scriptDataHashHex: serializedSignRequest
-          .body()
-          .script_data_hash()
-          ?.to_hex(),
+        scriptDataHashHex: serializedSignRequest.body().script_data_hash()?.to_hex(),
         metadataBytes: serializedAuxiliaryData.to_cbor_bytes(),
         vkeyWitnesses: serializedSignRequest.witness_set().vkeywitnesses(),
-        plutusDatumCount:
-          serializedSignRequest
-            .witness_set()
-            .plutus_datums()
-            ?.len() ?? 0,
-        plutusDatumHex: serializedSignRequest
-          .witness_set()
-          .plutus_datums()
-          ?.get(0)
-          ?.to_cbor_hex(),
+        plutusDatumCount: serializedSignRequest.witness_set().plutus_datums()?.len() ?? 0,
+        plutusDatumHex: serializedSignRequest.witness_set().plutus_datums()?.get(0)?.to_cbor_hex(),
         witnessSetHex: serializedSignRequest.witness_set().to_cbor_hex(),
       };
     });
@@ -1812,10 +1745,7 @@ describe('CML connector transaction construction', () => {
         validityStart: body.validity_interval_start()?.toString(),
         fee: body.fee().toString(),
         outputCount: outputs.len(),
-        inlineDatum: firstOutput
-          .datum()
-          ?.as_datum()
-          ?.to_cbor_hex(),
+        inlineDatum: firstOutput.datum()?.as_datum()?.to_cbor_hex(),
         referenceScript: firstOutput.script_ref()?.to_cbor_hex(),
         minted: (() => {
           const amount = mint?.get(Module.CML.ScriptHash.from_hex(scriptBytes.hash), Module.CML.AssetName.from_hex('74657374'));
@@ -1860,11 +1790,7 @@ describe('CML connector transaction construction', () => {
       return {
         bytes: auxiliaryData.to_cbor_bytes(),
         hash: auxiliaryDataHash.to_hex(),
-        nativeScriptCount:
-          transaction
-            .witness_set()
-            .native_scripts()
-            ?.len() ?? 0,
+        nativeScriptCount: transaction.witness_set().native_scripts()?.len() ?? 0,
       };
     });
     expect(serializedAuxiliaryData.bytes).toEqual(response.auxiliaryData);
@@ -1879,11 +1805,7 @@ describe('CML connector transaction construction', () => {
     const policyScript = RustModule.WasmScope(Module =>
       Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('33'.repeat(28))).to_cbor_hex()
     );
-    const policyId = RustModule.WasmScope(Module =>
-      Module.CML.NativeScript.from_cbor_hex(policyScript)
-        .hash()
-        .to_hex()
-    );
+    const policyId = RustModule.WasmScope(Module => Module.CML.NativeScript.from_cbor_hex(policyScript).hash().to_hex());
     const response = await newAdaUnsignedTxForConnector(
       [makeOutput(change.address, '2000000', '1', `${policyId}.74657374`)],
       [{ policyScript, assetName: '74657374', amount: '1' }],
@@ -1928,10 +1850,7 @@ describe('CML connector transaction construction', () => {
       return {
         quantity: quantity?.toString(),
         nativeScriptCount: nativeScripts?.len() ?? 0,
-        nativeScriptHash: nativeScripts
-          ?.get(0)
-          ?.hash()
-          .to_hex(),
+        nativeScriptHash: nativeScripts?.get(0)?.hash().to_hex(),
       };
     });
     expect(summary).toEqual({ quantity: '1', nativeScriptCount: 1, nativeScriptHash: policyId });
@@ -1998,11 +1917,7 @@ describe('CML connector transaction construction', () => {
           ),
           BigInt('0')
         ),
-        witnessCount:
-          tx
-            .witness_set()
-            .bootstrap_witnesses()
-            ?.len() ?? 0,
+        witnessCount: tx.witness_set().bootstrap_witnesses()?.len() ?? 0,
       };
     });
     expect(feeCheck.witnessCount).toEqual(2);

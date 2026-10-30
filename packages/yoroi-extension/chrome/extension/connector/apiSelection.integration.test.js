@@ -3,7 +3,45 @@
 import '../../../app/api/ada/lib/test-config.forTests';
 import { RustModule } from '../../../app/api/ada/lib/cardanoCrypto/rustLoader';
 
-let persistedTransactions = null;
+let persistedTransactions: any = null;
+
+const mockConnectorDependencies = () => {
+  jest.doMock('../../../app/api/ada/lib/storage/models/PublicDeriver/traits', () => {
+    const actual = jest.requireActual('../../../app/api/ada/lib/storage/models/PublicDeriver/traits');
+    return {
+      ...actual,
+      asGetAllUtxos: wallet => ({
+        getAllUtxoAddresses: async () => wallet.testAddresses ?? [],
+        getAllUtxos: async () => wallet.testUtxos,
+      }),
+    };
+  });
+  jest.doMock('../../../app/api/localStorage', () => {
+    const actual = jest.requireActual('../../../app/api/localStorage');
+    return {
+      ...actual,
+      loadSubmittedTransactions: async () => [],
+      persistSubmittedTransactions: async transactions => {
+        persistedTransactions = transactions;
+      },
+    };
+  });
+  jest.doMock('../../../app/api/ada', () => {
+    const actual = jest.requireActual('../../../app/api/ada');
+    return {
+      __esModule: true,
+      ...actual,
+      default: class {
+        utxosWithSubmittedTxs(utxos) {
+          return utxos;
+        }
+        addressedUtxosWithSubmittedTxs(utxos) {
+          return utxos;
+        }
+      },
+    };
+  });
+};
 
 describe('connectorGetUtxosCardano CML selection', () => {
   test('returns token-bearing UTxOs for a serialized multiasset value', async () => {
@@ -40,41 +78,7 @@ describe('connectorGetUtxosCardano CML selection', () => {
         UtxoTransactionOutput: { OutputIndex: 0 },
       },
     }));
-    jest.doMock('../../../app/api/ada/lib/storage/models/PublicDeriver/traits', () => {
-      const actual = jest.requireActual('../../../app/api/ada/lib/storage/models/PublicDeriver/traits');
-      return {
-        ...actual,
-        asGetAllUtxos: wallet => ({
-          getAllUtxoAddresses: async () => wallet.testAddresses ?? [],
-          getAllUtxos: async () => wallet.testUtxos,
-        }),
-      };
-    });
-    jest.doMock('../../../app/api/localStorage', () => {
-      const actual = jest.requireActual('../../../app/api/localStorage');
-      return {
-        ...actual,
-        loadSubmittedTransactions: async () => [],
-        persistSubmittedTransactions: async transactions => {
-          persistedTransactions = transactions;
-        },
-      };
-    });
-    jest.doMock('../../../app/api/ada', () => {
-      const actual = jest.requireActual('../../../app/api/ada');
-      return {
-        __esModule: true,
-        ...actual,
-        default: class {
-          utxosWithSubmittedTxs(utxos) {
-            return utxos;
-          }
-          addressedUtxosWithSubmittedTxs(utxos) {
-            return utxos;
-          }
-        },
-      };
-    });
+    mockConnectorDependencies();
     const { connectorGetUtxosCardano } = require('./api');
     const result = await connectorGetUtxosCardano(
       ({ publicDeriverId: 1, testUtxos: dbUtxos }: any),
@@ -105,7 +109,7 @@ describe('connectorGetUtxosCardano CML selection', () => {
       return cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true).to_cbor_hex();
     });
     const network = require('../../../app/api/ada/lib/storage/database/prepackaged/networks').networks.CardanoMainnet;
-    const publicDeriver = {
+    const publicDeriver: any = {
       publicDeriverId: 1,
       getParent: () => ({
         defaultToken: { NetworkId: network.NetworkId, Identifier: 'ada' },
@@ -113,6 +117,7 @@ describe('connectorGetUtxosCardano CML selection', () => {
       }),
     };
     persistedTransactions = null;
+    mockConnectorDependencies();
 
     await require('./api').connectorRecordSubmittedCardanoTransaction(publicDeriver, sourceTxHex, []);
 
