@@ -79,6 +79,11 @@ function inspectCmlTransaction(bytes: Uint8Array): any {
         .toString(),
       vkeyWitnessCount: vkeyWitnesses?.len() ?? 0,
       plutusDatumCount: witnesses.plutus_datums()?.len() ?? 0,
+      plutusDatumHex: witnesses
+        .plutus_datums()
+        ?.get(0)
+        ?.to_cbor_hex(),
+      witnessSetHex: witnesses.to_cbor_hex(),
       vkeyHashes:
         vkeyWitnesses == null
           ? []
@@ -1431,23 +1436,41 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       metadata,
       network.NetworkId
     );
-    const { fullTxHex, auxiliaryDataHex, witnessSetBytes } = RustModule.WasmScope(Module => {
+    const { fullTxHex, auxiliaryDataHex, scriptDataHashHex, sourceBodyBytes, witnessSetBytes } = RustModule.WasmScope(Module => {
       const cml = Module.CML;
       const body = cml.TransactionBody.from_cbor_bytes(response.txBuilder);
       const auxiliaryData = cml.AuxiliaryData.from_cbor_bytes(metadata);
-      const witnessBuilder = cml.TransactionWitnessSetBuilder.new();
-      witnessBuilder.add_plutus_datum(cml.PlutusData.from_cbor_hex('01'));
-      const witnessSet = witnessBuilder.build();
       const sourceAuxiliaryDataHex = auxiliaryData.to_cbor_hex();
+      const witnessSetBytes = Uint8Array.from([0xa1, 0x04, 0x9f, 0x01, 0xff]);
+      const sourceWitnessSet = cml.TransactionWitnessSet.from_cbor_bytes(witnessSetBytes);
+      const scriptDataHash = cml.hash_script_data(
+        cml.Redeemers.from_cbor_hex('80'),
+        cml.CostModels.from_cbor_hex('a0'),
+        sourceWitnessSet.plutus_datums()
+      );
+      body.set_script_data_hash(scriptDataHash);
+      const bodyBytes = body.to_cbor_bytes();
+      const auxiliaryDataBytes = auxiliaryData.to_cbor_bytes();
+      const fullTxBytes = new Uint8Array(1 + bodyBytes.length + witnessSetBytes.length + 1 + auxiliaryDataBytes.length);
+      let offset = 0;
+      fullTxBytes[offset++] = 0x84;
+      fullTxBytes.set(bodyBytes, offset);
+      offset += bodyBytes.length;
+      fullTxBytes.set(witnessSetBytes, offset);
+      offset += witnessSetBytes.length;
+      fullTxBytes[offset++] = 0xf5;
+      fullTxBytes.set(auxiliaryDataBytes, offset);
       return {
-        fullTxHex: cml.Transaction.new(body, witnessSet, true, auxiliaryData).to_cbor_hex(),
+        fullTxHex: bytesToHex(fullTxBytes),
         auxiliaryDataHex: sourceAuxiliaryDataHex,
-        witnessSetBytes: witnessSet.to_cbor_bytes(),
+        scriptDataHashHex: scriptDataHash.to_hex(),
+        sourceBodyBytes: bodyBytes,
+        witnessSetBytes,
       };
     });
 
     const extracted = extractSwapCmlTransaction(fullTxHex);
-    expect(Array.from(extracted.bodyBytes)).toEqual(Array.from(response.txBuilder));
+    expect(Array.from(extracted.bodyBytes)).toEqual(Array.from(sourceBodyBytes));
     expect(extracted.inputRefs).toEqual([{ txHash: utxo.tx_hash, index: utxo.tx_index }]);
     expect(bytesToHex(extracted.metadataBytes)).toEqual(auxiliaryDataHex);
     expect(Array.from(extracted.witnessSetBytes)).toEqual(Array.from(witnessSetBytes));
@@ -1483,8 +1506,8 @@ describe('Create sendAll unsigned TX from UTXO', () => {
     });
     signRequest.setMetadata(extracted.metadataBytes);
     expect(signRequest.metadata).toEqual(extracted.metadataBytes);
-    expect(Array.from(signRequest.self())).toEqual(Array.from(response.txBuilder));
-    expect(signRequest.isEqual(response.txBuilder)).toBe(true);
+    expect(Array.from(signRequest.self())).toEqual(Array.from(extracted.bodyBytes));
+    expect(signRequest.isEqual(extracted.bodyBytes)).toBe(true);
     const serializedSignRequestHex = signRequest.serializedUnsignedTxHex();
     const signRequestSummary = RustModule.WasmScope(Module => {
       const serializedSignRequest = Module.CML.Transaction.from_cbor_hex(serializedSignRequestHex);
@@ -1492,15 +1515,29 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       if (serializedAuxiliaryData == null) throw new Error('Missing serialized auxiliary data');
       return {
         bodyBytes: serializedSignRequest.body().to_cbor_bytes(),
+        scriptDataHashHex: serializedSignRequest.body().script_data_hash()?.to_hex(),
         metadataBytes: serializedAuxiliaryData.to_cbor_bytes(),
         vkeyWitnesses: serializedSignRequest.witness_set().vkeywitnesses(),
-        plutusDatumCount: serializedSignRequest.witness_set().plutus_datums()?.len() ?? 0,
+        plutusDatumCount:
+          serializedSignRequest
+            .witness_set()
+            .plutus_datums()
+            ?.len() ?? 0,
+        plutusDatumHex: serializedSignRequest
+          .witness_set()
+          .plutus_datums()
+          ?.get(0)
+          ?.to_cbor_hex(),
+        witnessSetHex: serializedSignRequest.witness_set().to_cbor_hex(),
       };
     });
-    expect(Array.from(signRequestSummary.bodyBytes)).toEqual(Array.from(response.txBuilder));
+    expect(Array.from(signRequestSummary.bodyBytes)).toEqual(Array.from(extracted.bodyBytes));
+    expect(signRequestSummary.scriptDataHashHex).toBe(scriptDataHashHex);
     expect(bytesToHex(signRequestSummary.metadataBytes)).toEqual(auxiliaryDataHex);
     expect(signRequestSummary.vkeyWitnesses == null).toBe(true);
     expect(signRequestSummary.plutusDatumCount).toBe(1);
+    expect(signRequestSummary.plutusDatumHex).toBe('01');
+    expect(signRequestSummary.witnessSetHex).toContain('049f01ff');
 
     const privateKeyBytes = RustModule.WasmScope(Module => {
       const key = Module.CML.Bip32PrivateKey.from_raw_bytes(
@@ -1520,7 +1557,11 @@ describe('Create sendAll unsigned TX from UTXO', () => {
       [],
       extracted.witnessSetBytes
     );
-    expect(inspectCmlTransaction(signedTransaction).plutusDatumCount).toBe(1);
+    expect(inspectCmlTransaction(signedTransaction)).toMatchObject({
+      plutusDatumCount: 1,
+      plutusDatumHex: '01',
+      witnessSetHex: expect.stringContaining('049f01ff'),
+    });
   });
 
   it('Should fail due to insufficient funds (no inputs)', () => {

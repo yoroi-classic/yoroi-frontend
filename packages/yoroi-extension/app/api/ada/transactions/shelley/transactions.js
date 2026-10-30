@@ -1232,10 +1232,21 @@ function signCmlTransaction(
     const cml = Module.CML;
     const body = cml.TransactionBody.from_cbor_bytes(bodyBytes);
     const txHash = cml.hash_transaction(body);
-    const witnessBuilder = cml.TransactionWitnessSetBuilder.new();
-    if (existingWitnessSet != null) {
-      witnessBuilder.add_existing(cml.TransactionWitnessSet.from_cbor_bytes(existingWitnessSet));
-    }
+    const witnesses =
+      existingWitnessSet == null
+        ? cml.TransactionWitnessSet.new()
+        : cml.TransactionWitnessSet.from_cbor_bytes(existingWitnessSet);
+    const addVkeyWitness = witness => {
+      const vkeyWitnesses = witnesses.vkeywitnesses() ?? cml.VkeywitnessList.new();
+      vkeyWitnesses.add(witness);
+      witnesses.set_vkeywitnesses(vkeyWitnesses);
+    };
+    const addBootstrapWitness = witness => {
+      const bootstrapWitnesses =
+        witnesses.bootstrap_witnesses() ?? cml.BootstrapWitnessList.new();
+      bootstrapWitnesses.add(witness);
+      witnesses.set_bootstrap_witnesses(bootstrapWitnesses);
+    };
     const cmlSigningKey = cml.Bip32PrivateKey.from_raw_bytes(signingKeyBytes);
     for (const item of uniqueAddressings) {
       const lastLevelSpecified = item.addressing.startLevel + item.addressing.path.length - 1;
@@ -1252,8 +1263,8 @@ function signCmlTransaction(
       }
       const cmlAddress = parseCmlAddress(cml, item.address);
       const byronAddress = cml.ByronAddress.from_address(cmlAddress);
-      if (byronAddress == null) witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, derived.to_raw_key()));
-      else witnessBuilder.add_bootstrap(cml.make_icarus_bootstrap_witness(txHash, byronAddress, derived));
+      if (byronAddress == null) addVkeyWitness(cml.make_vkey_witness(txHash, derived.to_raw_key()));
+      else addBootstrapWitness(cml.make_icarus_bootstrap_witness(txHash, byronAddress, derived));
     }
 
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
@@ -1261,10 +1272,9 @@ function signCmlTransaction(
       const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey);
       const stakingKeyHash = cmlStakingKey.to_public().hash().to_hex();
       if (stakingHashes.has(stakingKeyHash)) {
-        witnessBuilder.add_vkey(cml.make_vkey_witness(txHash, cmlStakingKey));
+        addVkeyWitness(cml.make_vkey_witness(txHash, cmlStakingKey));
       }
     }
-    const witnesses = witnessBuilder.build();
     const cmlMetadata = metadata == null ? undefined : cml.AuxiliaryData.from_cbor_bytes(metadata);
     return cml.Transaction.new(body, witnesses, true, cmlMetadata).to_cbor_bytes();
   });
