@@ -122,7 +122,7 @@ describe('connectorGetUtxosCardano CML selection', () => {
     await require('./api').connectorRecordSubmittedCardanoTransaction(publicDeriver, sourceTxHex, []);
 
     expect(persistedTransactions).toHaveLength(1);
-    expect(persistedTransactions[0].isDrepDelegation).toBe(true);
+    expect(((persistedTransactions: any)[0]: any).isDrepDelegation).toBe(true);
   });
 
   test('serializes connector UTxOs through the CML bridge with legacy-compatible CBOR', async () => {
