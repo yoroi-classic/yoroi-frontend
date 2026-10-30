@@ -203,11 +203,16 @@ test('parses CML DRep voting procedures for Ledger signing', () => {
   );
   const body = cml.TransactionBody.new(cml.TransactionInputList.new(), outputs, BigInt('170000'));
   body.set_voting_procedures(votingProcedures);
+  const mintAssets = cml.MapAssetNameToNonZeroInt64.new();
+  mintAssets.insert(cml.AssetName.from_raw_bytes(hexToBytes('aabb')), BigInt('4'));
+  const mint = cml.Mint.new();
+  mint.insert_assets(cml.ScriptHash.from_hex('44'.repeat(28)), mintAssets);
+  body.set_mint(mint);
   const certificate = cml.Certificate.new_reg_drep_cert(
     cml.Credential.new_pub_key(keyHash),
     // eslint-disable-next-line no-undef
     BigInt('500000000'),
-    anchor
+    cml.Anchor.from_cbor_hex(`827368747470733a2f2f6578616d706c652e636f6d5820${'33'.repeat(32)}`)
   );
   const certificates = cml.CertificateList.new();
   certificates.add(certificate);
@@ -243,6 +248,8 @@ test('parses CML DRep voting procedures for Ledger signing', () => {
   if (transactionCertificates == null || transactionCertificates[0] == null)
     throw new Error('Missing Ledger certificate fixture');
   expect(transactionCertificates[0].type).toBe(CertificateType.DREP_REGISTRATION);
+  expect(transactionCertificates[0].params.anchor).toEqual({ url: 'https://example.com', hashHex: '33'.repeat(32) });
+  expect(request.tx.mint).toEqual([{ policyIdHex: '44'.repeat(28), tokens: [{ assetNameHex: 'aabb', amount: '4' }] }]);
 });
 
 test('Ledger address parameters preserve script stake credentials with CML', () => {
@@ -250,7 +257,9 @@ test('Ledger address parameters preserve script stake credentials with CML', () 
     const cml = Module.CML;
     const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
     const stake = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-    return cml.BaseAddress.new(0, payment, stake).to_address().to_hex();
+    return cml.BaseAddress.new(0, payment, stake)
+      .to_address()
+      .to_hex();
   });
   expect(
     toLedgerAddressParameters({
@@ -394,7 +403,12 @@ test('Create Ledger transaction', async () => {
       )
     );
     const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-    const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_raw_key().to_public().hash());
+    const stakeCredential = cml.Credential.new_pub_key(
+      stakingKey
+        .to_raw_key()
+        .to_public()
+        .hash()
+    );
     const certificates = cml.CertificateList.new();
     certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
     const body = cml.TransactionBody.new(inputs, outputs, BigInt('2000'));
@@ -580,16 +594,33 @@ test('Create Ledger transaction', async () => {
     return {
       bodyHex: body.to_cbor_hex(),
       txId: cml.hash_transaction(body).to_hex(),
-      vkeyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
+      vkeyHashes: Array.from({ length: vkeys.len() }, (_, index) =>
+        vkeys
+          .get(index)
+          .vkey()
+          .hash()
+          .to_hex()
+      ),
       finalVkeySignatureHex: vkeys
         .get(vkeys.len() - 1)
         .ed25519_signature()
         .to_hex(),
       bootstrapCount: bootstraps.len(),
-      bootstrapPublicKeyHex: bytesToHex(bootstraps.get(0).public_key().to_raw_bytes()),
-      bootstrapSignatureHex: bootstraps.get(0).signature().to_hex(),
+      bootstrapPublicKeyHex: bytesToHex(
+        bootstraps
+          .get(0)
+          .public_key()
+          .to_raw_bytes()
+      ),
+      bootstrapSignatureHex: bootstraps
+        .get(0)
+        .signature()
+        .to_hex(),
       bootstrapChainCodeHex: bytesToHex(bootstraps.get(0).chain_code()),
-      bootstrapAttributesHex: bootstraps.get(0).attributes().to_cbor_hex(),
+      bootstrapAttributesHex: bootstraps
+        .get(0)
+        .attributes()
+        .to_cbor_hex(),
       auxiliaryDataHex: auxiliaryData.to_cbor_hex(),
       auxiliaryDataHash: auxiliaryDataHash.to_hex(),
       expectedAuxiliaryDataHash: cml.hash_auxiliary_data(cml.AuxiliaryData.from_cbor_bytes(metadata)).to_hex(),
@@ -599,7 +630,11 @@ test('Create Ledger transaction', async () => {
   expect(signedResult.txId).toEqual(signedSummary.txId);
   expect(signedSummary.vkeyHashes).toHaveLength(2);
   expect(signedSummary.vkeyHashes[0]).toEqual(
-    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
+    RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1))
+        .hash()
+        .to_hex()
+    )
   );
   expect(signedSummary.finalVkeySignatureHex).toEqual(
     'dc273ee8929c240f95b27b29b53043eb31dc1a5d8c1ba4a44b678bc97bb84db34c05144b50df954e1ac73dec1d33df06e4d95c3c7874458e7fea873c90614207'
@@ -621,7 +656,10 @@ test('Create Ledger transaction', async () => {
     return {
       publicKeyHex: bytesToHex(bootstrapKey.to_raw_key().to_raw_bytes()),
       chainCodeHex: bytesToHex(bootstrapKey.chaincode()),
-      attributesHex: cml.ByronAddress.from_base58(senderUtxos[0].receiver).content().addr_attributes().to_cbor_hex(),
+      attributesHex: cml.ByronAddress.from_base58(senderUtxos[0].receiver)
+        .content()
+        .addr_attributes()
+        .to_cbor_hex(),
     };
   });
   expect(signedSummary.bootstrapPublicKeyHex).toEqual(expectedBootstrap.publicKeyHex);

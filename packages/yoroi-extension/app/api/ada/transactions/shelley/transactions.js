@@ -704,7 +704,7 @@ export async function maxSendableADA(request: {|
       token: $ReadOnly<TokenRow>,
       shouldSendAll?: boolean,
       amount?: string,
-    |}>,
+    |}>
   >,
 |}): Promise<BigNumber> {
   try {
@@ -787,7 +787,10 @@ export async function maxSendableADA(request: {|
       for (const input of addressedUtxo) {
         const cmlValue = cmlValueFromRemoteFormat(cml, input);
         try {
-          txBuilder.get_explicit_input().checked_add(txBuilder.get_implicit_input()).checked_add(cmlValue);
+          txBuilder
+            .get_explicit_input()
+            .checked_add(txBuilder.get_implicit_input())
+            .checked_add(cmlValue);
         } catch (_error) {
           throw new AssetOverflowError();
         }
@@ -1074,7 +1077,10 @@ async function newAdaUnsignedTxFromUtxoForConnector(
     }
 
     const body = signedBuilder.body();
-    const witnessSetBytes = signedBuilder.witness_set().build().to_cbor_bytes();
+    const witnessSetBytes = signedBuilder
+      .witness_set()
+      .build()
+      .to_cbor_bytes();
     const selectedUtxos = [];
     const inputs = body.inputs();
     for (let index = 0; index < inputs.len(); index++) {
@@ -1198,7 +1204,9 @@ export function signTransaction(
 
 export function transactionWitnessSetHex(signedTransactionBytes: Uint8Array): string {
   return RustModule.WasmScope(Module =>
-    Module.CML.Transaction.from_cbor_bytes(signedTransactionBytes).witness_set().to_cbor_hex()
+    Module.CML.Transaction.from_cbor_bytes(signedTransactionBytes)
+      .witness_set()
+      .to_cbor_hex()
   );
 }
 
@@ -1236,15 +1244,53 @@ function signCmlTransaction(
       existingWitnessSet == null
         ? cml.TransactionWitnessSet.new()
         : cml.TransactionWitnessSet.from_cbor_bytes(existingWitnessSet);
+    const seenVkeyHashes = new Set();
+    const existingVkeys = witnesses.vkeywitnesses();
+    if (existingVkeys != null) {
+      for (let index = 0; index < existingVkeys.len(); index++) {
+        seenVkeyHashes.add(
+          existingVkeys
+            .get(index)
+            .vkey()
+            .hash()
+            .to_hex()
+        );
+      }
+    }
+    const seenBootstrapHashes = new Set();
+    const existingBootstraps = witnesses.bootstrap_witnesses();
+    if (existingBootstraps != null) {
+      for (let index = 0; index < existingBootstraps.len(); index++) {
+        seenBootstrapHashes.add(
+          existingBootstraps
+            .get(index)
+            .public_key()
+            .hash()
+            .to_hex()
+        );
+      }
+    }
     const addVkeyWitness = witness => {
+      const keyHash = witness
+        .vkey()
+        .hash()
+        .to_hex();
+      if (seenVkeyHashes.has(keyHash)) return;
       const vkeyWitnesses = witnesses.vkeywitnesses() ?? cml.VkeywitnessList.new();
       vkeyWitnesses.add(witness);
       witnesses.set_vkeywitnesses(vkeyWitnesses);
+      seenVkeyHashes.add(keyHash);
     };
     const addBootstrapWitness = witness => {
+      const keyHash = witness
+        .public_key()
+        .hash()
+        .to_hex();
+      if (seenBootstrapHashes.has(keyHash)) return;
       const bootstrapWitnesses = witnesses.bootstrap_witnesses() ?? cml.BootstrapWitnessList.new();
       bootstrapWitnesses.add(witness);
       witnesses.set_bootstrap_witnesses(bootstrapWitnesses);
+      seenBootstrapHashes.add(keyHash);
     };
     const cmlSigningKey = cml.Bip32PrivateKey.from_raw_bytes(signingKeyBytes);
     for (const item of uniqueAddressings) {
@@ -1269,7 +1315,10 @@ function signCmlTransaction(
     const stakingHashes = getStakingKeyHashesInTransactionBody(body.to_cbor_hex());
     if (stakingHashes.size > 0 && stakingKey != null) {
       const cmlStakingKey = cml.PrivateKey.from_extended_bytes(stakingKey);
-      const stakingKeyHash = cmlStakingKey.to_public().hash().to_hex();
+      const stakingKeyHash = cmlStakingKey
+        .to_public()
+        .hash()
+        .to_hex();
       if (stakingHashes.has(stakingKeyHash)) {
         addVkeyWitness(cml.make_vkey_witness(txHash, cmlStakingKey));
       }

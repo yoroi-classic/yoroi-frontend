@@ -87,7 +87,9 @@ test('address parameters preserve script stake credentials with CML', () => {
     const cml = Module.CML;
     const payment = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('11'.repeat(28)));
     const stake = cml.Credential.new_script(cml.ScriptHash.from_hex('22'.repeat(28)));
-    return cml.BaseAddress.new(0, payment, stake).to_address().to_hex();
+    return cml.BaseAddress.new(0, payment, stake)
+      .to_address()
+      .to_hex();
   });
   expect(toTrezorAddressParameters(addressHex, [1, 2])).toEqual({
     addressType: CardanoAddressType.BASE,
@@ -145,8 +147,19 @@ test('Assemble Trezor witnesses and metadata with CML', () => {
       throw new Error('Missing signed transaction witnesses or metadata');
     return {
       txId: cml.hash_transaction(body).to_hex(),
-      keyHashes: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).vkey().hash().to_hex()),
-      signatures: Array.from({ length: vkeys.len() }, (_, index) => vkeys.get(index).ed25519_signature().to_hex()),
+      keyHashes: Array.from({ length: vkeys.len() }, (_, index) =>
+        vkeys
+          .get(index)
+          .vkey()
+          .hash()
+          .to_hex()
+      ),
+      signatures: Array.from({ length: vkeys.len() }, (_, index) =>
+        vkeys
+          .get(index)
+          .ed25519_signature()
+          .to_hex()
+      ),
       metadataHex: auxiliaryData.to_cbor_hex(),
       metadataHash: auxiliaryDataHash.to_hex(),
       expectedMetadataHex: cml.AuxiliaryData.from_cbor_bytes(metadata).to_cbor_hex(),
@@ -157,10 +170,18 @@ test('Assemble Trezor witnesses and metadata with CML', () => {
   expect(signed.txId).toEqual(summary.txId);
   expect(summary.keyHashes).toHaveLength(2);
   expect(summary.keyHashes[0]).toEqual(
-    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1)).hash().to_hex())
+    RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(1))
+        .hash()
+        .to_hex()
+    )
   );
   expect(summary.keyHashes[1]).toEqual(
-    RustModule.WasmScope(Module => Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(2)).hash().to_hex())
+    RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_bytes(new Uint8Array(32).fill(2))
+        .hash()
+        .to_hex()
+    )
   );
   expect(summary.signatures).toEqual([existingSignatureHex, incomingSignatureHex]);
   expect(summary.metadataHex).toEqual(summary.expectedMetadataHex);
@@ -231,6 +252,10 @@ test('Create Trezor transaction', async () => {
     }
     const multiAsset = cml.MultiAsset.new();
     multiAsset.set(cml.ScriptHash.from_hex('11'.repeat(28)), cml.AssetName.from_raw_bytes(hexToBytes('aabb')), BigInt('4'));
+    const mintAssets = cml.MapAssetNameToNonZeroInt64.new();
+    mintAssets.insert(cml.AssetName.from_raw_bytes(hexToBytes('cafe')), BigInt('-7'));
+    const mint = cml.Mint.new();
+    mint.insert_assets(cml.ScriptHash.from_hex('22'.repeat(28)), mintAssets);
     const outputs = cml.TransactionOutputList.new();
     outputs.add(
       cml.TransactionOutput.new(
@@ -246,7 +271,12 @@ test('Create Trezor transaction', async () => {
       )
     );
     const stakingKey = accountKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(0);
-    const stakeCredential = cml.Credential.new_pub_key(stakingKey.to_raw_key().to_public().hash());
+    const stakeCredential = cml.Credential.new_pub_key(
+      stakingKey
+        .to_raw_key()
+        .to_public()
+        .hash()
+    );
     const certificates = cml.CertificateList.new();
     certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
     certificates.add(
@@ -255,6 +285,7 @@ test('Create Trezor transaction', async () => {
     const body = cml.TransactionBody.new(inputs, outputs, BigInt('2000'));
     body.set_certs(certificates);
     body.set_ttl(BigInt('500'));
+    body.set_mint(mint);
     return body.to_cbor_hex();
   });
 
@@ -322,5 +353,6 @@ test('Create Trezor transaction', async () => {
     ],
     signingMode: 0,
     tagCborSets: true,
+    mint: [{ policyId: '22'.repeat(28), tokenAmounts: [{ assetNameBytes: 'cafe', mintAmount: '-7' }] }],
   });
 });

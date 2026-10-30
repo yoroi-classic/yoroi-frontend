@@ -580,7 +580,10 @@ export async function connectorSignCardanoTxs(
           const addressing = ownAddressMap.get(receiver);
           if (addressing != null) {
             outputs.push({
-              amount: output.amount().coin().toString(),
+              amount: output
+                .amount()
+                .coin()
+                .toString(),
               assets: parseTokenList(output.amount().multi_asset()),
               receiver,
               tx_hash: txHash,
@@ -627,6 +630,14 @@ export function resolveTxOrTxBody(
     }
   }
   return { txBody, witnessSet, auxiliaryData, rawTxBody };
+}
+
+export function getTxInputUtxoIds(txBody: any): Set<string> {
+  const collateralInputs = txBody.collateral_inputs();
+  return iterateLenGet(txBody.inputs())
+    .join(collateralInputs == null ? [] : iterateLenGet(collateralInputs))
+    .map(input => `${input.transaction_id().to_hex()}${String(input.index())}`)
+    .toSet();
 }
 
 async function __connectorSignCardanoTx(
@@ -740,11 +751,7 @@ async function __connectorSignCardanoTx(
   const adaApi = new AdaApi();
   const addressedUtxos = await adaApi.addressedUtxosWithSubmittedTxs(asAddressedUtxoCardano(utxos), publicDeriver, submittedTxs);
 
-  const collateralInputs = txBody.collateral_inputs();
-  const utxoIdSet: Set<string> = iterateLenGet(txBody.inputs())
-    .join(collateralInputs == null ? [] : iterateLenGet(collateralInputs))
-    .map(input => `${input.transaction_id().to_hex()}${String(input.index())}`)
-    .toSet();
+  const utxoIdSet = getTxInputUtxoIds(txBody);
 
   const usedUtxos = [...addressedUtxos, ...chainedUtxos].filter(utxo => utxoIdSet.has(utxo.utxo_id));
 
@@ -873,7 +880,10 @@ export async function connectorRecordSubmittedCardanoTransaction(
       outputs: iterateLenGet(body.outputs())
         .map(output => ({
           address: output.address().to_hex(),
-          amount: output.amount().coin().toString(),
+          amount: output
+            .amount()
+            .coin()
+            .toString(),
           assets: parseTokenList(output.amount().multi_asset()),
         }))
         .toArray(),

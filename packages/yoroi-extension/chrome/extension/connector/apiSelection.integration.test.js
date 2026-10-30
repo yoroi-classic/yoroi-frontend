@@ -3,6 +3,8 @@
 import '../../../app/api/ada/lib/test-config.forTests';
 import { RustModule } from '../../../app/api/ada/lib/cardanoCrypto/rustLoader';
 
+let persistedTransactions = null;
+
 describe('connectorGetUtxosCardano CML selection', () => {
   test('returns token-bearing UTxOs for a serialized multiasset value', async () => {
     await RustModule.load();
@@ -42,12 +44,21 @@ describe('connectorGetUtxosCardano CML selection', () => {
       const actual = jest.requireActual('../../../app/api/ada/lib/storage/models/PublicDeriver/traits');
       return {
         ...actual,
-        asGetAllUtxos: wallet => ({ getAllUtxos: async () => wallet.testUtxos }),
+        asGetAllUtxos: wallet => ({
+          getAllUtxoAddresses: async () => wallet.testAddresses ?? [],
+          getAllUtxos: async () => wallet.testUtxos,
+        }),
       };
     });
     jest.doMock('../../../app/api/localStorage', () => {
       const actual = jest.requireActual('../../../app/api/localStorage');
-      return { ...actual, loadSubmittedTransactions: async () => [] };
+      return {
+        ...actual,
+        loadSubmittedTransactions: async () => [],
+        persistSubmittedTransactions: async transactions => {
+          persistedTransactions = transactions;
+        },
+      };
     });
     jest.doMock('../../../app/api/ada', () => {
       const actual = jest.requireActual('../../../app/api/ada');
@@ -56,6 +67,9 @@ describe('connectorGetUtxosCardano CML selection', () => {
         ...actual,
         default: class {
           utxosWithSubmittedTxs(utxos) {
+            return utxos;
+          }
+          addressedUtxosWithSubmittedTxs(utxos) {
             return utxos;
           }
         },
@@ -71,6 +85,39 @@ describe('connectorGetUtxosCardano CML selection', () => {
 
     expect(result).toHaveLength(2);
     expect(result.every(utxo => utxo.assets.some(asset => asset.assetId === tokenId))).toBe(true);
+  });
+
+  test('records submitted DRep delegation transactions with the delegation flag', async () => {
+    await RustModule.load();
+    const sourceTxHex = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const outputs = cml.TransactionOutputList.new();
+      outputs.add(
+        cml.TransactionOutput.new(cml.Address.from_hex(`61${'11'.repeat(28)}`), cml.Value.from_coin(BigInt('2000000')))
+      );
+      const stakeCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('22'.repeat(28)));
+      const certificates = cml.CertificateList.new();
+      certificates.add(
+        cml.Certificate.new_vote_deleg_cert(stakeCredential, cml.DRep.new_key(cml.Ed25519KeyHash.from_hex('33'.repeat(28))))
+      );
+      const body = cml.TransactionBody.new(cml.TransactionInputList.new(), outputs, BigInt('170000'));
+      body.set_certs(certificates);
+      return cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true).to_cbor_hex();
+    });
+    const network = require('../../../app/api/ada/lib/storage/database/prepackaged/networks').networks.CardanoMainnet;
+    const publicDeriver = {
+      publicDeriverId: 1,
+      getParent: () => ({
+        defaultToken: { NetworkId: network.NetworkId, Identifier: 'ada' },
+        getNetworkInfo: () => network,
+      }),
+    };
+    persistedTransactions = null;
+
+    await require('./api').connectorRecordSubmittedCardanoTransaction(publicDeriver, sourceTxHex, []);
+
+    expect(persistedTransactions).toHaveLength(1);
+    expect(persistedTransactions[0].isDrepDelegation).toBe(true);
   });
 
   test('serializes connector UTxOs through the CML bridge with legacy-compatible CBOR', async () => {
@@ -144,6 +191,40 @@ describe('connectorGetUtxosCardano CML selection', () => {
       return Array.from(getCertificatesRequiredSignKeys(body));
     });
     expect(hashes).toEqual([keyHashHex, drepHashHex]);
+  });
+
+  test('extracts DRep vote key hashes required to sign a transaction', async () => {
+    await RustModule.load();
+    const drepHashHex = 'aa'.repeat(28);
+    const hashes = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const voter = cml.Voter.new_d_rep_key_hash(cml.Ed25519KeyHash.from_hex(drepHashHex));
+      const actionId = cml.GovActionId.new(cml.TransactionHash.from_hex('bb'.repeat(32)), BigInt('0'));
+      const proceduresByAction = cml.MapGovActionIdToVotingProcedure.new();
+      proceduresByAction.insert(actionId, cml.VotingProcedure.new(cml.Vote.Yes, undefined));
+      const procedures = cml.VotingProcedures.new();
+      procedures.insert(voter, proceduresByAction);
+      const body = cml.TransactionBody.new(cml.TransactionInputList.new(), cml.TransactionOutputList.new(), BigInt('0'));
+      body.set_voting_procedures(procedures);
+      const { getCertificatesRequiredSignKeys } = require('./api');
+      return Array.from(getCertificatesRequiredSignKeys(body));
+    });
+    expect(hashes).toEqual([drepHashHex]);
+  });
+
+  test('includes collateral inputs when resolving wallet UTxOs to sign', async () => {
+    await RustModule.load();
+    const inputIds = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const regular = cml.TransactionInputList.new();
+      regular.add(cml.TransactionInput.new(cml.TransactionHash.from_hex('11'.repeat(32)), BigInt('0')));
+      const collateral = cml.TransactionInputList.new();
+      collateral.add(cml.TransactionInput.new(cml.TransactionHash.from_hex('22'.repeat(32)), BigInt('1')));
+      const body = cml.TransactionBody.new(regular, cml.TransactionOutputList.new(), BigInt('0'));
+      body.set_collateral_inputs(collateral);
+      return Array.from(require('./api').getTxInputUtxoIds(body));
+    });
+    expect(inputIds).toEqual([`${'11'.repeat(32)}0`, `${'22'.repeat(32)}1`]);
   });
 
   test('extracts required key hashes from CML native scripts', async () => {
