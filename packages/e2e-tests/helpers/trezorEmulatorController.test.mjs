@@ -84,6 +84,18 @@ test('queues the initial event and correlates a successful response by id', asyn
   controller.closeWsConnection();
 });
 
+test('starts the current user-env bridge by default', async () => {
+  const controller = makeController();
+  const socket = await connect(controller);
+
+  const response = controller.bridgeStart();
+  assert.deepEqual(socket.sent, [{ type: 'bridge-start', id: 0 }]);
+  socket.message({ id: 0, success: true });
+  assert.deepEqual(await response, { id: 0, success: true });
+
+  controller.closeWsConnection();
+});
+
 test('ignores background and wrong-id messages until the matching response arrives', async () => {
   const controller = makeController();
   const socket = await connect(controller);

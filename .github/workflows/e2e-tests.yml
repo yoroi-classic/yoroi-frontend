@@ -313,9 +313,8 @@ jobs:
           sudo docker run \
             -p 9001:9001 \
             -p 9002:9002 \
-            -p 21326:21326 \
-            -p 127.0.0.1:21325:21326 \
-            -d ghcr.io/trezor/trezor-user-env:4c194889610c3f21f1da3799e7ddb82004fd4e91
+            -p 21328:21328 \
+            -d ghcr.io/trezor/trezor-user-env:a3579d8e2f76d22115050b4d4146d0f66dc5fbbd
 
       - uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2.1.2
         id: setup-chrome
