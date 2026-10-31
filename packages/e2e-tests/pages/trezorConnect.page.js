@@ -24,8 +24,8 @@ class TrezorConnect extends BasePage {
     method: 'css',
   };
   exportTrezorButtonLocator = {
-    locator: '[data-testid="@connect-device-prompt"] button, .confirm',
-    method: 'css',
+    locator: '//button[normalize-space(.)="Connect Trezor"]',
+    method: 'xpath',
   };
   exportAddressTitleTextLocator = {
     locator: '#container > div > div:nth-child(1) > h3',
