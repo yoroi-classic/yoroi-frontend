@@ -1142,7 +1142,7 @@ describe('Create signed transactions', () => {
     );
   });
 
-  it('does not duplicate vkey witnesses from wallet and stake signing', () => {
+  it('does not duplicate vkey witnesses from wallet and stake signing across delegation certificates', () => {
     const accountPrivateKey = RustModule.CML.Bip32PrivateKey.from_raw_bytes(
       hexToBytes(
         '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
@@ -1163,6 +1163,8 @@ describe('Create signed transactions', () => {
       const body = cml.TransactionBody.new(inputs, outputs, BigInt('1000'));
       const certificates = cml.CertificateList.new();
       certificates.add(cml.Certificate.new_stake_registration(credential));
+      certificates.add(cml.Certificate.new_stake_delegation(credential, cml.Ed25519KeyHash.from_hex('22'.repeat(28))));
+      certificates.add(cml.Certificate.new_vote_deleg_cert(credential, cml.DRep.new_always_abstain()));
       body.set_certs(certificates);
       return {
         bodyBytes: body.to_cbor_bytes(),
