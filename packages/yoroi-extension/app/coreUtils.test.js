@@ -10,12 +10,18 @@ import {
   sanitizeForLog,
   timeCached,
   utfToBytes,
+  urlResolveForIpfsAndCorsproxy,
   zipGenerators,
 } from './coreUtils';
 import type { LenGet, LenGetMap } from './coreUtils';
 import { RustModule } from './api/ada/lib/cardanoCrypto/rustLoader';
 
 describe('utils', () => {
+  test('resolve NFT image URLs', () => {
+    expect(urlResolveForIpfsAndCorsproxy('ipfs://QmTestImage')).toEqual('https://ipfs.io/ipfs/QmTestImage');
+    expect(urlResolveForIpfsAndCorsproxy(null)).toBeNull();
+  });
+
   test('encoders', () => {
     expect(hexToBytes('cafebabe')).toEqual(Buffer.from('cafebabe', 'hex'));
     expect(bytesToHex(Buffer.from('cafebabe', 'hex'))).toEqual('cafebabe');

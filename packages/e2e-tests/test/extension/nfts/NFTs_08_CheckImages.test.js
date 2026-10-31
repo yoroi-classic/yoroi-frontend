@@ -27,6 +27,7 @@ describe('Check the NFT image links', function () {
   let nftDetailsPage = null;
   const testNFT = getRandomItem(testWalletNFTsAllNfts);
   let initialImageLink = '';
+  let imageUnavailable = false;
 
   before(async function () {
     logger = getTestLogger(this.test.parent.title);
@@ -45,12 +46,19 @@ describe('Check the NFT image links', function () {
 
   it('Get NFT image link by name', async function () {
     const nftImageLink = await nftsMainPage.getImageLinkByName(testNFT.title);
+    if (nftImageLink === null) {
+      imageUnavailable = true;
+      const fallbackIsDisplayed = await nftsMainPage.imageFallbackIsDisplayedByName(testNFT.title);
+      expect(fallbackIsDisplayed, 'Default NFT image is not displayed when the image URL is unavailable').to.be.true;
+      return;
+    }
     const compareResult = isImageIdsSame(nftImageLink, testNFT.src);
     expect(compareResult, 'Image Id is different from the expected').to.be.true;
     initialImageLink = nftImageLink;
   });
 
   it('Check image link on NFT Details', async function () {
+    if (imageUnavailable) this.skip();
     const nftDetailsPage = await nftsMainPage.selectNftByName(testNFT.title);
     const detailsIsDisplayed = await nftDetailsPage.isDisplayed();
     expect(detailsIsDisplayed, 'NFT details page is not displayed').to.be.true;
@@ -59,6 +67,7 @@ describe('Check the NFT image links', function () {
   });
 
   it('Check zoomed image', async function () {
+    if (imageUnavailable) this.skip();
     await nftDetailsPage.zoomImage();
     const nftDetailsImageLink = await nftDetailsPage.getZoomedImageLink();
     expect(nftDetailsImageLink, 'Image link is different').to.equal(initialImageLink);

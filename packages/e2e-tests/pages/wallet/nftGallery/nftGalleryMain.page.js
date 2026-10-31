@@ -294,4 +294,21 @@ export default class NftGalleryTab extends WalletCommonBase {
     }
     throw new Error(`Suitable NFT with name "${nftName}" is not found`);
   }
+
+  /**
+   * Checking whether the default NFT image is displayed by name
+   * @param {string} nftName
+   * @returns {Promise<boolean>}
+   */
+  async imageFallbackIsDisplayedByName(nftName) {
+    const allNftComponents = await this._getAllNfts();
+    for (let index = 0; index < allNftComponents.length; index++) {
+      const receivedNftName = await this.getText(this.getNftNameLocator(index));
+      if (receivedNftName === nftName) {
+        const image = await this.findElement(this.getNftImageLocator(index));
+        return this.driver.executeScript(element => element.tagName !== 'IMG' && element.querySelector('svg') !== null, image);
+      }
+    }
+    throw new Error(`Suitable NFT with name "${nftName}" is not found`);
+  }
 }
