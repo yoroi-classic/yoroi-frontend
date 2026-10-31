@@ -77,7 +77,7 @@ export default (
       // so that the background service could access `chrome.system.display.width`
       'system.display',
     ],
-    host_permissions: ['*://connect.trezor.io/*', 'https://suite.trezor.io/*', ...(hostPermissions ?? [])],
+    host_permissions: ['*://connect.trezor.io/*', ...(hostPermissions ?? [])],
     externally_connectable: { matches: ['https://suite.trezor.io/*'] },
     content_scripts: [
       {
