@@ -70,6 +70,8 @@ describe('connectorGetUtxosCardano CML selection', () => {
     try {
       const result = await connectorSignCardanoTx(({ publicDeriverId: 1, testUtxos: [] }: any), 'test-password', {
         tx: transaction.to_cbor_hex(),
+        tabId: -1,
+        partialSign: false,
       });
       expect(result).toBe(cml.TransactionWitnessSet.from_cbor_bytes(expectedWitnessSet).to_cbor_hex());
     } finally {
