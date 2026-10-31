@@ -238,7 +238,6 @@
     "@babel/helpers": "7.16.0",
     "@fivebinaries/coin-selection": "github:yoroi-classic/coin-selection#860e908"
   },
-  "engineStrict": true,
   "engines": {
     "node": ">=22.22.2 <23",
     "npm": "10.9.7"
