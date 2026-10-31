@@ -5,6 +5,7 @@ import { TrezorEmulatorController } from '../../helpers/trezorEmulatorController
 import {
   convertExportResponse,
   getStakeBeck32KeyFromKeyHash,
+  logTrezorWalletCreationError,
   runAndPrepareTrezor,
   TrezorModels,
 } from '../../helpers/trezorHelper.js';
@@ -120,6 +121,9 @@ for (const model in TrezorModels) {
     });
 
     afterEach(async function () {
+      if (this.currentTest.isFailed() && this.currentTest.title === 'Wait the wallet is loaded') {
+        await logTrezorWalletCreationError(webdriver, logger);
+      }
       await customAfterEach(this, webdriver, logger);
     });
 
