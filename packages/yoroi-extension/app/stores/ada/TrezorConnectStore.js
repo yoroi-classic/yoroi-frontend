@@ -29,6 +29,30 @@ type TrezorConnectionResponse = {|
   trezorFeatures: ?TrezorFeatures,
 |};
 
+const isHexStringOfLength = (value: mixed, length: number): boolean =>
+  typeof value === 'string' && value.length === length && /^[0-9a-f]+$/i.test(value);
+
+const normalizeTrezorPublicKey = (payload: CardanoPublicKey): string => {
+  const chainCode = payload.node?.chain_code;
+
+  if (isHexStringOfLength(payload.publicKey, 128)) {
+    return payload.publicKey;
+  }
+
+  if (isHexStringOfLength(payload.publicKey, 64) && isHexStringOfLength(chainCode, 64)) {
+    return `${payload.publicKey}${chainCode}`;
+  }
+
+  if (isHexStringOfLength(payload.node?.public_key, 64) && isHexStringOfLength(chainCode, 64)) {
+    return `${payload.node.public_key}${chainCode}`;
+  }
+
+  throw new Error(
+    `Invalid extended public key received from Trezor device (public key: ${payload.publicKey?.length ?? 0} characters, ` +
+      `node public key: ${payload.node?.public_key?.length ?? 0} characters, chain code: ${chainCode?.length ?? 0} characters)`
+  );
+};
+
 export default class TrezorConnectStore extends Store<StoresMap> implements HWConnectStoreTypes<TrezorConnectionResponse> {
   // =================== VIEW RELATED =================== //
   /** the only observable which manages state change */
@@ -163,7 +187,7 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     const { trezorResp, trezorFeatures } = resp;
 
     return {
-      publicMasterKey: trezorResp.payload.publicKey,
+      publicMasterKey: normalizeTrezorPublicKey(trezorResp.payload),
       hwFeatures: {
         Vendor: trezorFeatures?.vendor ?? Config.wallets.hardwareWallet.trezorT.VENDOR,
         Model: trezorFeatures?.model ?? Config.wallets.hardwareWallet.trezorT.MODEL,

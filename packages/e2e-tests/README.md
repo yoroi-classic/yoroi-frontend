@@ -221,13 +221,12 @@ node helpers/walletBackendPreflight.mjs http://127.0.0.1:21000 mainnet
 #### Trezor Tests
 
 ```bash
-# Start Trezor emulator (requires Docker)
+# Start the Trezor emulator and Node Bridge (requires Docker)
 docker run -d \
-  -p 9001:9001 \
-  -p 9002:9002 \
-  -p 21326:21326 \
-  -p 127.0.0.1:21325:21326 \
-  ghcr.io/trezor/trezor-user-env:4c194889610c3f21f1da3799e7ddb82004fd4e91
+  -p 127.0.0.1:9001:9001 \
+  -p 127.0.0.1:9002:9002 \
+  -p 127.0.0.1:21328:21328 \
+  ghcr.io/trezor/trezor-user-env:a3579d8e2f76d22115050b4d4146d0f66dc5fbbd
 
 # Run Trezor tests
 npm run test:trezor

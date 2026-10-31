@@ -376,8 +376,8 @@ export class TrezorEmulatorController {
   bridgeStart(bridgeVersion) {
     const requestJson = {
       type: 'bridge-start',
-      version: bridgeVersion || `2.0.33${this._getAddition()}`,
     };
+    if (bridgeVersion) requestJson.version = bridgeVersion;
 
     return this._customPromise(requestJson, 'bridgeStart');
   }
