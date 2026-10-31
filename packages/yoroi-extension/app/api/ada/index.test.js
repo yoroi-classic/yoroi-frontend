@@ -15,7 +15,7 @@ import { legacyWalletChecksum } from '@yoroi-classic/cip4-js';
 import { asGetAllUtxos, asGetPublicKey } from './lib/storage/models/PublicDeriver/traits';
 import { cip8DataToSign } from './lib/cardanoCrypto/utils';
 import { hexToBytes } from '../../coreUtils';
-import { networks } from './lib/storage/database/prepackaged/networks';
+import { defaultAssets, networks } from './lib/storage/database/prepackaged/networks';
 import BigNumber from 'bignumber.js';
 import type { FilterUsedRequest, FilterUsedResponse } from './lib/state-fetch/types';
 
@@ -74,6 +74,71 @@ describe('app/api/ada/index', () => {
       Module.CML.PublicKey.from_bytes(hexToBytes(signedData.pubKey)).hash().to_hex()
     );
     expect(actualPublicKeyHash).toBe(expectedPaymentKeyHash);
+  });
+
+  test('carries connector mint witnesses into the sign request', async () => {
+    const { utxo } = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const paymentKeyHash = cml.Ed25519KeyHash.from_hex('11'.repeat(28));
+      const address = cml.EnterpriseAddress.new(
+        networks.CardanoMainnet.NetworkId,
+        cml.Credential.new_pub_key(paymentKeyHash)
+      ).to_address();
+      const txHash = '05ec4a4a7f4645fa66886cef2e34706907a3a7f9d88e0d48b313ad2cdf76fb5f';
+      return {
+        utxo: {
+          amount: '30000000',
+          assets: [],
+          addressing: { path: [0, 0], startLevel: Bip44DerivationLevels.CHAIN.level },
+          receiver: address.to_hex(),
+          tx_hash: txHash,
+          tx_index: 0,
+          utxo_id: `${txHash}0`,
+        },
+      };
+    });
+    const nativeScriptHex = RustModule.WasmScope(Module =>
+      Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('22'.repeat(28))).to_cbor_hex()
+    );
+    const api = new AdaApi();
+    const signRequest = await api._createUnsignedTxForConnector(
+      {
+        includeTargets: [
+          {
+            address: utxo.receiver,
+            value: '2000000',
+            mintRequest: [{ script: nativeScriptHex, assetName: '74657374', amount: '1' }],
+          },
+        ],
+      },
+      {
+        defaultIdentifier: defaultAssets.find(asset => asset.NetworkId === networks.CardanoMainnet.NetworkId).Identifier,
+        defaultNetworkId: networks.CardanoMainnet.NetworkId,
+      },
+      1,
+      [],
+      { addr: { Hash: utxo.receiver }, addressing: utxo.addressing },
+      networks.CardanoMainnet,
+      new BigNumber(5000000),
+      [],
+      [utxo],
+      {
+        linearFee: { coefficient: '44', constant: '155381' },
+        coinsPerUtxoByte: '4310',
+        poolDeposit: '500000000',
+        keyDeposit: '2000000',
+        epoch: 1,
+      },
+      null
+    );
+
+    expect(signRequest.witnessSet).toBeInstanceOf(Uint8Array);
+    expect(
+      RustModule.WasmScope(Module => {
+        const transaction = Module.CML.Transaction.from_cbor_hex(signRequest.serializedUnsignedTxHex());
+        return transaction.witness_set().native_scripts()?.len() ?? 0;
+      })
+    ).toBe(1);
   });
 
   test('Restore wallet for transfer', async () => {
