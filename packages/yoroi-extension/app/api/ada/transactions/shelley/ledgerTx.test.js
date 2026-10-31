@@ -248,8 +248,7 @@ test('parses CML DRep voting procedures for Ledger signing', () => {
   if (transactionCertificates == null || transactionCertificates[0] == null)
     throw new Error('Missing Ledger certificate fixture');
   const drepRegistration = transactionCertificates[0];
-  if (drepRegistration.type !== CertificateType.DREP_REGISTRATION)
-    throw new Error('Expected DRep registration certificate');
+  if (drepRegistration.type !== CertificateType.DREP_REGISTRATION) throw new Error('Expected DRep registration certificate');
   expect(drepRegistration.params.anchor).toEqual({
     url: 'https://example.com',
     hashHex: '33'.repeat(32),
