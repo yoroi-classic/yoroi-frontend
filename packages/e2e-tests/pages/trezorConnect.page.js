@@ -11,6 +11,10 @@ class TrezorConnect extends BasePage {
     locator: '[data-testid="@analytics/toggle-switch"]',
     method: 'css',
   };
+  analyticsSwitchLocator = {
+    locator: '[data-testid="@analytics/toggle-switch"] input[role="switch"]',
+    method: 'css',
+  };
   analyticsContinueButtonLocator = {
     locator: 'button[data-testid="@analytics/continue-button"]',
     method: 'css',
@@ -54,7 +58,11 @@ class TrezorConnect extends BasePage {
     // existing connection-permission screen.
     const analyticsToggles = await this.findElements(this.analyticsToggleLocator);
     if (analyticsToggles.length > 0) {
-      const isAnalyticsEnabled = (await analyticsToggles[0].getAttribute('aria-checked')) === 'true';
+      const analyticsSwitch = await this.findElement(
+        this.analyticsSwitchLocator
+      );
+      const isAnalyticsEnabled =
+        (await analyticsSwitch.getAttribute('aria-checked')) === 'true';
       if (isAnalyticsEnabled) {
         await this.clickElementByScript(analyticsToggles[0]);
       }
