@@ -90,6 +90,9 @@ export function genCSP(request: {|
   // FCM
   connectSrc.push('https://firebaseinstallations.googleapis.com');
 
+  // Trezor Connect uses the local Bridge websocket to communicate with devices.
+  connectSrc.push('ws://127.0.0.1:21335');
+
   const unique = (sources: Array<string>): Array<string> => Array.from(new Set(sources));
 
   // unsafe-inline is unfortunately required by style-loader (even in production builds)
