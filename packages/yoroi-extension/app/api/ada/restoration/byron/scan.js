@@ -5,24 +5,27 @@
 import type { GenerateAddressFunc } from '../../../common/lib/restoration/bip44AddressScan';
 
 import { RustModule } from '../../lib/cardanoCrypto/rustLoader';
+import { hexToBytes } from '../../../../coreUtils';
 
 import type { InsertRequest } from '../../lib/storage/database/walletTypes/common/utils.types';
 import type { AddByHashFunc } from '../../../common/lib/storage/bridge/hashMapper';
 import { CoreAddressTypes } from '../../lib/storage/database/primitives/enums';
 
 export function v2genAddressBatchFunc(
-  addressChain: RustModule.WalletV2.Bip44ChainPublic,
+  accountPublicKey: string,
+  chainIndex: number,
   byronProtocolMagic: number
 ): GenerateAddressFunc {
-  const settings = RustModule.WalletV2.BlockchainSettings.from_json({
-    protocol_magic: byronProtocolMagic,
-  });
   return (indices: Array<number>) => {
-    return indices.map(i => {
-      const pubKey = addressChain.address_key(RustModule.WalletV2.AddressKeyIndex.new(i));
-      const addr = pubKey.bootstrap_era_address(settings);
-      const hex = addr.to_base58();
-      return hex;
+    return RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const protocolMagic = cml.ProtocolMagic.new(byronProtocolMagic);
+      const accountKey = cml.Bip32PublicKey.from_raw_bytes(hexToBytes(accountPublicKey));
+      const addressChain = accountKey.derive(chainIndex);
+      return indices.map(index => {
+        const cmlAddressKey = addressChain.derive(index);
+        return cml.AddressContent.new_simple(cmlAddressKey, protocolMagic).to_address().to_base58();
+      });
     });
   };
 }

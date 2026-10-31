@@ -24,14 +24,14 @@ const ScrollBox = styled(Box)({
 const pathId = 'reviewTx';
 
 export const ReviewTxSection = () => {
-  const { unsignedTx, cborTx, receiverCustomTitle, operations } = useTxReviewModal();
+  const { unsignedTx, metadata, cborTx, receiverCustomTitle, operations } = useTxReviewModal();
   const hasSentAnalyticsRef = useRef<string | null>(null);
 
   const txBody: any = useTxBody({ cbor: cborTx, unsignedTx });
   const formattedTx = useFormattedTx(cborTx ? txBody : txBody?.body);
   const formattedMetadata = useFormattedMetadata({
     txBody: cborTx ? txBody : txBody?.body,
-    unsignedTx: unsignedTx,
+    metadata,
     cbor: cborTx,
   });
   const location = useLocation();

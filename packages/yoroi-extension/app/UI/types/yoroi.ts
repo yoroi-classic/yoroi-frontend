@@ -1,5 +1,6 @@
-import { Datum } from '@emurgo/yoroi-lib';
 import { Balance } from '@yoroi/types';
+
+export type Datum = { hash: string } | { data: string };
 
 export type YoroiUnsignedTx = YoroiTxInfo & {
   unsignedTx: any;

@@ -11,7 +11,7 @@ import globalMessages from '../../../i18n/global-messages';
 import WarningBox from '../../widgets/WarningBox';
 import LocalizableError from '../../../i18n/LocalizableError';
 import { bech32 } from 'bech32';
-import { isHex } from '@emurgo/yoroi-lib/dist/internals/utils/index';
+import { isHex } from '../../../utils/hex';
 import { bytesToHex } from '../../../coreUtils';
 import { DelegateButton } from '../staking/dashboard-revamp/DelegateButton';
 import type { StoresMap } from '../../../stores';

@@ -23,13 +23,14 @@ export async function buildYoroiTransferTx(payload: {|
     ...InexactSubset<Addressing>,
   |},
   keyLevel: number,
-  signingKey: RustModule.WalletV4.Bip32PrivateKey,
+  signingKey: RustModule.CML.Bip32PrivateKey | Uint8Array,
   absSlotNumber: BigNumber,
   protocolParams: {|
-    keyDeposit: RustModule.WalletV4.BigNum,
-    linearFee: RustModule.WalletV4.LinearFee,
-    coinsPerUtxoByte: RustModule.WalletV4.BigNum,
-    poolDeposit: RustModule.WalletV4.BigNum,
+    keyDeposit: string,
+    linearFeeCoefficient: string,
+    linearFeeConstant: string,
+    coinsPerUtxoByte: string,
+    poolDeposit: string,
     networkId: number,
   |},
   networkId: number,
@@ -56,13 +57,18 @@ export async function buildYoroiTransferTx(payload: {|
       payload.networkId
     );
 
+    const transactionDetails = RustModule.WasmScope(Module => {
+      const body = Module.CML.TransactionBody.from_cbor_bytes(unsignedTxResponse.txBuilder);
+      return {
+        fee: body.fee().toString(),
+        id: Module.CML.hash_transaction(body).to_hex(),
+      };
+    });
     const fee = new MultiToken(
       [
         {
           identifier: PRIMARY_ASSET_CONSTANTS.Cardano,
-          amount: new BigNumber(unsignedTxResponse.txBuilder.get_fee_if_set()?.to_str() || '0').plus(
-            unsignedTxResponse.txBuilder.get_deposit().to_str()
-          ),
+          amount: new BigNumber(transactionDetails.fee).plus(unsignedTxResponse.depositAmount ?? '0'),
           networkId: payload.protocolParams.networkId,
         },
       ],
@@ -74,7 +80,7 @@ export async function buildYoroiTransferTx(payload: {|
       unsignedTxResponse.senderUtxos,
       unsignedTxResponse.txBuilder,
       payload.keyLevel,
-      payload.signingKey,
+      payload.signingKey instanceof Uint8Array ? payload.signingKey : payload.signingKey.to_raw_bytes(),
       null,
       undefined
     );
@@ -83,8 +89,8 @@ export async function buildYoroiTransferTx(payload: {|
     return {
       recoveredBalance: totalBalance,
       fee,
-      id: RustModule.WalletV4.FixedTransaction.from_hex(signedTx.to_hex()).transaction_hash().to_hex(),
-      encodedTx: signedTx.to_bytes(),
+      id: transactionDetails.id,
+      encodedTx: signedTx,
       // only display unique addresses
       senders: Array.from(new Set(senderUtxos.map(utxo => utxo.receiver))),
       receivers: [payload.outputAddr.address],

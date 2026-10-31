@@ -5,16 +5,14 @@
 */
 const nodePlugins = {
   plugins: [
-    'dynamic-import-node',
-    '@babel/plugin-transform-runtime',
-    ['module-resolver', {
-      alias: {
-        'cardano-wallet-browser': 'cardano-wallet',
-        '@emurgo/cardano-serialization-lib-browser': '@emurgo/cardano-serialization-lib-nodejs',
-        '@emurgo/cardano-message-signing-browser': '@emurgo/cardano-message-signing-nodejs',
-        '@emurgo/cross-csl-browser': '@emurgo/cross-csl-nodejs',
-      }
-    }]
+      'dynamic-import-node',
+      '@babel/plugin-transform-runtime',
+      ['module-resolver', {
+        alias: {
+          'cardano-wallet-browser': 'cardano-wallet',
+          '@emurgo/cardano-message-signing-browser': '@emurgo/cardano-message-signing-nodejs',
+        }
+      }]
   ]
 };
 

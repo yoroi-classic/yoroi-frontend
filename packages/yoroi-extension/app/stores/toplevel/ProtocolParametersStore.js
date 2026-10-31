@@ -3,7 +3,7 @@
 // the protocol parameters to make it accessible synchronously.
 
 import Store from '../base/Store';
-import type { ProtocolParameters } from '@emurgo/yoroi-lib/dist/protocol-parameters/models';
+import type { ProtocolParameters } from '../../api/ada/lib/state-fetch/protocolParameters';
 import { getProtocolParameters } from '../../api/thunk';
 import { listRelevantNetworksForEnvironment } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import LocalizedRequest from '../lib/LocalizedRequest';

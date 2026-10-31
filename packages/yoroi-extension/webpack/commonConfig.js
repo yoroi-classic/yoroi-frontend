@@ -209,7 +209,10 @@ const resolve = () /*: * */ => ({
     'react-native-mmkv': false,
     'process/browser': require.resolve('process/browser'),
   },
-  alias: { process: 'process/browser' },
+  alias: {
+    process: 'process/browser',
+    '@emurgo/yoroi-lib/dist/internals/utils/assets': path.resolve(__dirname, '../app/utils/cardanoAssetName.js'),
+  },
 });
 
 const definePlugin = (

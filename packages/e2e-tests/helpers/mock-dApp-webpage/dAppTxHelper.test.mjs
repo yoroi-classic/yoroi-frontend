@@ -9,7 +9,7 @@ import {
   addressesFromCborIfNeeded,
   getAmountInHex,
   getCmlValue,
-  getPubKeyHashFromHex,
+  getKeyHashFromHex,
   mapCborUtxos,
   toInt,
 } from './dAppTxHelper.js';
@@ -90,10 +90,23 @@ test('CML transaction helper selects inputs, calculates fees and adds change', (
   assert.equal(outputs.get(1).address().to_bech32(), paymentAddress);
 });
 
-test('public key hashes are derived by CML', () => {
-  const publicKeyBytes = Uint8Array.from({ length: 32 }, (_, index) => index);
-  const publicKey = CML.PublicKey.from_bytes(publicKeyBytes);
-  const hash = getPubKeyHashFromHex(Buffer.from(publicKeyBytes).toString('hex'));
+test('mock dApp CML transaction bytes stay stable for the frozen legacy fixture', () => {
+  const stakeHash = CML.Ed25519KeyHash.from_raw_bytes(new Uint8Array(28).fill(1));
+  const credential = CML.Credential.new_pub_key(stakeHash);
+  const address = CML.BaseAddress.new(0, credential, credential).to_address();
+  const utxoHex =
+    '828258201111111111111111111111111111111111111111111111111111111111111111008258390001010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101011a004c4b40';
+  const result = buildSimpleTx(address.to_bech32(), '2000000', address.to_hex(), [utxoHex]);
 
-  assert.equal(hash.to_hex(), '491112dd01155c07dab485f71b572e0cae759e2cd38b1c0e97554297');
+  assert.equal(
+    result.uTxHex,
+    '84a300d901028182582011111111111111111111111111111111111111111111111111111111111111110001828258390001010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101011a001e84808258390001010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101011a002b3543021a0002917da0f5f6'
+  );
+});
+
+test('CIP-95 key hashes are parsed as 28-byte hashes, not public keys', () => {
+  const hashHex = '491112dd01155c07dab485f71b572e0cae759e2cd38b1c0e97554297';
+  const hash = getKeyHashFromHex(hashHex);
+
+  assert.equal(hash.to_hex(), hashHex);
 });

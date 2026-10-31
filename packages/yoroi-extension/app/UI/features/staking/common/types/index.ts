@@ -1,5 +1,18 @@
-import type { ExplorerPoolInfo as PoolInfo } from '@emurgo/yoroi-lib';
 export type StakingActions = Record<string, never>;
+
+type PoolInfo = {
+  id: string;
+  hash: string;
+  ticker: string;
+  name: string;
+  pic: string | null;
+  stake: string;
+  share: string;
+  roa: string;
+  saturation: string;
+  taxFix: string;
+  taxRatio: string;
+};
 
 // Define state type
 export type StakingState = {

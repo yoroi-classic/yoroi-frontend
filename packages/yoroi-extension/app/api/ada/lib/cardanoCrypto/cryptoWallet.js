@@ -1,5 +1,4 @@
 // @flow
-/* eslint-disable camelcase */
 
 // Utility functions for handling the private master key
 
@@ -30,7 +29,7 @@ export const hashRepeatedly = (seed: Buffer): [Buffer, Buffer] => {
 /**
  * Based on https://github.com/satoshilabs/slips/blob/master/slip-0010.md
  */
-export const generateLedgerWalletRootKey = (mnemonic: string): RustModule.WalletV4.Bip32PrivateKey => {
+export const generateLedgerWalletRootKey = (mnemonic: string): RustModule.CML.Bip32PrivateKey => {
   // Generate a seed byte sequence S of 512 bits according to BIP-0039.
   const seed = mnemonicToSeedSync(mnemonic);
 
@@ -51,10 +50,10 @@ export const generateLedgerWalletRootKey = (mnemonic: string): RustModule.Wallet
   IL[31] |= 64;
 
   const buffer = Buffer.concat([IL, IR, chainCode], IL.length + IR.length + chainCode.length);
-  return RustModule.WalletV4.Bip32PrivateKey.from_bytes(buffer);
+  return RustModule.CML.Bip32PrivateKey.from_raw_bytes(buffer);
 };
 
-export function generateWalletRootKey(mnemonic: string): RustModule.WalletV4.Bip32PrivateKey {
+export function generateWalletRootKey(mnemonic: string): RustModule.CML.Bip32PrivateKey {
   const bip39entropy = mnemonicToEntropy(mnemonic);
   /**
    * there is no wallet entropy password in yoroi
@@ -63,7 +62,7 @@ export function generateWalletRootKey(mnemonic: string): RustModule.WalletV4.Bip
    * it is NOT the spending PASSWORD
    */
   const EMPTY_PASSWORD = Buffer.from('');
-  const rootKey = RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(hexToBytes(bip39entropy), EMPTY_PASSWORD);
+  const rootKey = RustModule.CML.Bip32PrivateKey.from_bip39_entropy(hexToBytes(bip39entropy), EMPTY_PASSWORD);
   return rootKey;
 }
 
@@ -71,10 +70,10 @@ export function generateWalletRootKey(mnemonic: string): RustModule.WalletV4.Bip
  * Generate catalyst private key for QR code
  */
 
-export function generatePrivateKeyForCatalyst(): RustModule.WalletV4.Bip32PrivateKey {
+export function generatePrivateKeyForCatalyst(): RustModule.CML.Bip32PrivateKey {
   const mnemonic = generateMnemonic(160);
   const bip39entropy = mnemonicToEntropy(mnemonic);
   const EMPTY_PASSWORD = Buffer.from('');
-  const rootKey = RustModule.WalletV4.Bip32PrivateKey.from_bip39_entropy(hexToBytes(bip39entropy), EMPTY_PASSWORD);
+  const rootKey = RustModule.CML.Bip32PrivateKey.from_bip39_entropy(hexToBytes(bip39entropy), EMPTY_PASSWORD);
   return rootKey;
 }

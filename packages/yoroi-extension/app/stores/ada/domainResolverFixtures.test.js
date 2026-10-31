@@ -6,7 +6,12 @@ import developmentConfig from '../../../config/development.json';
 import mainnetConfig from '../../../config/mainnet.json';
 import shelleyTestnetConfig from '../../../config/shelley-testnet.json';
 import testConfig from '../../../config/test.json';
-import { Address } from '@emurgo/cardano-serialization-lib-nodejs';
+import '../../api/ada/lib/test-config.forTests';
+import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
+
+beforeAll(async () => {
+  await RustModule.load();
+});
 
 const fixtures = {
   $fixture: {
@@ -49,8 +54,9 @@ describe('domain resolver fixtures', () => {
     const configuredFixtures: DomainResolverFixtures = testConfig.app.domainResolverFixtures;
     const fixtureAddresses = Object.keys(configuredFixtures).map(domain => configuredFixtures[domain].address);
     expect(new Set(fixtureAddresses).size).toBe(3);
-    for (const address of fixtureAddresses) {
-      expect(Address.from_bech32(address).network_id()).toBe(1);
-    }
+    const networkIds = RustModule.WasmScope(Module =>
+      fixtureAddresses.map(address => Module.CML.Address.from_bech32(address).network_id())
+    );
+    expect(networkIds).toEqual([1, 1, 1]);
   });
 });

@@ -1,6 +1,6 @@
-import { convertDrepHashToCIP129Format } from '@yoroi/staking';
 import BigNumber from 'bignumber.js';
 import { EventDefinitions } from '../../../../../../posthog/events';
+import { dRepNormalize } from '../../../../../api/ada/lib/cardanoCrypto/utils';
 
 export function formatValue(value: BigNumber): string {
   if (value.isZero()) {
@@ -14,7 +14,7 @@ export function formatValue(value: BigNumber): string {
 
 export const formatDrepHash = (hash: string, kind: 'script' | 'key'): string => {
   try {
-    return convertDrepHashToCIP129Format(hash, kind);
+    return dRepNormalize(hash, kind === 'script' ? 'scripthash' : 'keyhash');
   } catch {
     return hash;
   }
