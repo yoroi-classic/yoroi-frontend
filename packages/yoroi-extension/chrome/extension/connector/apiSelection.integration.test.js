@@ -126,22 +126,57 @@ describe('connectorGetUtxosCardano CML selection', () => {
     expect(result.every(utxo => utxo.assets.some(asset => asset.assetId === tokenId))).toBe(true);
   });
 
-  test('records submitted DRep delegation transactions with the delegation flag', async () => {
+  test('records only CML DRep delegation certificates with the delegation flag', async () => {
     await RustModule.load();
-    const sourceTxHex = RustModule.WasmScope(Module => {
+    const cases = RustModule.WasmScope(Module => {
       const cml = Module.CML;
-      const outputs = cml.TransactionOutputList.new();
-      outputs.add(
-        cml.TransactionOutput.new(cml.Address.from_hex(`61${'11'.repeat(28)}`), cml.Value.from_coin(BigInt('2000000')))
-      );
       const stakeCredential = cml.Credential.new_pub_key(cml.Ed25519KeyHash.from_hex('22'.repeat(28)));
-      const certificates = cml.CertificateList.new();
-      certificates.add(
-        cml.Certificate.new_vote_deleg_cert(stakeCredential, cml.DRep.new_key(cml.Ed25519KeyHash.from_hex('33'.repeat(28))))
-      );
-      const body = cml.TransactionBody.new(cml.TransactionInputList.new(), outputs, BigInt('170000'));
-      body.set_certs(certificates);
-      return cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true).to_cbor_hex();
+      const drep = cml.DRep.new_key(cml.Ed25519KeyHash.from_hex('33'.repeat(28)));
+      const pool = cml.Ed25519KeyHash.from_hex('44'.repeat(28));
+      const certificates = [
+        {
+          name: 'VoteDelegCert',
+          certificate: cml.Certificate.new_vote_deleg_cert(stakeCredential, drep),
+          isDrepDelegation: true,
+        },
+        {
+          name: 'StakeVoteDelegCert',
+          certificate: cml.Certificate.new_stake_vote_deleg_cert(stakeCredential, pool, drep),
+          isDrepDelegation: true,
+        },
+        {
+          name: 'VoteRegDelegCert',
+          certificate: cml.Certificate.new_vote_reg_deleg_cert(stakeCredential, drep, BigInt('500000000')),
+          isDrepDelegation: true,
+        },
+        {
+          name: 'StakeVoteRegDelegCert',
+          certificate: cml.Certificate.new_stake_vote_reg_deleg_cert(stakeCredential, pool, drep, BigInt('500000000')),
+          isDrepDelegation: true,
+        },
+        {
+          name: 'RegDrepCert',
+          certificate: cml.Certificate.new_reg_drep_cert(stakeCredential, BigInt('500000000')),
+          isDrepDelegation: false,
+        },
+        {
+          name: 'UnregDrepCert',
+          certificate: cml.Certificate.new_unreg_drep_cert(stakeCredential, BigInt('500000000')),
+          isDrepDelegation: false,
+        },
+      ];
+
+      return certificates.map(({ name, certificate, isDrepDelegation }) => {
+        const certificateList = cml.CertificateList.new();
+        certificateList.add(certificate);
+        const body = cml.TransactionBody.new(cml.TransactionInputList.new(), cml.TransactionOutputList.new(), BigInt('170000'));
+        body.set_certs(certificateList);
+        return {
+          name,
+          sourceTxHex: cml.Transaction.new(body, cml.TransactionWitnessSet.new(), true).to_cbor_hex(),
+          isDrepDelegation,
+        };
+      });
     });
     const network = require('../../../app/api/ada/lib/storage/database/prepackaged/networks').networks.CardanoMainnet;
     const publicDeriver: any = {
@@ -153,11 +188,15 @@ describe('connectorGetUtxosCardano CML selection', () => {
     };
     persistedTransactions = null;
     mockConnectorDependencies();
+    const { connectorRecordSubmittedCardanoTransaction } = require('./api');
 
-    await require('./api').connectorRecordSubmittedCardanoTransaction(publicDeriver, sourceTxHex, []);
+    for (const testCase of cases) {
+      persistedTransactions = null;
+      await connectorRecordSubmittedCardanoTransaction(publicDeriver, testCase.sourceTxHex, []);
 
-    expect(persistedTransactions).toHaveLength(1);
-    expect(((persistedTransactions: any)[0]: any).isDrepDelegation).toBe(true);
+      expect(persistedTransactions).toHaveLength(1);
+      expect(((persistedTransactions: any)[0]: any).isDrepDelegation).toBe(testCase.isDrepDelegation);
+    }
   });
 
   test('serializes connector UTxOs through the CML bridge with legacy-compatible CBOR', async () => {
