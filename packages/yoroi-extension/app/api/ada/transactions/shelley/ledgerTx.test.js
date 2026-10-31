@@ -247,8 +247,13 @@ test('parses CML DRep voting procedures for Ledger signing', () => {
   const transactionCertificates = request.tx.certificates;
   if (transactionCertificates == null || transactionCertificates[0] == null)
     throw new Error('Missing Ledger certificate fixture');
-  expect(transactionCertificates[0].type).toBe(CertificateType.DREP_REGISTRATION);
-  expect((transactionCertificates[0].params: any).anchor).toEqual({ url: 'https://example.com', hashHex: '33'.repeat(32) });
+  const drepRegistration = transactionCertificates[0];
+  if (drepRegistration.type !== CertificateType.DREP_REGISTRATION)
+    throw new Error('Expected DRep registration certificate');
+  expect(drepRegistration.params.anchor).toEqual({
+    url: 'https://example.com',
+    hashHex: '33'.repeat(32),
+  });
   expect(request.tx.mint).toEqual([{ policyIdHex: '44'.repeat(28), tokens: [{ assetNameHex: 'aabb', amount: '4' }] }]);
 });
 
