@@ -14,6 +14,7 @@ const mockConnectorDependencies = () => {
         getAllUtxoAddresses: async () => wallet.testAddresses ?? [],
         getAllUtxos: async () => wallet.testUtxos,
       }),
+      asHasUtxoChains: utxos => ({ getAllUtxos: async () => utxos.getAllUtxos() }),
     };
   });
   jest.doMock('../../../app/api/localStorage', () => {
@@ -44,6 +45,38 @@ const mockConnectorDependencies = () => {
 };
 
 describe('connectorGetUtxosCardano CML selection', () => {
+  test('preserves a transaction witness set when signing through the connector', async () => {
+    await RustModule.load();
+    mockConnectorDependencies();
+    const cml = RustModule.WasmScope(Module => Module.CML);
+    const signing = require('../../../app/api/ada/transactions/shelley/transactions');
+    const signSpy = jest.spyOn(signing, 'signTransactionFromWallet');
+    signSpy.mockImplementation(async (utxos, bodyBytes, _wallet, _password, _metadata, _signers, witnessSet) => {
+      expect(utxos).toEqual([]);
+      expect(witnessSet).toEqual(expectedWitnessSet);
+      return signedTxBytes;
+    });
+    const witnessSetBytes = [0xa1, 0x00, 0x81, 0x82, 0x58, 0x20, ...Array(32).fill(0x11), 0x58, 0x40, ...Array(64).fill(0x22)];
+    const expectedWitnessSet = Uint8Array.from(witnessSetBytes);
+    const body = cml.TransactionBody.new(cml.TransactionInputList.new(), cml.TransactionOutputList.new(), BigInt('0'));
+    const transaction = cml.Transaction.from_cbor_bytes(
+      Uint8Array.from([
+        ...cml.Transaction.new(body, cml.TransactionWitnessSet.from_cbor_bytes(expectedWitnessSet), true).to_cbor_bytes(),
+      ])
+    );
+    const signedTxBytes = transaction.to_cbor_bytes();
+
+    const { connectorSignCardanoTx } = require('./api');
+    try {
+      const result = await connectorSignCardanoTx(({ publicDeriverId: 1, testUtxos: [] }: any), 'test-password', {
+        tx: transaction.to_cbor_hex(),
+      });
+      expect(result).toBe(cml.TransactionWitnessSet.from_cbor_bytes(expectedWitnessSet).to_cbor_hex());
+    } finally {
+      signSpy.mockRestore();
+    }
+  });
+
   test('returns token-bearing UTxOs for a serialized multiasset value', async () => {
     await RustModule.load();
     const fixture = RustModule.WasmScope(Module => {

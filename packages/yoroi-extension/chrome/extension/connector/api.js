@@ -580,7 +580,10 @@ export async function connectorSignCardanoTxs(
           const addressing = ownAddressMap.get(receiver);
           if (addressing != null) {
             outputs.push({
-              amount: output.amount().coin().toString(),
+              amount: output
+                .amount()
+                .coin()
+                .toString(),
               assets: parseTokenList(output.amount().multi_asset()),
               receiver,
               tx_hash: txHash,
@@ -758,7 +761,8 @@ async function __connectorSignCardanoTx(
     publicDeriver,
     password,
     auxiliaryData, // metadata
-    otherRequiredSigners
+    otherRequiredSigners,
+    witnessSet?.to_cbor_bytes()
   );
 
   return transactionWitnessSetHex(signedTx);
@@ -877,7 +881,10 @@ export async function connectorRecordSubmittedCardanoTransaction(
       outputs: iterateLenGet(body.outputs())
         .map(output => ({
           address: output.address().to_hex(),
-          amount: output.amount().coin().toString(),
+          amount: output
+            .amount()
+            .coin()
+            .toString(),
           assets: parseTokenList(output.amount().multi_asset()),
         }))
         .toArray(),
