@@ -58,11 +58,8 @@ class TrezorConnect extends BasePage {
     // existing connection-permission screen.
     const analyticsToggles = await this.findElements(this.analyticsToggleLocator);
     if (analyticsToggles.length > 0) {
-      const analyticsSwitch = await this.findElement(
-        this.analyticsSwitchLocator
-      );
-      const isAnalyticsEnabled =
-        (await analyticsSwitch.getAttribute('aria-checked')) === 'true';
+      const analyticsSwitch = await this.findElement(this.analyticsSwitchLocator);
+      const isAnalyticsEnabled = (await analyticsSwitch.getAttribute('aria-checked')) === 'true';
       if (isAnalyticsEnabled) {
         await this.clickElementByScript(analyticsToggles[0]);
       }
