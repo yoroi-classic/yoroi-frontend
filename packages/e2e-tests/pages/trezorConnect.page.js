@@ -23,6 +23,10 @@ class TrezorConnect extends BasePage {
     locator: 'button[data-testid="@connect-permissions-modal/confirm-button"], .confirm',
     method: 'css',
   };
+  connectPermissionsConfirmButtonLocator = {
+    locator: 'button[data-testid="@connect-permissions-modal/confirm-button"]',
+    method: 'css',
+  };
   connectTrezorButtonLocator = {
     locator: '//button[normalize-space(.)="Connect Trezor"]',
     method: 'xpath',
@@ -108,6 +112,7 @@ class TrezorConnect extends BasePage {
     const exportAccountsConfirmButtons = await this.findElements(this.exportAccountsConfirmButtonLocator);
     if (exportAccountsConfirmButtons.length > 0) {
       await this.click(this.exportAccountsConfirmButtonLocator);
+      await this.confirmConnectPermissions();
       return;
     }
 
@@ -120,11 +125,16 @@ class TrezorConnect extends BasePage {
       await this.click(this.findTrezorButtonLocator);
       await this.waitForElement(this.exportAccountsConfirmButtonLocator);
       await this.click(this.exportAccountsConfirmButtonLocator);
+      await this.confirmConnectPermissions();
       return;
     }
 
     await this.waitForElement(this.legacyExportTrezorButtonLocator);
     await this.clickByScript(this.legacyExportTrezorButtonLocator);
+  }
+  async confirmConnectPermissions() {
+    await this.waitForElement(this.connectPermissionsConfirmButtonLocator);
+    await this.click(this.connectPermissionsConfirmButtonLocator);
   }
   async exportAddressPageIsDisplayed() {
     this.logger.info(`TrezorConnect::exportAddressPageIsDisplayed is called`);

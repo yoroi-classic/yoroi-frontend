@@ -19,26 +19,33 @@ test('grants Trezor connection permission with a user click', async () => {
 
 test('waits for the v10 account export confirmation and confirms with a user click', async () => {
   const page = new TrezorConnect({}, { info() {} });
-  const confirmButton = {};
-  let confirmationVisible = false;
+  let state = 'waiting';
   const clicks = [];
 
   page.findElements = async locator => {
-    return locator === page.exportAccountsConfirmButtonLocator && confirmationVisible ? [confirmButton] : [];
+    if (locator === page.exportAccountsConfirmButtonLocator && state === 'export') return [{}];
+    if (locator === page.connectPermissionsConfirmButtonLocator && state === 'permissions') return [{}];
+    return [];
   };
   page.customWaiter = async condition => {
     assert.equal(await condition(), false);
-    confirmationVisible = true;
+    state = 'export';
     return condition();
   };
-  page.click = async locator => clicks.push(locator);
+  page.waitForElement = async locator => {
+    assert.equal(locator, page.connectPermissionsConfirmButtonLocator);
+  };
+  page.click = async locator => {
+    clicks.push(locator);
+    if (locator === page.exportAccountsConfirmButtonLocator) state = 'permissions';
+  };
   page.clickByScript = async () => {
     throw new Error('WebUSB must not be activated by a script click');
   };
 
   await page.allowPubKeysExport();
 
-  assert.deepEqual(clicks, [page.exportAccountsConfirmButtonLocator]);
+  assert.deepEqual(clicks, [page.exportAccountsConfirmButtonLocator, page.connectPermissionsConfirmButtonLocator]);
 });
 
 test('uses real clicks through the v10 device prompt to account confirmation', async () => {
@@ -58,13 +65,19 @@ test('uses real clicks through the v10 device prompt to account confirmation', a
     return condition();
   };
   page.waitForElement = async locator => {
-    const expected = state.prompt === 'find' ? page.findTrezorButtonLocator : page.exportAccountsConfirmButtonLocator;
+    const expected =
+      state.prompt === 'find'
+        ? page.findTrezorButtonLocator
+        : state.prompt === 'confirm'
+          ? page.exportAccountsConfirmButtonLocator
+          : page.connectPermissionsConfirmButtonLocator;
     assert.equal(locator, expected);
   };
   page.click = async locator => {
     clicks.push(locator);
     if (locator === page.connectTrezorButtonLocator) state.prompt = 'find';
     if (locator === page.findTrezorButtonLocator) state.prompt = 'confirm';
+    if (locator === page.exportAccountsConfirmButtonLocator) state.prompt = 'permissions';
   };
   page.clickByScript = async () => {
     throw new Error('WebUSB must not be activated by a script click');
@@ -76,5 +89,6 @@ test('uses real clicks through the v10 device prompt to account confirmation', a
     page.connectTrezorButtonLocator,
     page.findTrezorButtonLocator,
     page.exportAccountsConfirmButtonLocator,
+    page.connectPermissionsConfirmButtonLocator,
   ]);
 });
