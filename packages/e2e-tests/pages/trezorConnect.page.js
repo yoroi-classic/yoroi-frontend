@@ -20,7 +20,7 @@ class TrezorConnect extends BasePage {
     method: 'css',
   };
   confirmUsingTrezorButtonLocator = {
-    locator: '.confirm',
+    locator: 'button[data-testid="@connect-permissions-modal/confirm-button"], .confirm',
     method: 'css',
   };
   exportTrezorButtonLocator = {
