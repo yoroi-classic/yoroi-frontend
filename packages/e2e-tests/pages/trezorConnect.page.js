@@ -27,6 +27,10 @@ class TrezorConnect extends BasePage {
     locator: '//button[normalize-space(.)="Connect Trezor"]',
     method: 'xpath',
   };
+  findTrezorButtonLocator = {
+    locator: 'button[data-testid="web-usb-button"]',
+    method: 'css',
+  };
   exportAddressTitleTextLocator = {
     locator: '#container > div > div:nth-child(1) > h3',
     method: 'css',
@@ -80,6 +84,8 @@ class TrezorConnect extends BasePage {
     this.logger.info(`TrezorConnect::allowPubKeysExport is called`);
     await this.waitForElement(this.exportTrezorButtonLocator);
     await this.clickByScript(this.exportTrezorButtonLocator);
+    await this.waitForElement(this.findTrezorButtonLocator);
+    await this.clickByScript(this.findTrezorButtonLocator);
   }
   async exportAddressPageIsDisplayed() {
     this.logger.info(`TrezorConnect::exportAddressPageIsDisplayed is called`);
