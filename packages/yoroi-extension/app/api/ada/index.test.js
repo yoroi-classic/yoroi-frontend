@@ -77,6 +77,24 @@ describe('app/api/ada/index', () => {
   });
 
   test('carries connector mint witnesses into the sign request', async () => {
+    const restored = await AdaApi.prototype.restoreWallet({
+      db,
+      recoveryPhrase: TX_TEST_MNEMONIC_1,
+      walletName: 'connector-mint-witness-test',
+      walletPassword: '123',
+      network: networks.CardanoMainnet,
+      accountIndex: HARD_DERIVATION_START,
+    });
+    const withUtxos = asGetAllUtxos(restored.publicDerivers[0]);
+    if (withUtxos == null) throw new Error('Restored wallet is missing UTxO addresses');
+    const [receiveAddressPath] = await withUtxos.getAllUtxoAddresses();
+    const receiveAddressRow = receiveAddressPath?.addrs[0];
+    if (receiveAddressPath == null || receiveAddressRow == null) throw new Error('Restored wallet has no UTxO address');
+    const receiveAddress = {
+      addr: receiveAddressRow,
+      row: receiveAddressPath.row,
+      addressing: receiveAddressPath.addressing,
+    };
     const { utxo } = RustModule.WasmScope(Module => {
       const cml = Module.CML;
       const paymentKeyHash = cml.Ed25519KeyHash.from_hex('11'.repeat(28));
@@ -101,23 +119,26 @@ describe('app/api/ada/index', () => {
       Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('22'.repeat(28))).to_cbor_hex()
     );
     const api = new AdaApi();
+    const defaultAsset = defaultAssets.find(asset => asset.NetworkId === networks.CardanoMainnet.NetworkId);
+    if (defaultAsset == null) throw new Error('Missing mainnet default asset fixture');
     const signRequest = await api._createUnsignedTxForConnector(
       {
         includeTargets: [
           {
             address: utxo.receiver,
+            isForeign: false,
             value: '2000000',
             mintRequest: [{ script: nativeScriptHex, assetName: '74657374', amount: '1' }],
           },
         ],
       },
       {
-        defaultIdentifier: defaultAssets.find(asset => asset.NetworkId === networks.CardanoMainnet.NetworkId).Identifier,
+        defaultIdentifier: defaultAsset.Identifier,
         defaultNetworkId: networks.CardanoMainnet.NetworkId,
       },
       1,
       [],
-      { addr: { Hash: utxo.receiver }, addressing: utxo.addressing },
+      receiveAddress,
       networks.CardanoMainnet,
       new BigNumber(5000000),
       [],

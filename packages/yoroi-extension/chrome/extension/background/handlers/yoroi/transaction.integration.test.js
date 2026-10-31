@@ -3,6 +3,8 @@ import '../../../../../app/api/ada/lib/test-config.forTests';
 
 import AdaApi from '../../../../../app/api/ada';
 import { RustModule } from '../../../../../app/api/ada/lib/cardanoCrypto/rustLoader';
+import { HaskellShelleyTxSignRequest } from '../../../../../app/api/ada/transactions/shelley/HaskellShelleyTxSignRequest';
+import BigNumber from 'bignumber.js';
 import { SignAndBroadcastTransaction } from './transaction';
 import { getPublicDeriverById } from './utils';
 import { connectorRecordSubmittedCardanoTransaction } from '../../../connector/api';
@@ -64,11 +66,25 @@ test('preserves a swap witness set from thunk serialization through the backgrou
       swapWitnessSetBytes: witnessSetBytes,
     };
   });
-  let forwardedSignRequest;
+  let forwardedWitnessSet: void | Uint8Array;
   jest.spyOn(AdaApi.prototype, 'signAndBroadcast').mockImplementation(async request => {
-    forwardedSignRequest = request.signRequest;
+    forwardedWitnessSet = request.signRequest.witnessSet;
     return { txId: 'swap-tx-id', signedTxHex: '00' };
   });
+  const signRequest = new HaskellShelleyTxSignRequest({
+    senderUtxos: [],
+    unsignedTx: transactionBodyBytes,
+    witnessSet: swapWitnessSetBytes,
+    metadata: undefined,
+    changeAddr: [],
+    networkSettingSnapshot: {
+      NetworkId: 0,
+      ChainNetworkId: 1,
+      PoolDeposit: new BigNumber('500000000'),
+      KeyDeposit: new BigNumber('2000000'),
+    },
+  });
+  jest.spyOn(signRequest, 'serializedUnsignedTxHex').mockReturnValue(emptyWitnessTransactionHex);
 
   const runtime = {
     lastError: null,
@@ -79,17 +95,12 @@ test('preserves a swap witness set from thunk serialization through the backgrou
   Object.defineProperty(window, 'chrome', { configurable: true, value: { runtime } });
 
   const result = await signAndBroadcastTransaction({
-    signRequest: {
-      senderUtxos: [],
-      unsignedTx: transactionBodyBytes,
-      witnessSet: swapWitnessSetBytes,
-      metadata: undefined,
-      serializedUnsignedTxHex: () => emptyWitnessTransactionHex,
-    },
+    signRequest,
     password: 'test-password',
     publicDeriverId: 1,
   });
 
   expect(result).toEqual({ txId: 'swap-tx-id' });
-  expect(forwardedSignRequest.witnessSet).toEqual(swapWitnessSetBytes);
+  if (forwardedWitnessSet == null) throw new Error('The background handler did not forward the witness set');
+  expect(forwardedWitnessSet).toEqual(swapWitnessSetBytes);
 });
