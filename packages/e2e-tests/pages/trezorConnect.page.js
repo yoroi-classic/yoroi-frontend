@@ -7,6 +7,14 @@ class TrezorConnect extends BasePage {
     locator: '.custom-checkbox',
     method: 'css',
   };
+  analyticsToggleLocator = {
+    locator: '[data-testid="@analytics/toggle-switch"]',
+    method: 'css',
+  };
+  analyticsContinueButtonLocator = {
+    locator: 'button[data-testid="@analytics/continue-button"]',
+    method: 'css',
+  };
   confirmUsingTrezorButtonLocator = {
     locator: '.confirm',
     method: 'css',
@@ -26,24 +34,37 @@ class TrezorConnect extends BasePage {
   // functions
   async tickCheckbox() {
     this.logger.info(`TrezorConnect::tickCheckbox is called`);
-    const result = await this.customWaiter(
+    const consentScreenLoaded = await this.customWaiter(
       async () => {
-        const elAmount = await this.findElements(this.dontAskAgainCheckboxLocator);
-        this.logger.info(`TrezorConnect::tickCheckbox. Elements found: ${elAmount.length}`);
-        // this conditions was found empirically
-        return elAmount.length === 4;
+        const analyticsToggles = await this.findElements(this.analyticsToggleLocator);
+        if (analyticsToggles.length > 0) return true;
+        const legacyCheckboxes = await this.findElements(this.dontAskAgainCheckboxLocator);
+        return legacyCheckboxes.length === 4;
       },
       defaultWaitTimeout,
       halfSecond
     );
-    if (result) {
-      const allCheckboxes = await this.findElements(this.dontAskAgainCheckboxLocator);
-      // this conditions was found empirically
-      await this.clickElementByScript(allCheckboxes[0]);
-    } else {
-      this.logger.error(`TrezorConnect::tickCheckbox A correct checkbox is not found`);
-      throw new Error('A correct checkbox is not found');
+    if (!consentScreenLoaded) {
+      this.logger.error(`TrezorConnect::tickCheckbox A consent screen is not found`);
+      throw new Error('A consent screen is not found');
     }
+
+    // Trezor Connect v10 shows an analytics-consent screen before the wallet
+    // connection flow. Keep telemetry disabled in CI, then continue to the
+    // existing connection-permission screen.
+    const analyticsToggles = await this.findElements(this.analyticsToggleLocator);
+    if (analyticsToggles.length > 0) {
+      const isAnalyticsEnabled = (await analyticsToggles[0].getAttribute('aria-checked')) === 'true';
+      if (isAnalyticsEnabled) {
+        await this.clickElementByScript(analyticsToggles[0]);
+      }
+      await this.clickByScript(this.analyticsContinueButtonLocator);
+      return;
+    }
+
+    const allCheckboxes = await this.findElements(this.dontAskAgainCheckboxLocator);
+    // this conditions was found empirically
+    await this.clickElementByScript(allCheckboxes[0]);
   }
   async allowConnection() {
     this.logger.info(`TrezorConnect::allowConnection is called`);
