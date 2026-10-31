@@ -72,10 +72,14 @@ export const logTrezorWalletCreationError = async (webdriver, logger) => {
         return;
       }
 
-      const errorJson = entry.message.slice(entry.message.indexOf('error:') + 'error:'.length).trim();
+      const messageMatch = entry.message.match(/"message"\s*:\s*("(?:\\.|[^"\\])*")/);
+      if (!messageMatch) {
+        done('Background wallet creation failed without an error message');
+        return;
+      }
+
       try {
-        const error = JSON.parse(errorJson);
-        done(typeof error.message === 'string' ? error.message : 'Background wallet creation failed without an error message');
+        done(JSON.parse(messageMatch[1]));
       } catch {
         done('Background wallet creation failed; error details could not be parsed');
       }
