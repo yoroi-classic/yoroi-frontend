@@ -86,11 +86,26 @@ class TrezorConnect extends BasePage {
   }
   async allowPubKeysExport() {
     this.logger.info(`TrezorConnect::allowPubKeysExport is called`);
+    const exportPromptLoaded = await this.customWaiter(
+      async () => {
+        const connectTrezorButtons = await this.findElements(this.connectTrezorButtonLocator);
+        const legacyExportButtons = await this.findElements(this.legacyExportTrezorButtonLocator);
+        return connectTrezorButtons.length > 0 || legacyExportButtons.length > 0;
+      },
+      defaultWaitTimeout,
+      halfSecond
+    );
+    if (!exportPromptLoaded) {
+      throw new Error('Trezor export prompt is not found');
+    }
+
     const connectTrezorButtons = await this.findElements(this.connectTrezorButtonLocator);
     if (connectTrezorButtons.length > 0) {
-      await this.clickElementByScript(connectTrezorButtons[0]);
+      await this.click(this.connectTrezorButtonLocator);
       await this.waitForElement(this.findTrezorButtonLocator);
-      await this.clickByScript(this.findTrezorButtonLocator);
+      // Trezor Connect uses WebUSB from this button. A script-triggered click
+      // does not grant the browser's transient user activation for requestDevice().
+      await this.click(this.findTrezorButtonLocator);
       return;
     }
 
