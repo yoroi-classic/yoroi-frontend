@@ -228,7 +228,7 @@
     "semver": "7.6.0",
     "stream-browserify": "3.0.0",
     "tinycolor2": "1.4.2",
-    "trezor-connect-flow": "github:yoroi-classic/trezor-connect-flow#77286052a184810bcfbcc103fe7a06bc34ec7e42",
+    "trezor-connect-flow": "github:yoroi-classic/trezor-connect-flow#d926a0a6b88305d37c283db74d6a6a892fd40473",
     "typescript": "^5.4.5",
     "ua-parser-js": "1.0.37",
     "url": "0.11.3",

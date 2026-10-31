@@ -2,6 +2,7 @@
 
 module.exports = {
   moduleNameMapper: {
+    '^trezor-connect-flow$': '<rootDir>/test/mocks/trezor-connect-flow.js',
     // mock out the browser version of WASM bindings with the nodejs bindings
     '@dcspark/cardano-multiplatform-lib-browser': '@dcspark/cardano-multiplatform-lib-nodejs',
     '@emurgo/cardano-message-signing-browser': '@emurgo/cardano-message-signing-nodejs',
