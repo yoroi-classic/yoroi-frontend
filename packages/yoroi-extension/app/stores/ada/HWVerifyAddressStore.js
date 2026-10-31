@@ -12,7 +12,7 @@ import { Logger, stringifyError } from '../../utils/logging';
 
 import { convertToLocalizableError as ledgerErrorToLocalized } from '../../domain/LedgerLocalizedError';
 import { convertToLocalizableError as trezorErrorToLocalized } from '../../domain/TrezorLocalizedError';
-import { normalizeToAddress } from '../../api/ada/lib/storage/bridge/utils';
+import { normalizeAddressToHex } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
 import type { NetworkRow } from '../../api/ada/lib/storage/database/primitives/tables';
 import { getNetworkById, getCardanoHaskellBaseConfig } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import { toTrezorAddressParameters } from '../../api/ada/transactions/shelley/trezorTx';
@@ -69,10 +69,13 @@ export default class HWVerifyAddressStore extends Store<StoresMap> {
   ): Promise<void> => {
     const config = getCardanoHaskellBaseConfig(network).reduce((acc, next) => Object.assign(acc, next), {});
 
-    const wasmAddr = normalizeToAddress(address);
-    if (wasmAddr == null)
+    let addressHex;
+    try {
+      addressHex = normalizeAddressToHex(address);
+    } catch (_error) {
       throw new Error(`${nameof(HWVerifyAddressStore)}::${nameof(this.trezorVerifyAddress)} invalid address ${address}`);
-    const addressParams = toTrezorAddressParameters(wasmAddr, path);
+    }
+    const addressParams = toTrezorAddressParameters(addressHex, path);
     try {
       await wrapWithFrame(trezor =>
         trezor.cardanoGetAddress({
@@ -102,11 +105,14 @@ export default class HWVerifyAddressStore extends Store<StoresMap> {
         {}
       );
 
-      const wasmAddr = normalizeToAddress(expectedAddr);
-      if (wasmAddr == null)
+      let addressHex;
+      try {
+        addressHex = normalizeAddressToHex(expectedAddr);
+      } catch (_error) {
         throw new Error(`${nameof(HWVerifyAddressStore)}::${nameof(this.ledgerVerifyAddress)} invalid address ${expectedAddr}`);
+      }
       const addressParams = toLedgerAddressParameters({
-        address: wasmAddr,
+        addressHex,
         path,
         networkId: Number.parseInt(config.ChainNetworkId, 10),
         addressingMap: genAddressingLookup(wallet.networkId, this.stores.addresses.addressSubgroupMap),

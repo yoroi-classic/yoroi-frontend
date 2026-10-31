@@ -28,6 +28,7 @@ import { rawGenAddByHash } from '../../../../../common/lib/storage/bridge/hashMa
 import { addShelleyChimericAccountAddress, addShelleyUtxoAddress } from '../../../../restoration/shelley/scan';
 import { KeyKind } from '../../../cardanoCrypto/keys/types';
 import { bytesToHex } from '../../../../../../coreUtils';
+import { deriveBip32PublicKeyHashHex, deriveBip32PublicKeyHashesHex } from '../../../cardanoCrypto/cmlAddress';
 
 // TODO: maybe move this inside walletBuilder somehow so it's all done in the same transaction
 /**
@@ -37,20 +38,22 @@ import { bytesToHex } from '../../../../../../coreUtils';
  */
 export async function getAccountDefaultDerivations(
   chainNetworkId: number,
-  accountPublicKey: RustModule.WalletV4.Bip32PublicKey,
+  accountPublicKey: RustModule.CML.Bip32PublicKey,
   addByHash: AddByHashFunc
 ): Promise<TreeInsert<Bip44ChainInsert>> {
   const addressesIndex = range(0, BIP44_SCAN_SIZE);
 
-  const stakingKey = accountPublicKey.derive(ChainDerivations.CHIMERIC_ACCOUNT).derive(STAKING_KEY_INDEX).to_raw_key();
-  const externalAddrs = addressesIndex.map(i => {
-    const key = accountPublicKey.derive(ChainDerivations.EXTERNAL).derive(i).to_raw_key();
-    return key.hash();
-  });
-  const internalAddrs = addressesIndex.map(i => {
-    const key = accountPublicKey.derive(ChainDerivations.INTERNAL).derive(i).to_raw_key();
-    return key.hash();
-  });
+  const accountPublicKeyHex = bytesToHex(accountPublicKey.to_raw_bytes());
+  const stakingKeyHash = deriveBip32PublicKeyHashHex(accountPublicKeyHex, [ChainDerivations.CHIMERIC_ACCOUNT, STAKING_KEY_INDEX]);
+  const addressKeyHashes = deriveBip32PublicKeyHashesHex(
+    accountPublicKeyHex,
+    addressesIndex.flatMap(i => [
+      [ChainDerivations.EXTERNAL, i],
+      [ChainDerivations.INTERNAL, i],
+    ])
+  );
+  const externalAddrs = addressKeyHashes.filter((_hash, index) => index % 2 === 0);
+  const internalAddrs = addressKeyHashes.filter((_hash, index) => index % 2 === 1);
   /**
    * Even if the user has no internet connection and scanning fails,
    * we need to initialize our wallets with the bip44 gap size directly
@@ -65,19 +68,19 @@ export async function getAccountDefaultDerivations(
   const externalAddresses = addressesIndex.map(i => ({
     index: i,
     insert: async insertRequest => {
-      return await addShelleyUtxoAddress(addByHash, insertRequest, stakingKey, externalAddrs[i], chainNetworkId);
+      return await addShelleyUtxoAddress(addByHash, insertRequest, stakingKeyHash, externalAddrs[i], chainNetworkId);
     },
   }));
   const internalAddresses = addressesIndex.map(i => ({
     index: i,
     insert: async insertRequest => {
-      return await addShelleyUtxoAddress(addByHash, insertRequest, stakingKey, internalAddrs[i], chainNetworkId);
+      return await addShelleyUtxoAddress(addByHash, insertRequest, stakingKeyHash, internalAddrs[i], chainNetworkId);
     },
   }));
   const accountAddress = [0].map(i => ({
     index: i,
     insert: async insertRequest => {
-      return await addShelleyChimericAccountAddress(addByHash, insertRequest, stakingKey, chainNetworkId);
+      return await addShelleyChimericAccountAddress(addByHash, insertRequest, stakingKeyHash, chainNetworkId);
     },
   }));
 
@@ -115,7 +118,7 @@ export async function getAccountDefaultDerivations(
 export async function createStandardCip1852Wallet(request: {|
   db: lf$Database,
   encryptedRoot: string,
-  accountPublicKey: RustModule.WalletV4.Bip32PublicKey,
+  accountPublicKey: RustModule.CML.Bip32PublicKey,
   accountIndex: number,
   walletName: string,
   accountName: string,
@@ -189,7 +192,7 @@ export async function createStandardCip1852Wallet(request: {|
           deriverRequest: {
             decryptPrivateDeriver: {
               preDerived: true,
-              result: { pubKeyHex: request.accountPublicKey.to_hex() },
+              result: { pubKeyHex: bytesToHex(request.accountPublicKey.to_raw_bytes()) },
             },
             publicDeriverMeta: {
               name: request.accountName,
@@ -222,7 +225,7 @@ export async function createStandardCip1852Wallet(request: {|
 
 export async function createHardwareCip1852Wallet(request: {|
   db: lf$Database,
-  accountPublicKey: RustModule.WalletV4.Bip32PublicKey,
+  accountPublicKey: RustModule.CML.Bip32PublicKey,
   accountIndex: number,
   walletName: string,
   accountName: string,
@@ -309,7 +312,7 @@ export async function createHardwareCip1852Wallet(request: {|
                 KeyDerivationId: insertRequest.keyDerivationId,
               }),
             publicKey: {
-              Hash: bytesToHex(request.accountPublicKey.as_bytes()),
+              Hash: bytesToHex(request.accountPublicKey.to_raw_bytes()),
               IsEncrypted: false,
               PasswordLastUpdate: null,
               Type: KeyKind.BIP32ED25519,

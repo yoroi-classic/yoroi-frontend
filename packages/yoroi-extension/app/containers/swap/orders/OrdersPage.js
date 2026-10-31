@@ -23,7 +23,7 @@ import { Quantities } from '../../../utils/quantities';
 import { useRichOrders } from './hooks';
 import { LoadingCompletedOrders, LoadingOpenOrders } from './OrdersPlaceholders';
 import { useStrings } from '../common/useStrings';
-import { isHex } from '@emurgo/yoroi-lib/dist/internals/utils/index';
+import { isHex } from '../../../utils/hex';
 import type { StoresProps } from '../../../stores';
 import { submitSingleTransaction } from '../../../stores/ada/submitSingleTransaction';
 // $FlowIgnore[cannot-resolve-module]

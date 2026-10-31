@@ -6,8 +6,7 @@ import { groupBy, mapValues, uniqBy } from 'lodash';
 
 import { BigNumber } from 'bignumber.js';
 
-import type { UtxoStorage } from '@emurgo/yoroi-lib/dist/utxo';
-import type { Utxo, UtxoAtSafePoint, UtxoDiffToBestBlock } from '@emurgo/yoroi-lib/dist/utxo/models';
+import type { UtxoStorage, Utxo, UtxoAtSafePoint, UtxoDiffToBestBlock } from '../../state-fetch/utxoTypes';
 import type { Utxo as StorageUtxo } from '../database/utxo/tables';
 
 import type {

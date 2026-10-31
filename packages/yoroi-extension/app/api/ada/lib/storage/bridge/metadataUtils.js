@@ -1,36 +1,41 @@
 // @flow
 import { RustModule } from '../../cardanoCrypto/rustLoader';
-import { isHex } from '@emurgo/yoroi-lib/dist/internals/utils/index';
+import { isHex } from '../../../../../utils/hex';
 
 export type TransactionMetadata = {|
   label: string,
   data: { ... },
 |};
 
-export function createMetadata(metadata: Array<TransactionMetadata>): RustModule.WalletV4.AuxiliaryData {
-  const transactionMetadata = RustModule.WalletV4.GeneralTransactionMetadata.new();
+// Keep the existing to_bytes() boundary expected by transaction code, while
+// ensuring all metadata parsing and encoding is performed by CML.
+export function createMetadata(metadata: Array<TransactionMetadata>): Uint8Array {
+  return RustModule.WasmScope(Module => {
+    const transactionMetadata = Module.CML.Metadata.new();
 
-  metadata.forEach((meta: TransactionMetadata) => {
-    const metadatum = RustModule.WalletV4.encode_json_str_to_metadatum(
-      JSON.stringify(meta.data),
-      RustModule.WalletV4.MetadataJsonSchema.BasicConversions
-    );
-    transactionMetadata.insert(RustModule.WalletV4.BigNum.from_str(meta.label), metadatum);
+    metadata.forEach((meta: TransactionMetadata) => {
+      const metadatum = Module.CML.encode_json_str_to_metadatum(
+        JSON.stringify(meta.data),
+        Module.CML.MetadataJsonSchema.BasicConversions
+      );
+      // eslint-disable-next-line no-undef
+      transactionMetadata.set(BigInt(meta.label), metadatum);
+    });
+
+    const auxData = Module.CML.AuxiliaryData.new_shelley(transactionMetadata);
+    const bytes = Buffer.from(auxData.to_cbor_bytes());
+    auxData.free();
+    transactionMetadata.free();
+    return bytes;
   });
-
-  const auxData = RustModule.WalletV4.AuxiliaryData.new();
-  auxData.set_metadata(transactionMetadata);
-  return auxData;
 }
 
 export function parseMetadata(s: any): string {
   if (isHex(s)) {
-    return RustModule.WasmScope(Scope => {
-      const metadatum = Scope.WalletV4.TransactionMetadatum.from_hex(s);
-      const metadataString = Scope.WalletV4.decode_metadatum_to_json_str(
-        metadatum,
-        Scope.WalletV4.MetadataJsonSchema.BasicConversions
-      );
+    return RustModule.WasmScope(Module => {
+      const metadatum = Module.CML.TransactionMetadatum.from_cbor_bytes(Buffer.from(s, 'hex'));
+      const metadataString = Module.CML.decode_metadatum_to_json_str(metadatum, Module.CML.MetadataJsonSchema.BasicConversions);
+      metadatum.free();
       return metadataString;
     });
   }
@@ -39,12 +44,10 @@ export function parseMetadata(s: any): string {
 
 export function parseMetadataDetailed(s: any): string {
   if (isHex(s)) {
-    return RustModule.WasmScope(Scope => {
-      const metadatum = Scope.WalletV4.TransactionMetadatum.from_hex(s);
-      const metadataString = Scope.WalletV4.decode_metadatum_to_json_str(
-        metadatum,
-        Scope.WalletV4.MetadataJsonSchema.DetailedSchema
-      );
+    return RustModule.WasmScope(Module => {
+      const metadatum = Module.CML.TransactionMetadatum.from_cbor_bytes(Buffer.from(s, 'hex'));
+      const metadataString = Module.CML.decode_metadatum_to_json_str(metadatum, Module.CML.MetadataJsonSchema.DetailedSchema);
+      metadatum.free();
       return metadataString;
     });
   }

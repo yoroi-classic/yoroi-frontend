@@ -165,6 +165,7 @@ function AirdropPage({ stores }: Readonly<Props>) {
           kind: 'send',
         },
         unsignedTx: signRequest.unsignedTx,
+        metadata: signRequest.metadata,
       });
     });
   };

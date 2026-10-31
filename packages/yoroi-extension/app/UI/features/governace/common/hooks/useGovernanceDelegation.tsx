@@ -32,8 +32,7 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
 
   const strings = useStrings();
 
-  const { governanceVoteChanged, createDrepDelegationTransaction, signDelegationTransaction, selectedWallet, governanceManager } =
-    useGovernance();
+  const { governanceVoteChanged, createDrepDelegationTransaction, signDelegationTransaction, selectedWallet } = useGovernance();
 
   const {
     openTxReviewModal,
@@ -83,6 +82,7 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
         openTxReviewModal({
           modalView: 'transactionReview',
           unsignedTx: txSignRequest.signTxRequest.unsignedTx,
+          metadata: txSignRequest.signTxRequest.metadata,
           submitTx: (password: string) => {
             void signGovernanceTx(password);
           },
@@ -120,10 +120,6 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
 
   /** 2) Open modal to choose a custom DRep */
   const openDelegateModalForCustomDrep = React.useCallback(() => {
-    if (!governanceManager) {
-      return;
-    }
-
     const vote: Vote = { kind: 'delegate', drepID: drepCredentialHex ?? '' };
     governanceVoteChanged(vote);
 
@@ -137,6 +133,7 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
           setUnsignedTx({
             type: 'setUnsignedTx',
             unsignedTx: txSignRequest.signTxRequest.unsignedTx,
+            metadata: txSignRequest.signTxRequest.metadata,
           });
         } finally {
           stopLoadingTxReview();
@@ -150,7 +147,6 @@ export const useGovernanceDelegation = (): UseGovernanceDelegationResult => {
       },
     });
   }, [
-    governanceManager,
     governanceVoteChanged,
     drepCredentialHex,
     openTxReviewModal,

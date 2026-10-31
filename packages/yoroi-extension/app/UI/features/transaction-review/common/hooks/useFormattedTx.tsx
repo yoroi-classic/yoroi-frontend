@@ -1,13 +1,12 @@
 // import { usePortfolioTokenInfos } from '../../../Portfolio/common/hooks/usePortfolioTokenInfos';
 // import { useSelectedNetwork } from '../../../WalletManager/common/hooks/useSelectedNetwork';
-import { CredKind } from '@emurgo/cross-csl-core';
 import { hexToAscii, isNonNullable } from '@yoroi/common';
 import { RustModule } from '../../../../../api/ada/lib/cardanoCrypto/rustLoader';
 import { deriveRewardAddressFromAddress } from '../../../../utils/common';
 import { asQuantity } from '../../../../utils/createCurrentWalletInfo';
 import { useTxReviewModal } from '../../module/ReviewTxProvider';
-import { FormattedTx, TransactionBody, TransactionInputs } from '../types';
-import { TransactionOutputsJSON } from '@emurgo/cardano-serialization-lib-nodejs';
+import { addressHexToBech32, resolveAddress } from '../addressResolver';
+import { FormattedTx, TransactionBody, TransactionInputs, TransactionOutputs } from '../types';
 
 export const useFormattedTx = (data: TransactionBody): FormattedTx => {
   const { walletUtxos, walletAddresses, primaryTokenInfo, allAssetList, networkId } = useTxReviewModal();
@@ -44,7 +43,8 @@ const formatInputs = (inputUtxos, allAssetList, networkId, primaryTokenInfo, wal
     const address = utxo?.receiver || utxo?.address;
     const { resolvedAddress, paymentCredKind } = resolveAddress(address);
 
-    const rewardAddress = address !== null && paymentCredKind === CredKind.Key ? deriveAddress(address, networkId) : null;
+    const rewardAddress =
+      address !== null && paymentCredKind === RustModule.CML.CredentialKind.PubKey ? deriveAddress(address, networkId) : null;
     const isOwnAddress = address != null ? isOwnedAddress(walletAddresses, address) : null;
 
     const assets = (utxo.assets ?? [])
@@ -72,7 +72,7 @@ const formatInputs = (inputUtxos, allAssetList, networkId, primaryTokenInfo, wal
 };
 
 const formatOutputs = (
-  outputs: TransactionOutputsJSON,
+  outputs: TransactionOutputs,
   allAssetList: any,
   networkId: number,
   primaryTokenInfo: any,
@@ -84,7 +84,7 @@ const formatOutputs = (
 
     const { resolvedAddress, paymentCredKind } = resolveAddress(address);
 
-    const rewardAddress = paymentCredKind === CredKind.Key ? deriveAddress(address, networkId) : null;
+    const rewardAddress = paymentCredKind === RustModule.CML.CredentialKind.PubKey ? deriveAddress(address, networkId) : null;
     const primaryAssets = [
       {
         tokenInfo: primaryTokenInfo,
@@ -143,28 +143,6 @@ const deriveAddress = (address: string, networkId: number) => {
   }
 };
 
-const resolveAddress = (
-  addressBech32: string | undefined
-): {
-  resolvedAddress: string | undefined;
-  paymentCredKind: number | null;
-} => {
-  if (addressBech32 == null) {
-    return { resolvedAddress: addressBech32, paymentCredKind: null };
-  }
-  const address = RustModule.WalletV4.Address.from_bech32(addressBech32);
-  if (address.kind() === RustModule.WalletV4.AddressKind.Byron) {
-    return {
-      resolvedAddress: RustModule.WalletV4.ByronAddress.from_address(address).to_base58(),
-      paymentCredKind: null,
-    };
-  }
-  return {
-    resolvedAddress: addressBech32,
-    paymentCredKind: address.payment_cred().kind() ?? null,
-  };
-};
-
 export const getAllUtxos = (inputs: TransactionInputs, walletUtxos: any) => {
   // noinspection JSIncompatibleTypesComparison
   return inputs.filter(i => i != null).map(input => getUtxo(walletUtxos, input.transaction_id, input.index)) ?? [];
@@ -176,7 +154,7 @@ const getUtxo = (utxos: any, txHash: string, txIndex: number) => {
   });
 
   if (internalUtxo === undefined) {
-    const hexAddr = RustModule.WalletV4.Address.from_hex(utxos[0].address).to_bech32();
+    const hexAddr = addressHexToBech32(utxos[0].address);
     internalUtxo = {
       address: hexAddr,
       amount: utxos[0].output?.tokens[0].TokenList.Amount,
@@ -188,7 +166,7 @@ const getUtxo = (utxos: any, txHash: string, txIndex: number) => {
     return internalUtxo;
   }
 
-  const hexAddr = RustModule.WalletV4.Address.from_hex(internalUtxo?.address).to_bech32();
+  const hexAddr = addressHexToBech32(internalUtxo.address);
   return {
     amount: internalUtxo.output?.tokens[0].TokenList.Amount,
     assets: internalUtxo.output?.tokens,

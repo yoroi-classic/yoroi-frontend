@@ -38,7 +38,7 @@ import type { TreeInsert } from '../../database/walletTypes/common/utils.types';
 import type { Bip44ChainInsert } from '../../database/walletTypes/common/tables';
 import { MultiToken } from '../../../../../common/lib/MultiToken';
 import type { GetUtxoAtSafePoint, GetUtxoDiffToBestBlock } from '../../database/utxo/api/read';
-import { UtxoService } from '@emurgo/yoroi-lib/dist/utxo';
+import type { UtxoService } from '../../../state-fetch/utxoService';
 import { UtxoStorageApi } from '../utils';
 import type { FilterFunc } from '../../../state-fetch/types';
 

@@ -2,20 +2,28 @@
 import './lib/test-config.forTests';
 import { schema } from 'lovefield';
 import type { lf$Database } from 'lovefield';
-import AdaApi from './index';
+import AdaApi, { walletSignData } from './index';
 import { RustModule } from './lib/cardanoCrypto/rustLoader';
 import { generateWalletRootKey } from './lib/cardanoCrypto/cryptoWallet';
 import { HARD_DERIVATION_START, WalletTypePurpose, CoinTypes } from '../../config/numbersConfig';
+import { Bip44DerivationLevels } from './lib/storage/database/walletTypes/bip44/api/utils';
+import { signTransaction } from './transactions/shelley/transactions';
 import { silenceLogsForTesting } from '../../utils/logging';
 
 import { loadLovefieldDB } from './lib/storage/database/index';
 import { legacyWalletChecksum } from '@yoroi-classic/cip4-js';
-import { asGetPublicKey } from './lib/storage/models/PublicDeriver/traits';
-import { networks } from './lib/storage/database/prepackaged/networks';
+import { asGetAllUtxos, asGetPublicKey } from './lib/storage/models/PublicDeriver/traits';
+import { cip8DataToSign } from './lib/cardanoCrypto/utils';
+import { hexToBytes } from '../../coreUtils';
+import { defaultAssets, networks } from './lib/storage/database/prepackaged/networks';
 import BigNumber from 'bignumber.js';
 import type { FilterUsedRequest, FilterUsedResponse } from './lib/state-fetch/types';
 
 let db: lf$Database;
+
+function inspectUnsignedTxFee(unsignedTx: Uint8Array): string {
+  return RustModule.WasmScope(Module => Module.CML.TransactionBody.from_cbor_bytes(unsignedTx).fee().toString());
+}
 
 describe('app/api/ada/index', () => {
   beforeAll(async () => {
@@ -44,6 +52,114 @@ describe('app/api/ada/index', () => {
       const plate = legacyWalletChecksum(pubKey.Hash);
       expect(plate.TextPart).toEqual('SKLE-8430');
     }
+    const withUtxos = asGetAllUtxos(pubDeriver);
+    if (withUtxos == null) throw new Error('Restored wallet is missing UTxO addresses');
+    const [firstAddressPath] = await withUtxos.getAllUtxoAddresses();
+    const firstAddressHex = firstAddressPath.addrs[0].Hash;
+    const signedData = await walletSignData(pubDeriver, '123', firstAddressHex, 'a1b2');
+    const valid = RustModule.WasmScope(Module => {
+      const cose = Module.MessageSigning.COSESign1.from_bytes(hexToBytes(signedData.signature));
+      return Module.CML.PublicKey.from_bytes(hexToBytes(signedData.pubKey)).verify(
+        cip8DataToSign(Buffer.from(hexToBytes(firstAddressHex)), Buffer.from(hexToBytes('a1b2'))),
+        Module.CML.Ed25519Signature.from_raw_bytes(cose.signature())
+      );
+    });
+    expect(valid).toBe(true);
+    const expectedPaymentKeyHash = RustModule.WasmScope(Module => {
+      const paymentCredential = Module.CML.Address.from_hex(firstAddressHex).payment_cred();
+      return paymentCredential?.as_pub_key()?.to_hex() ?? null;
+    });
+    expect(expectedPaymentKeyHash).not.toBeNull();
+    const actualPublicKeyHash = RustModule.WasmScope(Module =>
+      Module.CML.PublicKey.from_bytes(hexToBytes(signedData.pubKey)).hash().to_hex()
+    );
+    expect(actualPublicKeyHash).toBe(expectedPaymentKeyHash);
+  });
+
+  test('carries connector mint witnesses into the sign request', async () => {
+    const restored = await AdaApi.prototype.restoreWallet({
+      db,
+      recoveryPhrase: TX_TEST_MNEMONIC_1,
+      walletName: 'connector-mint-witness-test',
+      walletPassword: '123',
+      network: networks.CardanoMainnet,
+      accountIndex: HARD_DERIVATION_START,
+    });
+    const withUtxos = asGetAllUtxos(restored.publicDerivers[0]);
+    if (withUtxos == null) throw new Error('Restored wallet is missing UTxO addresses');
+    const [receiveAddressPath] = await withUtxos.getAllUtxoAddresses();
+    const receiveAddressRow = receiveAddressPath?.addrs[0];
+    if (receiveAddressPath == null || receiveAddressRow == null) throw new Error('Restored wallet has no UTxO address');
+    const receiveAddress = {
+      addr: receiveAddressRow,
+      row: receiveAddressPath.row,
+      addressing: receiveAddressPath.addressing,
+    };
+    const { utxo } = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const paymentKeyHash = cml.Ed25519KeyHash.from_hex('11'.repeat(28));
+      const address = cml.EnterpriseAddress.new(
+        networks.CardanoMainnet.NetworkId,
+        cml.Credential.new_pub_key(paymentKeyHash)
+      ).to_address();
+      const txHash = '05ec4a4a7f4645fa66886cef2e34706907a3a7f9d88e0d48b313ad2cdf76fb5f';
+      return {
+        utxo: {
+          amount: '30000000',
+          assets: [],
+          addressing: { path: [0, 0], startLevel: Bip44DerivationLevels.CHAIN.level },
+          receiver: address.to_hex(),
+          tx_hash: txHash,
+          tx_index: 0,
+          utxo_id: `${txHash}0`,
+        },
+      };
+    });
+    const nativeScriptHex = RustModule.WasmScope(Module =>
+      Module.CML.NativeScript.new_script_pubkey(Module.CML.Ed25519KeyHash.from_hex('22'.repeat(28))).to_cbor_hex()
+    );
+    const api = new AdaApi();
+    const defaultAsset = defaultAssets.find(asset => asset.NetworkId === networks.CardanoMainnet.NetworkId);
+    if (defaultAsset == null) throw new Error('Missing mainnet default asset fixture');
+    const signRequest = await api._createUnsignedTxForConnector(
+      {
+        includeTargets: [
+          {
+            address: utxo.receiver,
+            isForeign: false,
+            value: '2000000',
+            mintRequest: [{ script: nativeScriptHex, assetName: '74657374', amount: '1' }],
+          },
+        ],
+      },
+      {
+        defaultIdentifier: defaultAsset.Identifier,
+        defaultNetworkId: networks.CardanoMainnet.NetworkId,
+      },
+      1,
+      [],
+      receiveAddress,
+      networks.CardanoMainnet,
+      new BigNumber(5000000),
+      [],
+      [utxo],
+      {
+        linearFee: { coefficient: '44', constant: '155381' },
+        coinsPerUtxoByte: '4310',
+        poolDeposit: '500000000',
+        keyDeposit: '2000000',
+        epoch: 1,
+      },
+      null
+    );
+
+    expect(signRequest.witnessSet).toBeInstanceOf(Uint8Array);
+    expect(
+      RustModule.WasmScope(Module => {
+        const transaction = Module.CML.Transaction.from_cbor_hex(signRequest.serializedUnsignedTxHex());
+        return transaction.witness_set().native_scripts()?.len() ?? 0;
+      })
+    ).toBe(1);
   });
 
   test('Restore wallet for transfer', async () => {
@@ -55,11 +171,14 @@ describe('app/api/ada/index', () => {
 
     const accountIndex = HARD_DERIVATION_START + 0;
     const response = await AdaApi.prototype.restoreWalletForTransfer({
-      accountPubKey: generateWalletRootKey(recoveryPhrase)
-        .derive(WalletTypePurpose.BIP44)
-        .derive(CoinTypes.CARDANO)
-        .derive(accountIndex)
-        .to_public(),
+      accountPubKey: RustModule.CML.Bip32PublicKey.from_raw_bytes(
+        generateWalletRootKey(recoveryPhrase)
+          .derive(WalletTypePurpose.BIP44)
+          .derive(CoinTypes.CARDANO)
+          .derive(accountIndex)
+          .to_public()
+          .to_raw_bytes()
+      ),
       checkAddressesInUse,
       accountIndex,
       network: networks.CardanoMainnet,
@@ -356,6 +475,14 @@ describe('app/api/ada/index', () => {
   };
 
   test('create tx', async () => {
+    const accountPrivateKey = generateWalletRootKey(TX_TEST_MNEMONIC_1)
+      .derive(WalletTypePurpose.CIP1852)
+      .derive(CoinTypes.CARDANO)
+      .derive(HARD_DERIVATION_START);
+    const senderAddress = RustModule.WasmScope(Module => {
+      const paymentKeyHash = accountPrivateKey.derive(0).derive(0).to_public().to_raw_key().hash();
+      return Module.CML.EnterpriseAddress.new(0, Module.CML.Credential.new_pub_key(paymentKeyHash)).to_address().to_hex();
+    });
     const createTxRequest = {
       absSlotNumber: new BigNumber('70858976'),
       receivers: [
@@ -417,7 +544,7 @@ describe('app/api/ada/index', () => {
       utxos: [
         {
           amount: '10000000',
-          receiver: '6085abf3eca55024aa1c22b944599b5e890ec12dfb19941229da4ba293',
+          receiver: senderAddress,
           tx_hash: 'fa489b6c954ff298ab307a7433f33fa508a3504de04190533a5541905728292c',
           tx_index: 1,
           utxo_id: 'fa489b6c954ff298ab307a7433f33fa508a3504de04190533a5541905728292c1',
@@ -475,7 +602,7 @@ describe('app/api/ada/index', () => {
     expect(response.senderUtxos).toEqual([
       {
         amount: '10000000',
-        receiver: '6085abf3eca55024aa1c22b944599b5e890ec12dfb19941229da4ba293',
+        receiver: senderAddress,
         tx_hash: 'fa489b6c954ff298ab307a7433f33fa508a3504de04190533a5541905728292c',
         tx_index: 1,
         utxo_id: 'fa489b6c954ff298ab307a7433f33fa508a3504de04190533a5541905728292c1',
@@ -506,7 +633,7 @@ describe('app/api/ada/index', () => {
       {
         identifier: '',
         networkId: 300,
-        amount: new BigNumber('8820947'),
+        amount: new BigNumber('8829527'),
       },
       {
         amount: new BigNumber('45000000'),
@@ -515,116 +642,56 @@ describe('app/api/ada/index', () => {
       },
     ]);
 
-    expect(response.unsignedTx.get_fee_if_set()?.to_str()).toEqual('179053');
+    expect(inspectUnsignedTxFee(response.unsignedTx)).toEqual('170473');
 
-    function cmpOutputs(o1: any, o2: any): number {
-      if (o1.address > o2.address) {
-        return 1;
-      }
-      if (o1.address < o2.address) {
-        return -1;
-      }
-      return Number(o1.amount.coin) - Number(o2.amount.coin);
-    }
+    const signedBytes = signTransaction(
+      response.senderUtxos,
+      response.unsignedTx,
+      Bip44DerivationLevels.ACCOUNT.level,
+      accountPrivateKey.to_raw_bytes(),
+      null,
+      undefined
+    );
+    const signedFeeEvidence = RustModule.WasmScope(Module => {
+      const transaction = Module.CML.Transaction.from_cbor_bytes(signedBytes);
+      const witnesses = transaction.witness_set();
+      return {
+        fee: transaction.body().fee().toString(),
+        size: transaction.to_cbor_bytes().length,
+        vkeyCount: witnesses.vkeywitnesses()?.len() ?? 0,
+        vkeyHash: witnesses.vkeywitnesses()?.get(0).vkey().hash().to_hex(),
+        inputPaymentHash: (() => {
+          const paymentCredential = Module.CML.Address.from_hex(response.senderUtxos[0].receiver).payment_cred();
+          const paymentKeyHash = paymentCredential?.as_pub_key();
+          if (paymentKeyHash == null) throw new Error('Expected key-hash payment credential');
+          return paymentKeyHash.to_hex();
+        })(),
+        bootstrapCount: witnesses.bootstrap_witnesses()?.len() ?? 0,
+      };
+    });
+    expect(signedFeeEvidence.vkeyCount).toEqual(1);
+    expect(signedFeeEvidence.bootstrapCount).toEqual(0);
+    expect(signedFeeEvidence.vkeyHash).toEqual(signedFeeEvidence.inputPaymentHash);
+    expect(new BigNumber(signedFeeEvidence.fee).gte(new BigNumber(155381).plus(44 * signedFeeEvidence.size))).toEqual(true);
 
-    const txJson = JSON.parse(response.unsignedTx.build_tx().to_json());
-    const ref = {
-      auxiliary_data: null,
-      body: {
-        auxiliary_data_hash: null,
-        certs: null,
-        collateral: null,
-        collateral_return: null,
-        current_treasury_value: null,
-        donation: null,
-        fee: '179053',
-        inputs: [
-          {
-            index: 1,
-            transaction_id: 'fa489b6c954ff298ab307a7433f33fa508a3504de04190533a5541905728292c',
-          },
-        ],
-        mint: null,
-        network_id: null,
-        outputs: [
-          {
-            address:
-              'addr_test1qr9zjtaxnmv55ma65368097upzsvpvyrr2pajc9ryqte4vkr3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qfwzsgx',
-            amount: {
-              coin: '1000000',
-              multiasset: null,
-            },
-            plutus_data: null,
-            script_ref: null,
-          },
-          {
-            address:
-              'addr_test1qp00295qtc07m8f65trccaveaycum8zaj9xrwt4jw2qqdn7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qn97ahn',
-            amount: {
-              coin: '1155080',
-              multiasset: {
-                c85f714f2187021c7bab53741f659d0c5b1a6e7529d32b7794ff051c: {
-                  '474f4c44': '45000000',
-                },
-              },
-            },
-            plutus_data: null,
-            script_ref: null,
-          },
-          {
-            address:
-              'addr_test1qp00295qtc07m8f65trccaveaycum8zaj9xrwt4jw2qqdn7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qn97ahn',
-            amount: {
-              coin: '2000000',
-              multiasset: null,
-            },
-            plutus_data: null,
-            script_ref: null,
-          },
-          {
-            address:
-              'addr_test1qp00295qtc07m8f65trccaveaycum8zaj9xrwt4jw2qqdn7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qn97ahn',
-            amount: {
-              coin: '2000000',
-              multiasset: null,
-            },
-            plutus_data: null,
-            script_ref: null,
-          },
-          {
-            address:
-              'addr_test1qp00295qtc07m8f65trccaveaycum8zaj9xrwt4jw2qqdn7r3y3kdut55a40jff00qmg74686vz44v6k363md06qkq0qn97ahn',
-            amount: {
-              coin: '3665867',
-              multiasset: null,
-            },
-            plutus_data: null,
-            script_ref: null,
-          },
-        ],
-        reference_inputs: null,
-        required_signers: null,
-        script_data_hash: null,
-        total_collateral: null,
-        ttl: '70866176',
-        update: null,
-        validity_start_interval: null,
-        voting_procedures: null,
-        voting_proposals: null,
-        withdrawals: null,
-      },
-      is_valid: true,
-      witness_set: {
-        bootstraps: null,
-        native_scripts: null,
-        plutus_data: null,
-        plutus_scripts: null,
-        redeemers: null,
-        vkeys: null,
-      },
-    };
-    txJson.body.outputs.sort(cmpOutputs);
-    ref.body.outputs.sort(cmpOutputs);
-    expect(txJson).toEqual(ref);
+    const unsignedBody = RustModule.WasmScope(Module => {
+      const body = Module.CML.TransactionBody.from_cbor_bytes(response.unsignedTx);
+      return {
+        inputCount: body.inputs().len(),
+        outputCount: body.outputs().len(),
+        outputs: Array.from({ length: body.outputs().len() }, (_, index) => body.outputs().get(index).amount().coin().toString()),
+      };
+    });
+    expect(unsignedBody).toEqual({ inputCount: 1, outputCount: 2, outputs: ['1000000', '8829527'] });
+    expect(response.inputs()).toHaveLength(1);
+    expect(response.outputs()).toHaveLength(2);
+    expect(response.receivers(false)).toEqual([createTxRequest.receivers[0].address]);
+    expect(response.fee().getDefaultEntry().amount).toEqual(new BigNumber('170473'));
+    expect(response.totalInput().getDefaultEntry().amount).toEqual(new BigNumber('1170473'));
+    expect(
+      new BigNumber(response.senderUtxos[0].amount)
+        .minus(unsignedBody.outputs.reduce((total, amount) => total.plus(amount), new BigNumber(0)))
+        .toString()
+    ).toEqual(signedFeeEvidence.fee);
   });
 });

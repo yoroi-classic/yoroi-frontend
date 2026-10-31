@@ -1,7 +1,5 @@
 // @flow
 
-import { RustModule } from '../lib/cardanoCrypto/rustLoader';
-
 import type { Address, Value, Addressing } from '../lib/storage/models/PublicDeriver/interfaces';
 import { MultiToken } from '../../common/lib/MultiToken';
 
@@ -15,8 +13,6 @@ export const transactionTypes = Object.freeze({
   MULTI: 'multi',
 });
 export type TransactionDirectionType = $Values<typeof transactionTypes>;
-
-export type AddressKeyMap = { [addr: string]: RustModule.WalletV2.PrivateKey, ... };
 
 export type UserAnnotation = {|
   +type: TransactionDirectionType,
@@ -41,12 +37,20 @@ export type CardanoAddressedUtxo = {|
 
 export type V4UnsignedTxUtxoResponse = {|
   senderUtxos: Array<RemoteUnspentOutput>,
-  txBuilder: RustModule.WalletV4.TransactionBuilder,
+  txBuilder: Uint8Array,
+  witnessSet?: Uint8Array,
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
+  auxiliaryData?: Uint8Array,
+  implicitInputValue?: Uint8Array,
+  depositAmount?: string,
 |};
 export type V4UnsignedTxAddressedUtxoResponse = {|
   senderUtxos: Array<CardanoAddressedUtxo>,
-  txBuilder: RustModule.WalletV4.TransactionBuilder,
+  txBuilder: Uint8Array,
+  witnessSet?: Uint8Array,
   changeAddr: Array<{| ...Address, ...Value, ...Addressing |}>,
-  certificates: $ReadOnlyArray<RustModule.WalletV4.Certificate>,
+  auxiliaryData?: Uint8Array,
+  implicitInputValue?: Uint8Array,
+  depositAmount?: string,
+  certificates: $ReadOnlyArray<string>,
 |};

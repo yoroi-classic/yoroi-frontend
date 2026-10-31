@@ -10,13 +10,13 @@ import {
   Dispatch,
   useCallback,
 } from 'react';
-import { unwrapStakingKey } from '../../../../api/ada/lib/storage/bridge/utils';
+import { stakingKeyHashFromRewardAddress } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { swapManagerMaker, swapStorageMaker } from '@yoroi/swap';
 import { isPrimaryToken, primaryTokenId } from '@yoroi/portfolio';
 import { useSwapConfig } from '../common/hooks/useSwapConfig';
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { Api, Chain, Portfolio, Swap } from '@yoroi/types';
-import { RustModule } from '../../../../api/ada/lib/cardanoCrypto/rustLoader';
+import { addressBech32ToHex } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { produce } from 'immer';
 import { tokenManagers } from '../../portfolio/common/helpers/build-token-manager';
 import { useSyncedTokenInfos } from '../common/hooks/useTokensInfo';
@@ -25,8 +25,8 @@ import { toBaseUnits, useGetInputs } from '../common/helpers';
 import { ASSET_DIRECTION_IN, USDA_TOKEN_ID } from '../common/constants';
 import { useStrings } from '../common/hooks/useStrings';
 
-export const convertBech32ToHex = async (bech32Address: string) => {
-  return await RustModule.WalletV4.Address.from_bech32(bech32Address).to_hex();
+export const convertBech32ToHex = (bech32Address: string) => {
+  return addressBech32ToHex(bech32Address);
 };
 
 export const useAddressHex = (address: string) => {
@@ -57,7 +57,7 @@ export const SwapContextProvider = ({ children, currentWallet, stores }: any) =>
   useEffect(() => {
     if (!selectedWallet) return;
     const stakignAddr = selectedWallet.stakingAddress;
-    const skey = unwrapStakingKey(stakignAddr).to_keyhash()?.to_hex();
+    const skey = stakingKeyHashFromRewardAddress(stakignAddr);
     if (skey == null) {
       throw new Error('Cannot get staking key from the wallet!');
     }

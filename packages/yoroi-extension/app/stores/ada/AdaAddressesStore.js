@@ -6,9 +6,8 @@ import { AddressGroupTypes, AddressSubgroup } from '../../types/AddressFilterTyp
 import { unwrapStakingKey } from '../../api/ada/lib/storage/bridge/utils';
 import { filterAddressesByStakingKey } from '../../api/ada/lib/storage/bridge/delegationUtils';
 import type { StoresMap } from '../index';
-import { isResolvableDomain, resolverApiMaker } from '@yoroi/resolver';
+import { isResolvableDomain, resolverApiMaker } from '../../api/ada/domainResolver';
 import { Api, Resolver } from '@yoroi/types';
-import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import { isValidMainnetPaymentAddress } from './domainResolverUtils';
 import { resolveDomainAddressFixture } from './domainResolverFixtures';
 import type { ConfigType } from '../../../config/config-types';
@@ -70,7 +69,6 @@ export default class AdaAddressesStore extends Store<StoresMap> {
           apiKey: 'czsajliz-wxgu6tujd1zqq7hey_pclfqhdjsqolsxjfsurgh',
         },
       },
-      cslFactory: ctx => RustModule.CrossCsl.init(ctx),
     });
   }
 

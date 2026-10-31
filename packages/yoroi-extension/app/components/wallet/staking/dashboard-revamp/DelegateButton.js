@@ -41,6 +41,7 @@ export const DelegateButton = observer(({ stores, label, disabled, poolName, soc
         kind: 'delegate',
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 

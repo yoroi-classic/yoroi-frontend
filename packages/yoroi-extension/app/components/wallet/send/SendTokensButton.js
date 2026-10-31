@@ -25,6 +25,7 @@ export const SendTokensButton = ({ disabled, onSuccess, label, stores, domainRes
         associatedAddress: domainResolverResult.address,
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 

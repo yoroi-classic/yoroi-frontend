@@ -7,22 +7,21 @@ import { RustModule } from '../rustLoader';
 import type { BIP32Interface } from 'bip32';
 import { fromBase58, fromPublicKey } from 'bip32';
 import { decode, encode } from 'bs58check';
-import { hexToBytes } from '../../../../../coreUtils';
 
 // ================
 //   BIP32ED25519
 // ================
 
 export class BIP32ED25519PublicKey implements IKey, IKeyDerivation, IPublic {
-  key: RustModule.WalletV4.Bip32PublicKey;
+  key: RustModule.CML.Bip32PublicKey;
 
   // warning: don't use this function as it's won't decorate the object correctly
-  constructor(key: RustModule.WalletV4.Bip32PublicKey) {
+  constructor(key: RustModule.CML.Bip32PublicKey) {
     this.key = key;
   }
 
   toBuffer(): Buffer {
-    return Buffer.from(this.key.as_bytes());
+    return Buffer.from(this.key.to_raw_bytes());
   }
 
   getType(): KeyKindType {
@@ -31,16 +30,19 @@ export class BIP32ED25519PublicKey implements IKey, IKeyDerivation, IPublic {
 
   verify(data: Buffer, signature: Buffer): boolean {
     return RustModule.WasmScope(Scope => {
-      return this.key.to_raw_key().verify(data, Scope.WalletV4.Ed25519Signature.from_bytes(signature));
+      return Scope.CML.PublicKey.from_bytes(this.key.to_raw_key().to_raw_bytes()).verify(
+        data,
+        Scope.CML.Ed25519Signature.from_raw_bytes(signature)
+      );
     });
   }
 
   static fromBuffer(buff: Buffer): BIP32ED25519PublicKey {
-    const key = RustModule.WalletV4.Bip32PublicKey.from_bytes(buff);
-    return BIP32ED25519PublicKey.fromV3Key(key);
+    const key = RustModule.CML.Bip32PublicKey.from_raw_bytes(buff);
+    return BIP32ED25519PublicKey.fromCMLKey(key);
   }
 
-  static fromV3Key(key: RustModule.WalletV4.Bip32PublicKey): BIP32ED25519PublicKey {
+  static fromCMLKey(key: RustModule.CML.Bip32PublicKey): BIP32ED25519PublicKey {
     const newKey = annotateBIP32ED25519PublicKey(BIP32ED25519PublicKey);
     return new newKey(key);
   }
@@ -50,15 +52,15 @@ function annotateBIP32ED25519PublicKey(clazz: Class<BIP32ED25519PublicKey>): Cla
 }
 
 export class BIP32ED25519PrivateKey implements IKey, IKeyDerivation, IPrivate {
-  key: RustModule.WalletV4.Bip32PrivateKey;
+  key: RustModule.CML.Bip32PrivateKey;
 
   // warning: don't use this function as it's won't decorate the object correctly
-  constructor(key: RustModule.WalletV4.Bip32PrivateKey) {
+  constructor(key: RustModule.CML.Bip32PrivateKey) {
     this.key = key;
   }
 
   toBuffer(): Buffer {
-    return Buffer.from(this.key.as_bytes());
+    return Buffer.from(this.key.to_raw_bytes());
   }
 
   getType(): KeyKindType {
@@ -66,20 +68,20 @@ export class BIP32ED25519PrivateKey implements IKey, IKeyDerivation, IPrivate {
   }
 
   sign(data: Buffer): Buffer {
-    return hexToBytes(this.key.to_raw_key().sign(data).to_hex());
+    return Buffer.from(this.key.to_raw_key().sign(data).to_raw_bytes());
   }
 
   toPublic(): BIP32ED25519PublicKey {
     const pubKey = this.key.to_public();
-    return BIP32ED25519PublicKey.fromV3Key(pubKey);
+    return BIP32ED25519PublicKey.fromCMLKey(pubKey);
   }
 
   static fromBuffer(buff: Buffer): BIP32ED25519PrivateKey {
-    const key = RustModule.WalletV4.Bip32PrivateKey.from_bytes(buff);
-    return BIP32ED25519PrivateKey.fromV3Key(key);
+    const key = RustModule.CML.Bip32PrivateKey.from_raw_bytes(buff);
+    return BIP32ED25519PrivateKey.fromCMLKey(key);
   }
 
-  static fromV3Key(key: RustModule.WalletV4.Bip32PrivateKey): BIP32ED25519PrivateKey {
+  static fromCMLKey(key: RustModule.CML.Bip32PrivateKey): BIP32ED25519PrivateKey {
     const newKey = annotateBIP32ED25519PrivateKey(BIP32ED25519PrivateKey);
     return new newKey(key);
   }
@@ -219,10 +221,10 @@ export function deriveKey<T: IKeyDerivation>(key: T, index: number): T {
   /** simply deriving a key should never change its type so we can safely coerce to T */
   const coerceToT = (obj: any): T => obj;
   if (key instanceof BIP32ED25519PrivateKey) {
-    return coerceToT(BIP32ED25519PrivateKey.fromV3Key(key.key.derive(index)));
+    return coerceToT(BIP32ED25519PrivateKey.fromCMLKey(key.key.derive(index)));
   }
   if (key instanceof BIP32ED25519PublicKey) {
-    return coerceToT(BIP32ED25519PublicKey.fromV3Key(key.key.derive(index)));
+    return coerceToT(BIP32ED25519PublicKey.fromCMLKey(key.key.derive(index)));
   }
   if (key instanceof BIP32PrivateKey) {
     return coerceToT(BIP32PrivateKey.fromBip32(key.key.derive(index)));

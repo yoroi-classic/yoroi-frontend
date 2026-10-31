@@ -9,9 +9,9 @@ beforeAll(async () => {
 
 test('Wasm Scope Simple Address Convert', async () => {
   const addr = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
-  const addressFixedDirectly = bytesToHex(RustModule.WalletV4.Address.from_bech32(addr).to_bytes());
+  const addressFixedDirectly = bytesToHex(RustModule.CML.Address.from_bech32(addr).to_raw_bytes());
   const scopeResult = RustModule.__WasmScopeInternal(Module => {
-    return bytesToHex(Module.WalletV4.Address.from_bech32(addr).to_bytes());
+    return bytesToHex(Module.CML.Address.from_bech32(addr).to_raw_bytes());
   });
   const addressFixedInScope = scopeResult.result;
   expect(addressFixedInScope).toEqual(addressFixedDirectly);
@@ -21,9 +21,26 @@ test('Wasm Scope Simple Address Convert', async () => {
 
 test('Wasm Scope Monad Simple Address Convert', async () => {
   const addr = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
-  const addressFixedDirectly = bytesToHex(RustModule.WalletV4.Address.from_bech32(addr).to_bytes());
-  const addressFixedInScope = RustModule.ScopeMonad(Module => Module.WalletV4.Address.from_bech32(addr))
-    .wasmMap(a => a.to_bytes())
+  const addressFixedDirectly = bytesToHex(RustModule.CML.Address.from_bech32(addr).to_raw_bytes());
+  const addressFixedInScope = RustModule.ScopeMonad(Module => Module.CML.Address.from_bech32(addr))
+    .wasmMap(a => a.to_raw_bytes())
     .unwrap(bytes => bytesToHex(bytes));
   expect(addressFixedInScope).toEqual(addressFixedDirectly);
+});
+
+test('CML objects created in a wasm scope are freed', async () => {
+  const addr = 'addr1qf2w3pe8jsyvr9kutpv6e0rzuaym7dvq0rrz9699a7y3wwvz6g3gz764vxla692p4ttcekdw0smpedxuqq7a8t8sv3usrcv98z';
+  const scopeResult = RustModule.__WasmScopeInternal(Module => Module.CML.Address.from_bech32(addr).to_bech32());
+
+  expect(scopeResult.result).toEqual(addr);
+  expect(scopeResult.scopeSize).toEqual(1);
+  expect(scopeResult.scopeIsFree).toEqual(true);
+});
+
+test('reloads CML when another wasm module loaded before it', async () => {
+  RustModule._cml = null;
+
+  await RustModule.load();
+
+  expect(typeof RustModule.CML.Address.from_bech32).toEqual('function');
 });

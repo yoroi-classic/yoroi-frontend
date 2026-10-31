@@ -195,10 +195,10 @@ export const signTxWithCML = (unsignedTxHex, witnessHex) => {
   return bytesToHex(getSignedTransaction(unsignedTransaction, witnessSet).to_cbor_bytes());
 };
 
-export const getPubKeyHashFromHex = pubKeyHex => CML.PublicKey.from_bytes(hexToBytes(pubKeyHex)).hash();
+export const getKeyHashFromHex = keyHashHex => CML.Ed25519KeyHash.from_hex(keyHashHex);
 
 export const getDRepIDHexAndBechFromHex = pubDRepKey => {
-  const dRepIdHash = getPubKeyHashFromHex(pubDRepKey);
+  const dRepIdHash = getKeyHashFromHex(pubDRepKey);
   return {
     dRepIDHex: dRepIdHash.to_hex(),
     dRepIDBech32: dRepIdHash.to_bech32('drep'),

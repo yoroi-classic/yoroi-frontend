@@ -1,7 +1,7 @@
 // @flow
 
 import { CoreAddressTypes } from './lib/storage/database/primitives/enums';
-import { addressHexToBech32 } from './lib/cardanoCrypto/utils';
+import { addressHexToBech32, transactionHexToWitnessSet } from './lib/cardanoCrypto/utils';
 import { getPublicDeriverById } from '../../../chrome/extension/background/handlers/yoroi/utils';
 import AdaApi, { walletSignData, encodeHardwareWalletSignResult } from './index';
 import { getNetworkById } from './lib/storage/database/prepackaged/networks';
@@ -14,7 +14,6 @@ import LocalStorageApi, { loadSubmittedTransactions } from '../localStorage';
 import BigNumber from 'bignumber.js';
 import { forceNonNull } from '../../coreUtils.js';
 import { cardanoUtxoHexFromRemoteFormat } from './transactions/utils';
-import { RustModule } from './lib/cardanoCrypto/rustLoader';
 
 const localStorageApi = new LocalStorageApi();
 
@@ -410,7 +409,7 @@ export async function submitRedemptionTransaction(
   destAddr: string,
   txHex: string
 ): Promise<string /* error message */ | null /* ok */> {
-  const witnessSet = RustModule.WalletV4.Transaction.from_hex(txHex).witness_set().to_hex();
+  const witnessSet = transactionHexToWitnessSet(txHex);
 
   const resp = await fetch(`${thawEndpoint}/thaws/${destAddr}/transactions`, {
     method: 'POST',

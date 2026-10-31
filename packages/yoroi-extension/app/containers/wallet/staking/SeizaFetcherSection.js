@@ -45,6 +45,7 @@ export const SeizaFetcherSection = ({ urlTemplate, locale, bias, totalAda, poolL
         kind: 'delegate',
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 
@@ -84,6 +85,7 @@ export const SeizaFetcherSection = ({ urlTemplate, locale, bias, totalAda, poolL
         kind: 'delegate',
       },
       unsignedTx: signTxRequest.unsignedTx,
+      metadata: signTxRequest.metadata,
     });
   };
 

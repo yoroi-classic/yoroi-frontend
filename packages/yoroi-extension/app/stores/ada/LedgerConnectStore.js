@@ -23,6 +23,7 @@ import { Logger, stringifyData, stringifyError } from '../../utils/logging';
 import { CoinTypes, HARD_DERIVATION_START, WalletTypePurpose } from '../../config/numbersConfig';
 import { Bip44DerivationLevels } from '../../api/ada/lib/storage/database/walletTypes/bip44/api/utils';
 import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
+import { hexToBytes } from '../../coreUtils';
 import TimeUtils from '../../api/ada/lib/storage/bridge/timeUtils';
 import { getCardanoHaskellBaseConfig, networks } from '../../api/ada/lib/storage/database/prepackaged/networks';
 import type { StoresMap } from '../index';
@@ -183,8 +184,8 @@ export default class LedgerConnectStore
   };
 
   _generateTransferTx: (string, string) => Promise<void> = async (bip44Key, cip1852Key) => {
-    const bip44AccountPubKey = RustModule.WalletV4.Bip32PublicKey.from_hex(bip44Key);
-    const cip1852AccountPubKey = RustModule.WalletV4.Bip32PublicKey.from_hex(cip1852Key);
+    const bip44AccountPubKey = RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(bip44Key));
+    const cip1852AccountPubKey = RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(cip1852Key));
     const stateFetcher = this.stores.substores.ada.stateFetchStore.fetcher;
     if (this.stores.profile.selectedNetwork == null) {
       throw new Error(`${nameof(LedgerConnectStore)}::${nameof(this._checkAndStoreHWDeviceInfo)} no network selected`);

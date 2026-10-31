@@ -10,13 +10,13 @@ export function encryptWithPassword(password: string, bytes: Uint8Array): string
   const nonceHex = cryptoRandomString({ length: 2 * 12 });
   const passwordHex = bytesToHex(password);
   const dataHex = bytesToHex(bytes);
-  return RustModule.WalletV4.encrypt_with_password(passwordHex, saltHex, nonceHex, dataHex);
+  return RustModule.CML.emip3_encrypt_with_password(passwordHex, saltHex, nonceHex, dataHex);
 }
 
 export function decryptWithPassword(password: string, encryptedHex: string): Uint8Array {
   const passwordHex = bytesToHex(password);
   try {
-    const decryptedHex = RustModule.WalletV4.decrypt_with_password(passwordHex, encryptedHex);
+    const decryptedHex = RustModule.CML.emip3_decrypt_with_password(passwordHex, encryptedHex);
     return hexToBytes(decryptedHex);
   } catch (_err) {
     throw new WrongPassphraseError();

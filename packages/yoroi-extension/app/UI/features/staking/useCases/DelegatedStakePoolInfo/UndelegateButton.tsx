@@ -68,6 +68,7 @@ export const UndelegateButton = ({ poolTransition, delegateToSpecificPool, poolI
           kind: 'undelegate',
         },
         unsignedTx: unsignedTx.unsignedTx,
+        metadata: unsignedTx.metadata,
       });
     }
   };
