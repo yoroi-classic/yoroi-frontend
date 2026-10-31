@@ -60,7 +60,7 @@ export async function isWalletExist(
 ): Promise<WalletState | void> {
   const rootPk = cardanoGenerateWalletRootKey(recoveryPhrase);
   const accountPublicKey = rootPk.derive(WalletTypePurpose.CIP1852).derive(CoinTypes.CARDANO).derive(accountIndex).to_public();
-  const publicKey = bytesToHex(accountPublicKey.as_bytes());
+  const publicKey = bytesToHex(accountPublicKey.to_raw_bytes());
 
   for (const wallet of wallets) {
     const existedPublicKey = wallet.publicKey;

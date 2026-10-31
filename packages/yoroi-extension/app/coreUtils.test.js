@@ -130,18 +130,19 @@ function createLengetMap<K, V>(items: { [K]: V }): LenGetMap<K, V> {
 }
 
 describe('generators', () => {
-  function createAssetNames(...hexes: Array<string>): RustModule.WalletV4.AssetNames {
-    const names = RustModule.WalletV4.AssetNames.new();
+  function createAssetNames(...hexes: Array<string>): any {
+    const names = RustModule.CML.AssetNameList.new();
     for (const hex of hexes) {
-      names.add(RustModule.WalletV4.AssetName.new(hexToBytes(hex)));
+      names.add(RustModule.CML.AssetName.from_raw_bytes(hexToBytes(hex)));
     }
     return names;
   }
 
-  function createAssets(items: { [string]: number }): RustModule.WalletV4.Assets {
-    const assets = RustModule.WalletV4.Assets.new();
+  function createAssets(items: { [string]: number }): any {
+    const assets = RustModule.CML.MapAssetNameToCoin.new();
     for (const [hex, amount] of Object.entries(items)) {
-      assets.insert(RustModule.WalletV4.AssetName.new(hexToBytes(hex)), RustModule.WalletV4.BigNum.from_str(String(amount)));
+      // eslint-disable-next-line no-undef
+      assets.insert(RustModule.CML.AssetName.from_raw_bytes(hexToBytes(hex)), BigInt(amount));
     }
     return assets;
   }
@@ -174,12 +175,12 @@ describe('generators', () => {
   test('iterateLenGet wasm', async done => {
     await RustModule.load();
 
-    const names: RustModule.WalletV4.AssetNames = createAssetNames('cafebabe', '1234567890', 'aabbccddeeff');
+    const names = createAssetNames('cafebabe', '1234567890', 'aabbccddeeff');
 
     const iter = iterateLenGet(names)[Symbol.iterator]();
-    expect(iter.next().value.to_hex()).toEqual(names.get(0).to_hex());
-    expect(iter.next().value.to_hex()).toEqual(names.get(1).to_hex());
-    expect(iter.next().value.to_hex()).toEqual(names.get(2).to_hex());
+    expect(bytesToHex(iter.next().value.to_raw_bytes())).toEqual(bytesToHex(names.get(0).to_raw_bytes()));
+    expect(bytesToHex(iter.next().value.to_raw_bytes())).toEqual(bytesToHex(names.get(1).to_raw_bytes()));
+    expect(bytesToHex(iter.next().value.to_raw_bytes())).toEqual(bytesToHex(names.get(2).to_raw_bytes()));
     expect(iter.next().done).toEqual(true);
     expect(iter.next().value).toEqual(undefined);
 
@@ -205,21 +206,15 @@ describe('generators', () => {
   test('iterateLenGetMap wasm', async done => {
     await RustModule.load();
 
-    const assets: RustModule.WalletV4.Assets = createAssets({ cafebabe: 123, '1234567890': 456, aabbccddeeff: 789 });
+    const assets = createAssets({ cafebabe: 123, '1234567890': 456, aabbccddeeff: 789 });
 
-    const iter = iterateLenGetMap(assets)[Symbol.iterator]();
+    const entries = [...iterateLenGetMap(assets)].map(([name, amount]) => [bytesToHex(name.to_raw_bytes()), Number(amount)]);
 
-    function checkEntry(entry: [RustModule.WalletV4.AssetName, RustModule.WalletV4.BigNum], hex: string, amount: number) {
-      expect(bytesToHex(entry[0].name())).toEqual(hex);
-      expect(Number(entry[1]?.to_str())).toEqual(amount);
-    }
-
-    checkEntry(iter.next().value, 'cafebabe', 123);
-    checkEntry(iter.next().value, '1234567890', 456);
-    checkEntry(iter.next().value, 'aabbccddeeff', 789);
-
-    expect(iter.next().done).toEqual(true);
-    expect(iter.next().value).toEqual(undefined);
+    expect(entries.sort(([left], [right]) => left.localeCompare(right))).toEqual([
+      ['1234567890', 456],
+      ['aabbccddeeff', 789],
+      ['cafebabe', 123],
+    ]);
 
     done();
   });

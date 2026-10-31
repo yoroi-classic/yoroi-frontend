@@ -23,6 +23,7 @@ import {
   SendTransactionApiError,
 } from './api/common/errors';
 import { Logger } from './utils/logging';
+import { hexToBytes } from './coreUtils';
 
 import mainnetConfig from '../config/mainnet.json';
 import shelleyTestnetConfig from '../config/shelley-testnet.json';
@@ -38,30 +39,13 @@ const PACKAGE_ROOT = path.resolve(__dirname, '..');
 const WORKSPACE_ROOT = path.resolve(PACKAGE_ROOT, '..', '..');
 
 const EXPECTED_DIRECT_EMURGO_DEPENDENCIES = [
-  'packages/e2e-tests:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:dependencies:@emurgo/bringweb3-chrome-extension-kit',
   'packages/yoroi-extension:dependencies:@emurgo/cardano-message-signing-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-browser',
-  'packages/yoroi-extension:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:dependencies:@emurgo/yoroi-eutxo-txs',
-  'packages/yoroi-extension:dependencies:@emurgo/yoroi-lib',
   'packages/yoroi-extension:devDependencies:@emurgo/cardano-message-signing-nodejs',
-  'packages/yoroi-extension:devDependencies:@emurgo/cardano-serialization-lib-nodejs',
-  'packages/yoroi-extension:devDependencies:@emurgo/cross-csl-nodejs',
 ];
 
 const EXPECTED_TRANSITIVE_EMURGO_DEPENDENCY_EDGES = [
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-browser:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cardano-serialization-lib-nodejs',
-  'packages/yoroi-extension:node_modules/@emurgo/cross-csl-nodejs:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@emurgo/yoroi-eutxo-txs:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@emurgo/yoroi-lib:dependencies:@emurgo/cross-csl-core',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-browser',
-  'packages/yoroi-extension:node_modules/@fivebinaries/coin-selection:dependencies:@emurgo/cardano-serialization-lib-nodejs',
   'packages/yoroi-extension:node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
-  'packages/yoroi-extension:node_modules/@yoroi/staking:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap/node_modules/@yoroi/api:dependencies:@emurgo/cip14-js',
   'packages/yoroi-extension:node_modules/legacySwap:dependencies:@emurgo/cip14-js',
 ];
@@ -125,15 +109,16 @@ function currentAdaPriceFixture(asOf = Math.floor(Date.now() / 1000)) {
 
 function rewardAddressFixture(keyByte, networkId = 0) {
   return RustModule.WasmScope(Module => {
-    const keyHash = Module.WalletV4.Ed25519KeyHash.from_hex(keyByte.repeat(28));
-    const address = Module.WalletV4.RewardAddress.new(networkId, Module.WalletV4.Credential.from_keyhash(keyHash)).to_address();
+    const cml = Module.CML;
+    const keyHash = cml.Ed25519KeyHash.from_raw_bytes(hexToBytes(keyByte.repeat(28)));
+    const address = cml.RewardAddress.new(networkId, cml.Credential.new_pub_key(keyHash)).to_address();
     return { bech32: address.to_bech32(), hex: address.to_hex() };
   });
 }
 
 function poolFixture(keyByte) {
   return RustModule.WasmScope(Module => {
-    const keyHash = Module.WalletV4.Ed25519KeyHash.from_hex(keyByte.repeat(28));
+    const keyHash = Module.CML.Ed25519KeyHash.from_raw_bytes(hexToBytes(keyByte.repeat(28)));
     return { bech32: keyHash.to_bech32('pool'), hex: keyHash.to_hex() };
   });
 }
@@ -474,7 +459,7 @@ describe('extension dependency smoke', () => {
       preprod: 'http://localhost:3011/',
     };
     const displayAddress = 'addr1vxq0nckg3ekgzuqg7w5p9mvgnd9ym28qh5grlph8xd2z92su77c6m';
-    const storedAddress = RustModule.WalletV4.Address.from_bech32(displayAddress).to_hex();
+    const storedAddress = RustModule.WasmScope(Module => Module.CML.Address.from_bech32(displayAddress).to_hex());
     (global: any).fetch = jest.fn(() => successfulJsonResponse([displayAddress]));
     (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
@@ -936,7 +921,7 @@ describe('extension dependency smoke', () => {
     ],
     ['missing asOf', () => ({ ...currentAdaPriceFixture(), asOf: undefined })],
     ['nonpositive asOf', () => ({ ...currentAdaPriceFixture(), asOf: 0 })],
-    ['fractional asOf', () => ({ ...currentAdaPriceFixture(), asOf: Date.now() / 1000 })],
+    ['fractional asOf', () => ({ ...currentAdaPriceFixture(), asOf: Math.floor(Date.now() / 1000) - 0.5 })],
     ['future asOf', () => currentAdaPriceFixture(Math.floor(Date.now() / 1000) + 60)],
     [
       'stale asOf',
@@ -1469,23 +1454,35 @@ describe('extension dependency smoke', () => {
       undefined,
       CARDANO_MAINNET.NetworkId
     );
-    const accountPrivateKey = RustModule.WalletV4.Bip32PrivateKey.from_hex(
-      '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
+    const accountPrivateKey = RustModule.WasmScope(Module =>
+      Module.CML.Bip32PrivateKey.from_raw_bytes(
+        hexToBytes(
+          '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
+        )
+      ).to_raw_bytes()
     );
+    const unsignedBytes =
+      unsignedTx.txBuilder instanceof Uint8Array ? unsignedTx.txBuilder : unsignedTx.txBuilder.build().to_bytes();
     const signedTx = signTransaction(
       unsignedTx.senderUtxos,
-      unsignedTx.txBuilder.build().to_bytes(),
+      unsignedBytes,
       Bip44DerivationLevels.ACCOUNT.level,
       accountPrivateKey,
       null,
       undefined
     );
-    const bootstrapWitnesses = signedTx.witness_set().bootstraps();
-    const signedFee = signedTx.body().fee().to_str();
+    const signedDetails = RustModule.WasmScope(Module => {
+      const transaction = Module.CML.Transaction.from_cbor_bytes(signedTx instanceof Uint8Array ? signedTx : signedTx.to_bytes());
+      const bootstrapWitnesses = transaction.witness_set().bootstrap_witnesses();
+      return {
+        bootstrapCount: bootstrapWitnesses?.len() ?? 0,
+        fee: transaction.body().fee().toString(),
+      };
+    });
 
     expect(unsignedTx.senderUtxos).toEqual([senderUtxo]);
-    expect(new BigNumber(signedFee).gt(0)).toEqual(true);
-    expect(bootstrapWitnesses == null ? 0 : bootstrapWitnesses.len()).toEqual(1);
+    expect(new BigNumber(signedDetails.fee).gt(0)).toEqual(true);
+    expect(signedDetails.bootstrapCount).toEqual(1);
   });
 
   test('keeps dApp connector public methods wired to expected RPC contracts', async () => {

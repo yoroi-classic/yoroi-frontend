@@ -29,65 +29,69 @@ const hexToBytes = (hex: string): Uint8Array => {
   for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
   return out;
 };
-const bytesToHex = (bytes: Uint8Array): string => {
-  let hex = '';
-  // @ts-ignore
-  for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
-  return hex;
-};
 const looksLikeTUSO = (hex: string) =>
   typeof hex === 'string' && /^[0-9a-f]+$/i.test(hex) && hex.toLowerCase().startsWith('82825820'); // 82 [input,output] / 82 [hash,index] / 58 20 (32-byte hash)
+
+const unwrapScriptRef = (bytes: Uint8Array): Uint8Array => {
+  // ScriptRef is CBOR tag 24 wrapping a byte string containing the script CBOR.
+  if (bytes[0] !== 0xd8 || bytes[1] !== 0x18) throw new Error('Invalid script reference CBOR');
+  const header = bytes[2];
+  if (header == null || header >> 5 !== 2) throw new Error('Invalid script reference byte string');
+  const additional = header & 0x1f;
+  let length: number;
+  let offset: number;
+  if (additional < 24) {
+    length = additional;
+    offset = 3;
+  } else {
+    const size = additional === 24 ? 1 : additional === 25 ? 2 : additional === 26 ? 4 : additional === 27 ? 8 : 0;
+    if (size === 0 || bytes.length < 3 + size) throw new Error('Invalid script reference length');
+    length = 0;
+    for (let i = 0; i < size; i++) length = length * 256 + (bytes[3 + i] ?? 0);
+    offset = 3 + size;
+  }
+  if (bytes.length !== offset + length) throw new Error('Invalid script reference payload length');
+  return bytes.slice(offset);
+};
 
 export const useGetInputs = (walletUtxos: WalletUtxo[]) => {
   // encode one UTxO -> CBOR hex TUSO
   const encodeUtxo = (u: WalletUtxo): string => {
-    const { WalletV4 } = RustModule;
+    const hex = RustModule.WasmScope(Module => {
+      const CML = Module.CML;
+      const input = CML.TransactionInput.new(
+        CML.TransactionHash.from_hex(u.output.Transaction.Hash),
+        BigInt(u.output.UtxoTransactionOutput.OutputIndex)
+      );
+      const multiAsset = CML.MultiAsset.new();
+      let lovelace = BigInt(0);
 
-    const input = WalletV4.TransactionInput.new(
-      WalletV4.TransactionHash.from_hex(u.output.Transaction.Hash),
-      u.output.UtxoTransactionOutput.OutputIndex
-    );
-
-    const addr = WalletV4.Address.from_bytes(hexToBytes(u.address));
-
-    const value = WalletV4.Value.new(WalletV4.BigNum.from_str('0'));
-    const ma = WalletV4.MultiAsset.new();
-    let lovelaceSet = false;
-
-    for (const t of u.output.tokens ?? []) {
-      const amt = WalletV4.BigNum.from_str(t.TokenList.Amount);
-      const isAda = t.Token.Identifier === '.' || (t.Token.Metadata?.ticker ?? '').toUpperCase() === 'ADA';
-
-      if (isAda) {
-        value.set_coin(amt);
-        lovelaceSet = true;
-      } else {
-        const policyId = t.Token.Metadata?.policyId;
-        const assetNameHex = t.Token.Metadata?.assetName;
-        if (!policyId || !assetNameHex) continue;
-        const policy = WalletV4.ScriptHash.from_hex(policyId);
-        const assets = ma.get(policy) ?? WalletV4.Assets.new();
-        assets.insert(WalletV4.AssetName.new(hexToBytes(assetNameHex)), amt);
-        ma.insert(policy, assets);
+      for (const token of u.output.tokens ?? []) {
+        const amount = BigInt(token.TokenList.Amount);
+        const isAda = token.Token.Identifier === '.' || (token.Token.Metadata?.ticker ?? '').toUpperCase() === 'ADA';
+        if (isAda) {
+          lovelace = amount;
+          continue;
+        }
+        const policyId = token.Token.Metadata?.policyId;
+        const assetNameHex = token.Token.Metadata?.assetName;
+        if (policyId == null || assetNameHex == null) continue;
+        multiAsset.set(CML.ScriptHash.from_hex(policyId), CML.AssetName.from_raw_bytes(hexToBytes(assetNameHex)), amount);
       }
-    }
 
-    if (!lovelaceSet) value.set_coin(WalletV4.BigNum.from_str('0'));
-    if (ma.len() > 0) value.set_multiasset(ma);
-
-    const out = WalletV4.TransactionOutput.new(addr, value);
-
-    if (u.output.inlineDatumCborHex) {
-      out.set_datum(WalletV4.Datum.new_data(WalletV4.PlutusData.from_bytes(hexToBytes(u.output.inlineDatumCborHex))));
-    } else if (u.output.datumHashHex) {
-      out.set_datum(WalletV4.Datum.new_data_hash(WalletV4.DataHash.from_bytes(hexToBytes(u.output.datumHashHex))));
-    }
-    if (u.output.scriptRefCborHex) {
-      out.set_script_ref(WalletV4.ScriptRef.from_bytes(hexToBytes(u.output.scriptRefCborHex)));
-    }
-
-    const tuso = WalletV4.TransactionUnspentOutput.new(input, out);
-    const hex = bytesToHex(tuso.to_bytes());
+      const value = multiAsset.policy_count() > 0 ? CML.Value.new(lovelace, multiAsset) : CML.Value.from_coin(lovelace);
+      let datum;
+      if (u.output.inlineDatumCborHex) {
+        datum = CML.DatumOption.new_datum(CML.PlutusData.from_cbor_bytes(hexToBytes(u.output.inlineDatumCborHex)));
+      } else if (u.output.datumHashHex) {
+        datum = CML.DatumOption.new_hash(CML.DatumHash.from_hex(u.output.datumHashHex));
+      }
+      const scriptRef = u.output.scriptRefCborHex
+        ? CML.Script.from_cbor_bytes(unwrapScriptRef(hexToBytes(u.output.scriptRefCborHex)))
+        : undefined;
+      const output = CML.TransactionOutput.new(CML.Address.from_hex(u.address), value, datum, scriptRef);
+      return CML.TransactionUnspentOutput.new(input, output).to_cbor_hex();
+    });
     if (!looksLikeTUSO(hex)) throw new Error(`Not a full TransactionUnspentOutput: ${hex.slice(0, 10)}…`);
     return hex;
   };

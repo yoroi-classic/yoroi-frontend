@@ -101,11 +101,10 @@ import { ChainDerivations } from '../../../../../../config/numbersConfig';
 
 import type { Cip1852PublicDeriver } from './index';
 import { ConceptualWallet } from '../ConceptualWallet/index';
-import { RustModule } from '../../../cardanoCrypto/rustLoader';
 import { isCardanoHaskell } from '../../database/prepackaged/networks';
 import { GetUtxoAtSafePoint, GetUtxoDiffToBestBlock } from '../../database/utxo/api/read';
-import type { Utxo } from '@emurgo/yoroi-lib/dist/utxo/models';
-import { derivePublicByAddressing } from '../../../cardanoCrypto/deriveByAddressing';
+import type { Utxo } from '../../../state-fetch/utxoTypes';
+import { deriveBip32PublicKeyHashHex } from '../../../cardanoCrypto/cmlAddress';
 import { addressBech32ToHex } from '../../../cardanoCrypto/utils';
 
 // ===============
@@ -889,11 +888,7 @@ const Cip1852PickReceiveMixin = (superclass: Class<Cip1852PickReceiveMixinDepend
     ) => Promise<IPickReceiveResponse> = async (tx, deps, body, derivationTables) => {
       const stakingAddressDbRow = await this.rawGetStakingKey(tx, deps, undefined, derivationTables);
 
-      const keyHash = unwrapCardanoStakingKey(stakingAddressDbRow.addr.Hash).to_keyhash();
-      if (keyHash == null) {
-        throw new Error(`${nameof(Cip1852PickReceive)}::${nameof(this.rawPickReceive)} internal address is a script`);
-      }
-      const stakingKey = keyHash.to_hex();
+      const stakingKey = unwrapCardanoStakingKey(stakingAddressDbRow.addr.Hash);
       const ourBaseAddress = body.addrs
         .filter(addr => addr.Type === CoreAddressTypes.CARDANO_BASE)
         .filter(addr => addr.Hash.includes(stakingKey));
@@ -1286,11 +1281,6 @@ const ScanLegacyCardanoAccountUtxoMixin = (superclass: Class<ScanLegacyCardanoAc
       IScanAccountRequest,
       Map<number, string>
     ) => Promise<IScanAccountResponse> = async (_tx, _deps, body, _derivationTables): Promise<IScanAccountResponse> => {
-      const key = RustModule.WalletV2.Bip44AccountPublic.new(
-        RustModule.WalletV2.PublicKey.from_hex(body.accountPublicKey),
-        RustModule.WalletV2.DerivationScheme.v2()
-      );
-
       const network = this.getParent().getNetworkInfo();
       if (network.BaseConfig[0].ByronNetworkId == null) {
         throw new Error(`${nameof(ScanLegacyCardanoAccountUtxo)}::${nameof(this.rawScanAccount)} missing Byron network id`);
@@ -1298,8 +1288,8 @@ const ScanLegacyCardanoAccountUtxoMixin = (superclass: Class<ScanLegacyCardanoAc
       const { ByronNetworkId } = network.BaseConfig[0];
 
       return await scanBip44Account({
-        generateInternalAddresses: v2genAddressBatchFunc(key.bip44_chain(false), ByronNetworkId),
-        generateExternalAddresses: v2genAddressBatchFunc(key.bip44_chain(true), ByronNetworkId),
+        generateInternalAddresses: v2genAddressBatchFunc(body.accountPublicKey, 0, ByronNetworkId),
+        generateExternalAddresses: v2genAddressBatchFunc(body.accountPublicKey, 1, ByronNetworkId),
         network,
         lastUsedInternal: body.lastUsedInternal,
         lastUsedExternal: body.lastUsedExternal,
@@ -1344,15 +1334,10 @@ const ScanShelleyAccountUtxoMixin = (superclass: Class<ScanShelleyAccountUtxoDep
     ) => Promise<IScanAccountResponse> = async (tx, deps, body, derivationTables): Promise<IScanAccountResponse> => {
       const stakingAddressDbRow = await this.rawGetStakingKey(tx, deps, undefined, derivationTables);
 
-      const publicKey = RustModule.WalletV4.Bip32PublicKey.from_hex(body.accountPublicKey);
-
-      const stakingKey = derivePublicByAddressing({
-        addressing: stakingAddressDbRow.addressing,
-        startingFrom: {
-          level: this.getParent().getPublicDeriverLevel(),
-          key: publicKey,
-        },
-      });
+      const addressing = stakingAddressDbRow.addressing;
+      const firstPathIndex = this.getParent().getPublicDeriverLevel() - addressing.startLevel + 1;
+      if (firstPathIndex < 0) throw new Error('Public key derivation level is before the addressing start level');
+      const stakingKeyHash = deriveBip32PublicKeyHashHex(body.accountPublicKey, addressing.path, firstPathIndex);
 
       const network = this.getParent().getNetworkInfo();
 
@@ -1363,7 +1348,7 @@ const ScanShelleyAccountUtxoMixin = (superclass: Class<ScanShelleyAccountUtxoDep
         checkAddressesInUse: body.checkAddressesInUse,
         network,
         addByHash: rawGenAddByHash(new Set([...body.internalAddresses, ...body.externalAddresses])),
-        stakingKey: stakingKey.to_raw_key(),
+        stakingKeyHash,
       });
     };
   };

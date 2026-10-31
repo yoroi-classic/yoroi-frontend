@@ -2,7 +2,7 @@
 import type { Node } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { supportedProviders, swapApiMaker, swapManagerMaker, SwapProvider as Provider, swapStorageMaker } from 'legacySwap';
-import { unwrapStakingKey } from '../../api/ada/lib/storage/bridge/utils';
+import { stakingKeyHashFromRewardAddress } from '../../api/ada/lib/cardanoCrypto/cmlAddress';
 import type { WalletState } from '../../../chrome/extension/background/types';
 import { asyncLocalStorageWrapper } from '../../api/localStorage';
 
@@ -18,7 +18,7 @@ function SwapProvider({ children, publicDeriver }: Props): Node {
 
   useEffect(() => {
     const stakignAddr = publicDeriver.stakingAddress;
-    const skey = unwrapStakingKey(stakignAddr).to_keyhash()?.to_hex();
+    const skey = stakingKeyHashFromRewardAddress(stakignAddr);
     if (skey == null) {
       throw new Error('Cannot get staking key from the wallet!');
     }

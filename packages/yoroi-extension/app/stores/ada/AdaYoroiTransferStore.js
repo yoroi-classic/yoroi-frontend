@@ -24,14 +24,10 @@ export default class AdaYoroiTransferStore extends Store<StoresMap> {
   );
 
   _restoreWalletForTransfer: ({|
-    rootPk: RustModule.WalletV4.Bip32PrivateKey,
+    accountKey: RustModule.CML.Bip32PrivateKey,
     accountIndex: number,
   |}) => Promise<RestoreWalletForTransferResponse> = async request => {
-    const accountPubKey = request.rootPk
-      .derive(WalletTypePurpose.BIP44)
-      .derive(CoinTypes.CARDANO)
-      .derive(request.accountIndex)
-      .to_public();
+    const accountPubKey = request.accountKey.to_public();
 
     if (this.stores.profile.selectedNetwork == null) {
       throw new Error(`${nameof(AdaYoroiTransferStore)}::${nameof(this._restoreWalletForTransfer)} no network selected`);
@@ -59,18 +55,18 @@ export default class AdaYoroiTransferStore extends Store<StoresMap> {
     // 1) get receive address
     const destinationAddress = await request.getDestinationAddress();
 
-    // 2) Perform restoration
     const accountIndex = 0 + HARD_DERIVATION_START; // TODO: don't hardcode index
+    const accountKey = rootPk.derive(WalletTypePurpose.BIP44).derive(CoinTypes.CARDANO).derive(accountIndex);
+
+    // 2) Perform restoration
     const { addresses } = await this._restoreWalletForTransfer({
-      rootPk,
+      accountKey,
       accountIndex,
     });
 
     request.updateStatusCallback();
 
     // 3) Calculate private keys for restored wallet utxo
-
-    const accountKey = rootPk.derive(WalletTypePurpose.BIP44).derive(CoinTypes.CARDANO).derive(accountIndex);
 
     // 4) generate transaction
 
@@ -91,13 +87,11 @@ export default class AdaYoroiTransferStore extends Store<StoresMap> {
       network: selectedNetwork,
       getUTXOsForAddresses: this.stores.substores.ada.stateFetchStore.fetcher.getUTXOsForAddresses,
       protocolParams: {
-        keyDeposit: RustModule.WalletV4.BigNum.from_str(config.KeyDeposit),
-        linearFee: RustModule.WalletV4.LinearFee.new(
-          RustModule.WalletV4.BigNum.from_str(config.LinearFee.coefficient),
-          RustModule.WalletV4.BigNum.from_str(config.LinearFee.constant)
-        ),
-        coinsPerUtxoByte: RustModule.WalletV4.BigNum.from_str(config.CoinsPerUtxoByte),
-        poolDeposit: RustModule.WalletV4.BigNum.from_str(config.PoolDeposit),
+        keyDeposit: config.KeyDeposit,
+        linearFeeCoefficient: config.LinearFee.coefficient,
+        linearFeeConstant: config.LinearFee.constant,
+        coinsPerUtxoByte: config.CoinsPerUtxoByte,
+        poolDeposit: config.PoolDeposit,
         networkId: selectedNetwork.NetworkId,
       },
       // use server time for TTL if connected to server

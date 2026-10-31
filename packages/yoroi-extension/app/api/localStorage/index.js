@@ -11,8 +11,12 @@ import type { CatalystRoundInfoResponse } from '../ada/lib/state-fetch/types';
 import type { CardanoShelleyTransactionCtorData } from '../../domain/CardanoShelleyTransaction';
 import { deserializeTransactionCtorData } from '../../domain/CardanoShelleyTransaction';
 import { maybe } from '../../coreUtils';
-import type { StorageAPI } from '@emurgo/yoroi-lib/dist/flags';
 import { networks } from '../ada/lib/storage/database/prepackaged/networks';
+
+export type StorageAPI = {|
+  set: (key: string, value: string) => Promise<void>,
+  get: (key: string) => Promise<?string>,
+|};
 
 const networkForLocalStorage = String(environment.getNetworkName());
 const storageKeys = {

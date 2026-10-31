@@ -34,11 +34,8 @@ const handlers = Object.freeze({
     if (!publicDeriver) {
       return { ok: publicDeriver };
     }
-    const address = RustModule.WalletV4.Address.from_hex(
-      (await getAllAddressesForDisplay({ publicDeriver, type: CoreAddressTypes.CARDANO_BASE }))[0].address
-    );
-    const result = address.to_bech32();
-    address.free();
+    const addressHex = (await getAllAddressesForDisplay({ publicDeriver, type: CoreAddressTypes.CARDANO_BASE }))[0].address;
+    const result = RustModule.WasmScope(Module => Module.CML.Address.from_hex(addressHex).to_bech32());
     return { ok: result };
   },
 

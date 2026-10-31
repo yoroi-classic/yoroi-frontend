@@ -1,11 +1,9 @@
-import { GovernanceApi } from '@emurgo/yoroi-lib/dist/governance/emurgo-api';
 import * as React from 'react';
-import { RustModule } from '../../../../api/ada/lib/cardanoCrypto/rustLoader';
+import CmlGovernanceApi from '../../../../api/ada/lib/cardanoCrypto/cmlGovernanceApi';
 import { dRepNormalize } from '../../../../api/ada/lib/cardanoCrypto/utils';
-import { unwrapStakingKey } from '../../../../api/ada/lib/storage/bridge/utils';
+import { stakingKeyHashFromRewardAddress } from '../../../../api/ada/lib/cardanoCrypto/cmlAddress';
 import { getPrivateStakingKey } from '../../../../api/thunk';
 import { DREP_ALWAYS_ABSTAIN, DREP_ALWAYS_NO_CONFIDENCE } from '../common/constants';
-import { useGovernanceManagerMaker } from '../common/hooks/useGovernanceManagerMaker';
 import { GovernanceActionType, GovernanceReducer, defaultGovernanceActions, defaultGovernanceState } from './state';
 
 type drepDelegation = { status: string | null; drep: string | null };
@@ -15,7 +13,6 @@ const initialGovernanceProvider = {
   ...defaultGovernanceState,
   ...defaultGovernanceActions,
   walletId: '',
-  governanceManager: null,
   checkUserPassword: (_password: string) => Response,
   txDelegationResult: null,
   txDelegationError: null,
@@ -62,7 +59,7 @@ export const GovernanceContextProvider = ({
   const [state, dispatch] = React.useReducer(GovernanceReducer, {
     ...defaultGovernanceState,
   });
-  const [stakingKeyHex, setStakingKeyHex] = React.useState(null);
+  const [stakingKeyHex, setStakingKeyHex] = React.useState<string | null>(null);
   const [governanceStatus, setGovernanceStatus] = React.useState<drepDelegation>({ status: null, drep: null });
   const {
     walletId,
@@ -77,7 +74,6 @@ export const GovernanceContextProvider = ({
     submitedTransactions,
     stakingAddress,
   } = currentWallet;
-  const governanceManager = useGovernanceManagerMaker(walletId, networkId);
 
   const checkUserPassword = async (password: string): Promise<any> => {
     try {
@@ -88,7 +84,7 @@ export const GovernanceContextProvider = ({
   };
 
   React.useEffect(() => {
-    const skey = unwrapStakingKey(stakingAddress).to_keyhash()?.to_hex();
+    const skey = stakingKeyHashFromRewardAddress(stakingAddress);
     if (skey == null) {
       throw new Error(`missing staking key functionality`);
     }
@@ -104,11 +100,10 @@ export const GovernanceContextProvider = ({
   }, [stakingKeyHex]);
 
   const getGovApiState = async () => {
-    const govApi = new GovernanceApi({
+    const govApi = new CmlGovernanceApi({
       oldBackendUrl: String(backendService),
       newBackendUrl: String(backendServiceZero),
       networkId: networkId,
-      wasmFactory: RustModule.CrossCsl.init,
     });
     const governanceStatusState: any = await govApi.getAccountState(
       stakingAddress.substring(2) || '',
@@ -142,7 +137,6 @@ export const GovernanceContextProvider = ({
   const context: any = {
     ...state,
     ...actions,
-    governanceManager: governanceManager,
     stakePoolKeyHash: currentPool?.hash ?? '',
     walletId: currentWallet.walletId,
     stakingKeyHex,

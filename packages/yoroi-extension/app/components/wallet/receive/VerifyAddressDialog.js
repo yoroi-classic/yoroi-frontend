@@ -13,12 +13,8 @@ import { toDerivationPathString } from '../../../api/ada/lib/cardanoCrypto/keys/
 import { SelectedExplorer } from '../../../domain/SelectedExplorer';
 import { truncateAddress } from '../../../utils/formatters';
 import { CoreAddressTypes } from '../../../api/ada/lib/storage/database/primitives/enums';
-import { RustModule } from '../../../api/ada/lib/cardanoCrypto/rustLoader';
-import {
-  isCardanoHaskellAddress,
-  getCardanoSpendingKeyHash,
-  normalizeToAddress,
-} from '../../../api/ada/lib/storage/bridge/utils';
+import { stakeCredentialHashFromAddress, stakePointerFromAddressBech32 } from '../../../api/ada/lib/cardanoCrypto/cmlAddress';
+import { isCardanoHaskellAddress, getCardanoSpendingKeyHash } from '../../../api/ada/lib/storage/bridge/utils';
 import classnames from 'classnames';
 import QrCodeWrapper from '../../widgets/QrCodeWrapper';
 import Dialog from '../../widgets/Dialog';
@@ -156,16 +152,7 @@ export default class VerifyAddressDialog extends Component<Props> {
     const intl = this.context;
     const { type: addrType, address } = this.props.addressInfo;
 
-    const getStakingKey = (WasmScope: typeof RustModule) => {
-      if (addrType === CoreAddressTypes.CARDANO_BASE) {
-        const wasmAddr = WasmScope.WalletV4.BaseAddress.from_address(
-          WasmScope.WalletV4.Address.from_bech32(address)
-        )?.stake_cred();
-        return (wasmAddr?.to_keyhash() ?? wasmAddr?.to_scripthash())?.to_hex();
-      }
-    };
-
-    const stakingKey = RustModule.WasmScope(getStakingKey);
+    const stakingKey = addrType === CoreAddressTypes.CARDANO_BASE ? stakeCredentialHashFromAddress(address) : null;
     if (stakingKey == null) return null;
     return (
       <>
@@ -187,12 +174,10 @@ export default class VerifyAddressDialog extends Component<Props> {
 
     const getSpendingKey = () => {
       if (isCardanoHaskellAddress(this.props.addressInfo.type)) {
-        const wasmAddr = normalizeToAddress(this.props.addressInfo.address);
-        if (wasmAddr == null) throw new Error('Should never happen');
-        const spendingKey = getCardanoSpendingKeyHash(wasmAddr);
+        const spendingKey = getCardanoSpendingKeyHash(this.props.addressInfo.address);
         if (spendingKey === null) return null; // legacy address ignored
         if (spendingKey === undefined) return null; // TODO: handle script outputs
-        return spendingKey.to_hex();
+        return spendingKey;
       }
     };
 
@@ -221,14 +206,7 @@ export default class VerifyAddressDialog extends Component<Props> {
       return null;
     }
 
-    const addrInfo = RustModule.WasmScope(Scope => {
-      const wasmAddr = Scope.WalletV4.PointerAddress.from_address(
-        RustModule.WalletV4.Address.from_bech32(this.props.addressInfo.address)
-      )?.stake_pointer();
-      if (wasmAddr == null) return null; // should never happen
-
-      return [wasmAddr.slot(), wasmAddr.tx_index(), wasmAddr.cert_index()];
-    });
+    const addrInfo = stakePointerFromAddressBech32(this.props.addressInfo.address);
 
     if (addrInfo == null) return null; // should never happen
 

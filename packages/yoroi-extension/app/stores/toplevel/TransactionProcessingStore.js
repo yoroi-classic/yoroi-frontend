@@ -17,7 +17,7 @@ import { convertToLocalizableError as ledgerConvertToLocalizableError } from '..
 import type { Addressing, Address, Value } from '../../api/ada/lib/storage/models/PublicDeriver/interfaces';
 import { generateCip15RegistrationMetadata, generateRegistrationMetadata } from '../../api/ada/lib/cardanoCrypto/catalyst';
 import { TxAuxiliaryDataSupplementType } from '@cardano-foundation/ledgerjs-hw-app-cardano';
-import { fail } from '../../coreUtils';
+import { fail, hexToBytes } from '../../coreUtils';
 import { transactionHexToBodyHex } from '../../api/ada/lib/cardanoCrypto/utils';
 import { getNetworkById } from '../../api/ada/lib/storage/database/prepackaged/networks.js';
 import { LedgerConnect } from '../../utils/hwConnectHandler';
@@ -209,14 +209,14 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       );
 
       const { signedTxHex, txId, metadata } = await this.trezorSignRawTx({
-        rawTxHex: request.signRequest.self().build_tx().to_hex(),
+        rawTxHex: request.signRequest.serializedUnsignedTxHex(),
         wallet: request.wallet,
         catalystData: request.signRequest.trezorTCatalystRegistrationTxSignData,
         changeAddrs: request.signRequest.changeAddr,
       });
 
       if (metadata) {
-        request.signRequest.self().set_auxiliary_data(metadata);
+        request.signRequest.setMetadata(metadata);
       }
 
       await broadcastTransaction({
@@ -248,7 +248,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
   |}) => Promise<{|
     signedTxHex: string,
     txId: string,
-    metadata: ?RustModule.WalletV4.AuxiliaryData,
+    metadata: ?Uint8Array,
   |}> = async request => {
     try {
       Logger.debug(`${nameof(TransactionProcessingStore)}::${nameof(this.trezorSignRawTx)} called: ` + stringifyData(request));
@@ -349,7 +349,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       const mainnetNetworkIdForByronTransfer = request.signRequest.networkSettingSnapshot.NetworkId;
 
       const { signedTxHex, txId, metadata } = await this.ledgerWalletSignRawTx({
-        rawTxHex: request.signRequest.self().build_tx().to_hex(),
+        rawTxHex: request.signRequest.serializedUnsignedTxHex(),
         wallet: {
           ...request.wallet,
           networkId: mainnetNetworkIdForByronTransfer,
@@ -360,7 +360,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       });
 
       if (metadata) {
-        request.signRequest.self().set_auxiliary_data(metadata);
+        request.signRequest.setMetadata(metadata);
       }
 
       await broadcastTransaction({
@@ -396,7 +396,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
   |}) => Promise<{|
     signedTxHex: string,
     txId: string,
-    metadata: ?RustModule.WalletV4.AuxiliaryData,
+    metadata: ?Uint8Array,
   |}> = async request => {
     try {
       Logger.debug(
@@ -404,7 +404,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
       );
 
       const publicKeyInfo = {
-        key: RustModule.WalletV4.Bip32PublicKey.from_hex(request.wallet.publicKey),
+        key: RustModule.CML.Bip32PublicKey.from_raw_bytes(hexToBytes(request.wallet.publicKey)),
         addressing: {
           startLevel: 1,
           path: request.wallet.pathToPublic,
@@ -479,7 +479,9 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
           ledgerSignTxResp.auxiliaryDataSupplement.type !== TxAuxiliaryDataSupplementType.CIP36_REGISTRATION
         ) {
           throw new Error(
-            `${nameof(TransactionProcessingStore)}::${nameof(this.ledgerWalletSignRawTx)} unexpected Ledger sign transaction response`
+            `${nameof(TransactionProcessingStore)}::${nameof(
+              this.ledgerWalletSignRawTx
+            )} unexpected Ledger sign transaction response`
           );
         }
         const { cip36VoteRegistrationSignatureHex } = ledgerSignTxResp.auxiliaryDataSupplement;
