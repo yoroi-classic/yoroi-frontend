@@ -17,7 +17,12 @@ import {
   signTransaction,
   transactionWitnessSetHex,
 } from './transactions';
-import { AssetOverflowError, NoOutputsError, NotEnoughMoneyToSendError } from '../../../common/errors';
+import {
+  AssetOverflowError,
+  CannotSendBelowMinimumValueError,
+  NoOutputsError,
+  NotEnoughMoneyToSendError,
+} from '../../../common/errors';
 
 import { loadLovefieldDB } from '../../lib/storage/database/index';
 import { Bip44DerivationLevels } from '../../lib/storage/database/walletTypes/bip44/api/utils';
@@ -293,6 +298,30 @@ test('recognizes CML minimum UTxO errors including its reported spelling', () =>
   expect(isMinimumUtxoValueError(new Error('Value 500000 less tan the minimum UTXO value 969750'))).toBe(true);
   expect(isMinimumUtxoValueError(new Error('Value 500000 less than the minimum UTXO value 969750'))).toBe(true);
   expect(isMinimumUtxoValueError(new Error('Insufficient funds'))).toBe(false);
+});
+
+it('maps a below-minimum ADA output to CannotSendBelowMinimumValueError', async () => {
+  const [changeAddress] = genSampleAdaAddresses();
+  if (changeAddress == null) throw new Error('Missing change address fixture');
+  const output = new MultiToken(
+    [{ amount: new BigNumber('500000'), identifier: defaultIdentifier, networkId: network.NetworkId }],
+    { defaultIdentifier, defaultNetworkId: network.NetworkId }
+  );
+
+  await expect(
+    newAdaUnsignedTxFromUtxo(
+      [{ address: changeAddress.address, amount: output }],
+      changeAddress,
+      [genSampleUtxos()[4]],
+      new BigNumber(0),
+      { ...getProtocolParams(), coinsPerUtxoByte: '4310' },
+      [],
+      [],
+      true,
+      undefined,
+      network.NetworkId
+    )
+  ).rejects.toThrow(CannotSendBelowMinimumValueError);
 });
 
 describe('Create unsigned TX from UTXO', () => {
@@ -1213,6 +1242,68 @@ describe('Create signed transactions', () => {
     expect(inspectCmlTransaction(signedTransaction)).toMatchObject({
       vkeyWitnessCount: 1,
       vkeyHashes: [keyHash],
+    });
+  });
+
+  it('deduplicates distinct payment and stake witnesses when signing a CIP-30 transaction', () => {
+    const accountPrivateKey = RustModule.CML.Bip32PrivateKey.from_raw_bytes(
+      hexToBytes(
+        '70afd5ff1f7f551c481b7e3f3541f7c63f5f6bcb293af92565af3deea0bcd6481a6e7b8acbe38f3906c63ccbe8b2d9b876572651ac5d2afc0aca284d9412bb1b4839bf02e1d990056d0f06af22ce4bcca52ac00f1074324aab96bbaaaccf290d'
+      )
+    );
+    const paymentKey = accountPrivateKey.derive(0).derive(0);
+    const stakeKey = accountPrivateKey.derive(2).derive(STAKING_KEY_INDEX).to_raw_key();
+    const { bodyBytes, senderUtxo, requiredStakeSigner, paymentKeyHash, stakeKeyHash } = RustModule.WasmScope(Module => {
+      const cml = Module.CML;
+      const paymentHash = paymentKey.to_public().to_raw_key().hash();
+      const stakeHash = stakeKey.to_public().hash();
+      const paymentCredential = cml.Credential.new_pub_key(paymentHash);
+      const stakeCredential = cml.Credential.new_pub_key(stakeHash);
+      const address = cml.EnterpriseAddress.new(network.NetworkId, paymentCredential).to_address();
+      const rewardAddress = cml.RewardAddress.new(network.NetworkId, stakeCredential).to_address();
+      const inputHash = cml.TransactionHash.from_hex('05ec4a4a7f4645fa66886cef2e34706907a3a7f9d88e0d48b313ad2cdf76fb5f');
+      const inputs = cml.TransactionInputList.new();
+      inputs.add(cml.TransactionInput.new(inputHash, BigInt('0')));
+      const outputs = cml.TransactionOutputList.new();
+      outputs.add(cml.TransactionOutput.new(address, cml.Value.new(BigInt('2000000'), cml.MultiAsset.new())));
+      const body = cml.TransactionBody.new(inputs, outputs, BigInt('1000'));
+      const certificates = cml.CertificateList.new();
+      certificates.add(cml.Certificate.new_stake_registration(stakeCredential));
+      certificates.add(cml.Certificate.new_stake_delegation(stakeCredential, cml.Ed25519KeyHash.from_hex('22'.repeat(28))));
+      body.set_certs(certificates);
+      return {
+        bodyBytes: body.to_cbor_bytes(),
+        senderUtxo: {
+          amount: '3000000',
+          assets: [],
+          addressing: { path: [0, 0], startLevel: Bip44DerivationLevels.CHAIN.level },
+          receiver: address.to_hex(),
+          tx_hash: '05ec4a4a7f4645fa66886cef2e34706907a3a7f9d88e0d48b313ad2cdf76fb5f',
+          tx_index: 0,
+          utxo_id: '05ec4a4a7f4645fa66886cef2e34706907a3a7f9d88e0d48b313ad2cdf76fb5f0',
+        },
+        requiredStakeSigner: {
+          address: rewardAddress.to_hex(),
+          addressing: { path: [2, STAKING_KEY_INDEX], startLevel: Bip44DerivationLevels.CHAIN.level },
+        },
+        paymentKeyHash: paymentHash.to_hex(),
+        stakeKeyHash: stakeHash.to_hex(),
+      };
+    });
+
+    const signedTransaction = signTransaction(
+      [senderUtxo],
+      bodyBytes,
+      Bip44DerivationLevels.ACCOUNT.level,
+      accountPrivateKey.to_raw_bytes(),
+      stakeKey.to_raw_bytes(),
+      undefined,
+      [requiredStakeSigner]
+    );
+
+    expect(inspectCmlTransaction(signedTransaction)).toMatchObject({
+      vkeyWitnessCount: 2,
+      vkeyHashes: expect.arrayContaining([paymentKeyHash, stakeKeyHash]),
     });
   });
 
