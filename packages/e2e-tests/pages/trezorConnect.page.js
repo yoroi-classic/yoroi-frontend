@@ -86,7 +86,8 @@ class TrezorConnect extends BasePage {
   async allowConnection() {
     this.logger.info(`TrezorConnect::allowConnection is called`);
     await this.waitForElement(this.confirmUsingTrezorButtonLocator);
-    await this.clickByScript(this.confirmUsingTrezorButtonLocator);
+    // Suite's permission grant requires a trusted user gesture in Chrome.
+    await this.click(this.confirmUsingTrezorButtonLocator);
   }
   async allowPubKeysExport() {
     this.logger.info(`TrezorConnect::allowPubKeysExport is called`);

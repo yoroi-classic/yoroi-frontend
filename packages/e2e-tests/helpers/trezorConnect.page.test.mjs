@@ -2,6 +2,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import TrezorConnect from '../pages/trezorConnect.page.js';
 
+test('grants Trezor connection permission with a user click', async () => {
+  const page = new TrezorConnect({}, { info() {} });
+  const clicks = [];
+
+  page.waitForElement = async locator => assert.equal(locator, page.confirmUsingTrezorButtonLocator);
+  page.click = async locator => clicks.push(locator);
+  page.clickByScript = async () => {
+    throw new Error('Trezor permission must be granted with a user click');
+  };
+
+  await page.allowConnection();
+
+  assert.deepEqual(clicks, [page.confirmUsingTrezorButtonLocator]);
+});
+
 test('waits for the v10 account export confirmation and confirms with a user click', async () => {
   const page = new TrezorConnect({}, { info() {} });
   const confirmButton = {};
