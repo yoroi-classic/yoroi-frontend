@@ -35,6 +35,10 @@ class TrezorConnect extends BasePage {
     locator: 'button[data-testid="web-usb-button"]',
     method: 'css',
   };
+  exportAccountsConfirmButtonLocator = {
+    locator: 'button[data-testid="@connect-address-confirmation/confirm-button"]',
+    method: 'css',
+  };
   exportAddressTitleTextLocator = {
     locator: '#container > div > div:nth-child(1) > h3',
     method: 'css',
@@ -90,13 +94,20 @@ class TrezorConnect extends BasePage {
       async () => {
         const connectTrezorButtons = await this.findElements(this.connectTrezorButtonLocator);
         const legacyExportButtons = await this.findElements(this.legacyExportTrezorButtonLocator);
-        return connectTrezorButtons.length > 0 || legacyExportButtons.length > 0;
+        const exportAccountsConfirmButtons = await this.findElements(this.exportAccountsConfirmButtonLocator);
+        return connectTrezorButtons.length > 0 || legacyExportButtons.length > 0 || exportAccountsConfirmButtons.length > 0;
       },
       defaultWaitTimeout,
       halfSecond
     );
     if (!exportPromptLoaded) {
       throw new Error('Trezor export prompt is not found');
+    }
+
+    const exportAccountsConfirmButtons = await this.findElements(this.exportAccountsConfirmButtonLocator);
+    if (exportAccountsConfirmButtons.length > 0) {
+      await this.click(this.exportAccountsConfirmButtonLocator);
+      return;
     }
 
     const connectTrezorButtons = await this.findElements(this.connectTrezorButtonLocator);
@@ -106,6 +117,8 @@ class TrezorConnect extends BasePage {
       // Trezor Connect uses WebUSB from this button. A script-triggered click
       // does not grant the browser's transient user activation for requestDevice().
       await this.click(this.findTrezorButtonLocator);
+      await this.waitForElement(this.exportAccountsConfirmButtonLocator);
+      await this.click(this.exportAccountsConfirmButtonLocator);
       return;
     }
 
