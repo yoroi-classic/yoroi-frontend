@@ -23,9 +23,13 @@ class TrezorConnect extends BasePage {
     locator: 'button[data-testid="@connect-permissions-modal/confirm-button"], .confirm',
     method: 'css',
   };
-  exportTrezorButtonLocator = {
+  connectTrezorButtonLocator = {
     locator: '//button[normalize-space(.)="Connect Trezor"]',
     method: 'xpath',
+  };
+  legacyExportTrezorButtonLocator = {
+    locator: '.confirm',
+    method: 'css',
   };
   findTrezorButtonLocator = {
     locator: 'button[data-testid="web-usb-button"]',
@@ -82,10 +86,16 @@ class TrezorConnect extends BasePage {
   }
   async allowPubKeysExport() {
     this.logger.info(`TrezorConnect::allowPubKeysExport is called`);
-    await this.waitForElement(this.exportTrezorButtonLocator);
-    await this.clickByScript(this.exportTrezorButtonLocator);
-    await this.waitForElement(this.findTrezorButtonLocator);
-    await this.clickByScript(this.findTrezorButtonLocator);
+    const connectTrezorButtons = await this.findElements(this.connectTrezorButtonLocator);
+    if (connectTrezorButtons.length > 0) {
+      await this.clickElementByScript(connectTrezorButtons[0]);
+      await this.waitForElement(this.findTrezorButtonLocator);
+      await this.clickByScript(this.findTrezorButtonLocator);
+      return;
+    }
+
+    await this.waitForElement(this.legacyExportTrezorButtonLocator);
+    await this.clickByScript(this.legacyExportTrezorButtonLocator);
   }
   async exportAddressPageIsDisplayed() {
     this.logger.info(`TrezorConnect::exportAddressPageIsDisplayed is called`);
