@@ -215,12 +215,9 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
       }
     }
 
-    if (
-      trezorResp == null ||
-      trezorResp.payload == null ||
-      trezorResp.payload.publicKey == null ||
-      trezorResp.payload.publicKey.length <= 0
-    ) {
+    // The key itself is validated by normalizeTrezorPublicKey, which also
+    // accepts a payload carrying only node.public_key and node.chain_code.
+    if (trezorResp == null || trezorResp.payload == null) {
       throw new Error('Invalid public key received from Trezor device');
     }
 
