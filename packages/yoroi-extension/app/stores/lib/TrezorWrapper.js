@@ -1,20 +1,19 @@
 // @flow
 
 import Config from '../../config';
-import TrezorConnect from 'trezor-connect-flow';
+import type TrezorConnect from 'trezor-connect-flow';
 import type { Manifest } from 'trezor-connect-flow';
 
 /* eslint-disable no-restricted-properties */
 
-/*
- * Trezor needs to embed an iframe inside Yoroi to function (created by TrezorConnect.init)
- * Some TrezorConnect functions depend on this iframe existing, while others don't
- * Goal: want to only keep the Trezor iframe open for the least amount of time for safety & privacy
- *
- * To do this safely, we disallow the usage of TrezorConnect in the whole codebase
- * except for this function that exposes wrapper functions
- * that forces the programmer to explicitly decide to initialize the iframe or not
- */
+export const TREZOR_CONNECT_REQUEST_TYPE = 'yoroi-trezor-connect';
+
+type TrezorConnectApi = {|
+  cardanoGetPublicKey: typeof TrezorConnect.cardanoGetPublicKey,
+  cardanoGetAddress: typeof TrezorConnect.cardanoGetAddress,
+  cardanoSignMessage: typeof TrezorConnect.cardanoSignMessage,
+  cardanoSignTransaction: typeof TrezorConnect.cardanoSignTransaction,
+|};
 
 export function getTrezorManifest(): Manifest {
   /** Starting from v7 Trezor Connect Manifest has been made mandatory
@@ -30,14 +29,28 @@ export function getTrezorManifest(): Manifest {
   return trezorManifest;
 }
 
-export async function wrapWithFrame<T>(func: (typeof TrezorConnect) => Promise<T>): Promise<T> {
-  const trezorManifest = getTrezorManifest();
-  await TrezorConnect.init({
-    manifest: trezorManifest,
+function sendTrezorRequest(method: string, params: Object): Promise<any> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type: TREZOR_CONNECT_REQUEST_TYPE, method, params }, response => {
+      const runtimeError = chrome.runtime.lastError;
+      if (runtimeError) {
+        reject(new Error(runtimeError.message));
+      } else if (!response || typeof response !== 'object') {
+        reject(new Error('Trezor Connect returned no response'));
+      } else {
+        resolve(response);
+      }
+    });
   });
-  try {
-    return await func(TrezorConnect);
-  } finally {
-    await TrezorConnect.dispose();
-  }
+}
+
+const trezorConnectProxy: TrezorConnectApi = {
+  cardanoGetPublicKey: params => sendTrezorRequest('cardanoGetPublicKey', params),
+  cardanoGetAddress: params => sendTrezorRequest('cardanoGetAddress', params),
+  cardanoSignMessage: params => sendTrezorRequest('cardanoSignMessage', params),
+  cardanoSignTransaction: params => sendTrezorRequest('cardanoSignTransaction', params),
+};
+
+export async function withTrezorConnect<T>(func: TrezorConnectApi => Promise<T>): Promise<T> {
+  return func(trezorConnectProxy);
 }

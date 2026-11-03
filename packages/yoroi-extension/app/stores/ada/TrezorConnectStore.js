@@ -3,12 +3,11 @@
 
 import { action, observable } from 'mobx';
 import type { CardanoPublicKey, Success, TrezorFeatures, Unsuccessful } from 'trezor-connect-flow';
-import TrezorConnect from 'trezor-connect-flow';
 import Store from '../base/Store';
 import globalMessages from '../../i18n/global-messages';
 import LocalizableError, { UnexpectedError } from '../../i18n/LocalizableError';
 import { CheckAddressesInUseApiError } from '../../api/common/errors';
-import { wrapWithFrame } from '../lib/TrezorWrapper';
+import { withTrezorConnect } from '../lib/TrezorWrapper';
 import { ROUTES } from '../../routes-config';
 import Config from '../../config';
 // This is actually just an interface
@@ -150,7 +149,7 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     try {
       this.hwDeviceInfo = undefined;
 
-      const trezorConnection = await wrapWithFrame(async trezor => {
+      const trezorConnection = await withTrezorConnect(async trezor => {
         const trezorResp = await trezor.cardanoGetPublicKey({
           path: this.getPath(),
           showOnTrezor: false,
@@ -348,14 +347,5 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     this.isCreateHWActive = active;
   };
 
-  // this is used to inject test data
-  // prettier-ignore
-  setSelectedMockWallet: string => Promise<void> = async serial => {
-    // $FlowExpectedError[prop-missing] only added in tests
-    if (TrezorConnect.setSelectedWallet != null) { // eslint-disable-line no-restricted-properties
-      // $FlowExpectedError[not-a-function] only added in tests
-      await TrezorConnect.setSelectedWallet(serial); // eslint-disable-line no-restricted-properties
-    }
-  };
   // =================== API =================== //
 }

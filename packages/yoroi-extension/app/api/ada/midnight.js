@@ -8,7 +8,7 @@ import { getNetworkById } from './lib/storage/database/prepackaged/networks';
 import { MessageAddressFieldType, AddressType } from '@cardano-foundation/ledgerjs-hw-app-cardano';
 import { LedgerConnect } from '../../utils/hwConnectHandler';
 import type { WalletState } from '../../../chrome/extension/background/types';
-import { wrapWithFrame } from '../../stores/lib/TrezorWrapper';
+import { withTrezorConnect } from '../../stores/lib/TrezorWrapper';
 import { CardanoDerivationType } from 'trezor-connect-flow';
 import LocalStorageApi, { loadSubmittedTransactions } from '../localStorage';
 import BigNumber from 'bignumber.js';
@@ -139,7 +139,7 @@ export async function signClaim(
     signResult = await encodeHardwareWalletSignResult(addressFieldHex, signatureHex, payload, signingPublicKeyHex, false);
     publicKey = signingPublicKeyHex;
   } else if (wallet.type === 'trezor') {
-    const resp = await wrapWithFrame(trezor =>
+    const resp = await withTrezorConnect(trezor =>
       trezor.cardanoSignMessage({
         path: [...wallet.stakingAddressing.addressing.path],
         payload,

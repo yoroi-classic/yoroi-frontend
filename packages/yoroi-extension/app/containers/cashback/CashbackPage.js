@@ -34,7 +34,7 @@ import LocalStorageApi from '../../api/localStorage';
 import DisclaimerDialog from '../../components/widgets/DisclaimerDialog';
 import type { BringConfigType, ConfigType } from '../../../config/config-types';
 import { ReactComponent as CloseCrossRevamp } from '../../assets/images/cross-dark-revamp.inline.svg';
-import { wrapWithFrame } from '../../stores/lib/TrezorWrapper';
+import { withTrezorConnect } from '../../stores/lib/TrezorWrapper';
 import { CardanoAddressType, CardanoDerivationType } from 'trezor-connect-flow';
 
 declare var chrome;
@@ -332,7 +332,7 @@ const CashbackPageContainer = observer((props: AllProps) => {
           const network = getNetworkById(wallet.networkId);
           const config = network.BaseConfig[0];
           const messageHex = stringToHex(msg);
-          const signResult = await wrapWithFrame(trezor =>
+          const signResult = await withTrezorConnect(trezor =>
             trezor.cardanoSignMessage({
               path: [...addressing.path],
               payload: messageHex,

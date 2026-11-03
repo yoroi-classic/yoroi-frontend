@@ -14,6 +14,8 @@ import { makeAccessorServer } from '../../../api/objectModel';
 // $FlowIgnore
 import appState from '../../../api/appState';
 import { storeLog, createLogEntry } from '../../../app/utils/logStorage';
+import { handleTrezorConnectMessage } from './trezorConnect';
+import { TREZOR_CONNECT_REQUEST_TYPE } from '../../../app/stores/lib/TrezorWrapper';
 
 // populated by ConfigWebpackPlugin
 declare var CONFIG: ConfigType;
@@ -80,6 +82,21 @@ if (chrome.action) {
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === TREZOR_CONNECT_REQUEST_TYPE) {
+    handleTrezorConnectMessage(message, sender)
+      .then(sendResponse)
+      .catch(error =>
+        sendResponse({
+          success: false,
+          payload: {
+            error: error instanceof Error ? error.message : 'Trezor Connect request failed',
+            code: 'TrezorConnectRequestError',
+          },
+        }),
+      );
+    return true;
+  }
+
   //fixme: verify sender.id === extension id
   /*if (environment.isDev()) {
     console.debug(`get message ${JSON.stringify(sanitizeForLog(message))} from ${sender.tab.id}`);

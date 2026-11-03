@@ -24,7 +24,7 @@ import { LedgerConnect } from '../../utils/hwConnectHandler';
 import { genAddressingLookup } from '../stateless/addressStores';
 import { RustModule } from '../../api/ada/lib/cardanoCrypto/rustLoader';
 import type { CardanoAddressedUtxo } from '../../api/ada/transactions/types';
-import { wrapWithFrame } from '../lib/TrezorWrapper';
+import { withTrezorConnect } from '../lib/TrezorWrapper';
 import type { WalletState } from '../../../chrome/extension/background/types';
 
 export type SendMoneyRequest = Request<DeferredCall<{| txId: string |}>>;
@@ -275,7 +275,7 @@ export default class TransactionProcessingStore extends Store<StoresMap> {
           ? response.result.trezorSignTxPayload
           : fail('Unecpected response type from `createHwSignTxDataFromRawTx` for trezor: ' + JSON.stringify(response));
 
-      const trezorSignTxResp = await wrapWithFrame(trezor => {
+      const trezorSignTxResp = await withTrezorConnect(trezor => {
         return trezor.cardanoSignTransaction(JSON.parse(JSON.stringify({ ...trezorSignTxPayload })));
       });
 
