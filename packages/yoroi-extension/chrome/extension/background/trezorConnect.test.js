@@ -41,6 +41,20 @@ describe('handleTrezorConnectMessage', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
+  it('dispatches feature requests through the service worker', async () => {
+    const response = { success: true, payload: { capabilities: [] } };
+    const init = jest.spyOn(TrezorConnect, 'init').mockResolvedValue(undefined);
+    const getFeatures = jest.spyOn(TrezorConnect, 'getFeatures').mockResolvedValue(response);
+    jest.spyOn(TrezorConnect, 'dispose').mockResolvedValue(undefined);
+
+    await expect(
+      handleTrezorConnectMessage({ type: TREZOR_CONNECT_REQUEST_TYPE, method: 'getFeatures', params: {} }, sender)
+    ).resolves.toBe(response);
+
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(getFeatures).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects requests from outside the extension', async () => {
     const init = jest.spyOn(TrezorConnect, 'init');
 

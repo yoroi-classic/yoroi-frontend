@@ -7,10 +7,18 @@ declare var chrome: any;
 
 /* eslint-disable no-restricted-properties */
 
-const supportedMethods = new Set(['cardanoGetPublicKey', 'cardanoGetAddress', 'cardanoSignMessage', 'cardanoSignTransaction']);
+const supportedMethods = new Set([
+  'getFeatures',
+  'cardanoGetPublicKey',
+  'cardanoGetAddress',
+  'cardanoSignMessage',
+  'cardanoSignTransaction',
+]);
 
 const callTrezorMethod = (method: string, params: any): Promise<any> => {
   switch (method) {
+    case 'getFeatures':
+      return TrezorConnect.getFeatures();
     case 'cardanoGetPublicKey':
       return TrezorConnect.cardanoGetPublicKey(params);
     case 'cardanoGetAddress':

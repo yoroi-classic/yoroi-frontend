@@ -10,6 +10,7 @@ declare var chrome: any;
 export const TREZOR_CONNECT_REQUEST_TYPE = 'yoroi-trezor-connect';
 
 type TrezorConnectApi = {|
+  getFeatures: () => Promise<any>,
   cardanoGetPublicKey: (params: any) => Promise<any>,
   cardanoGetAddress: (params: any) => Promise<any>,
   cardanoSignMessage: (params: any) => Promise<any>,
@@ -46,6 +47,7 @@ function sendTrezorRequest(method: string, params: Object): Promise<any> {
 }
 
 const trezorConnectProxy: TrezorConnectApi = {
+  getFeatures: () => sendTrezorRequest('getFeatures', {}),
   cardanoGetPublicKey: params => sendTrezorRequest('cardanoGetPublicKey', params),
   cardanoGetAddress: params => sendTrezorRequest('cardanoGetAddress', params),
   cardanoSignMessage: params => sendTrezorRequest('cardanoSignMessage', params),

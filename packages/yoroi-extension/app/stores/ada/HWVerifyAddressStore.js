@@ -77,13 +77,17 @@ export default class HWVerifyAddressStore extends Store<StoresMap> {
     }
     const addressParams = toTrezorAddressParameters(addressHex, path);
     try {
-      await withTrezorConnect(trezor =>
+      const response = await withTrezorConnect(trezor =>
         trezor.cardanoGetAddress({
           protocolMagic: config.ByronNetworkId,
           networkId: Number.parseInt(config.ChainNetworkId, 10),
           addressParameters: addressParams,
+          showOnTrezor: true,
         })
       );
+      if (!response?.success) {
+        throw new Error(response?.payload?.error ?? 'Trezor address verification failed');
+      }
     } catch (error) {
       Logger.error(`${nameof(HWVerifyAddressStore)}::${nameof(this.trezorVerifyAddress)}::error: ` + stringifyError(error));
       this._setError(trezorErrorToLocalized(error));

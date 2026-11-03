@@ -25,6 +25,19 @@ describe('withTrezorConnect', () => {
     );
   });
 
+  it('routes feature requests to the background service worker', async () => {
+    const response = { success: true, payload: { capabilities: [] } };
+    const sendMessage = jest.fn((_message, callback) => callback(response));
+    global.chrome = { runtime: { sendMessage } };
+
+    await expect(withTrezorConnect(trezor => trezor.getFeatures())).resolves.toBe(response);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      { type: 'yoroi-trezor-connect', method: 'getFeatures', params: {} },
+      expect.any(Function)
+    );
+  });
+
   it('rejects when the extension service worker cannot answer', async () => {
     const sendMessage = jest.fn((_message, callback) => {
       global.chrome.runtime.lastError = { message: 'Could not establish connection' };
