@@ -1,18 +1,19 @@
 // @flow
 
 import Config from '../../config';
-import type TrezorConnect from 'trezor-connect-flow';
 import type { Manifest } from 'trezor-connect-flow';
+
+declare var chrome: any;
 
 /* eslint-disable no-restricted-properties */
 
 export const TREZOR_CONNECT_REQUEST_TYPE = 'yoroi-trezor-connect';
 
 type TrezorConnectApi = {|
-  cardanoGetPublicKey: typeof TrezorConnect.cardanoGetPublicKey,
-  cardanoGetAddress: typeof TrezorConnect.cardanoGetAddress,
-  cardanoSignMessage: typeof TrezorConnect.cardanoSignMessage,
-  cardanoSignTransaction: typeof TrezorConnect.cardanoSignTransaction,
+  cardanoGetPublicKey: (params: any) => Promise<any>,
+  cardanoGetAddress: (params: any) => Promise<any>,
+  cardanoSignMessage: (params: any) => Promise<any>,
+  cardanoSignTransaction: (params: any) => Promise<any>,
 |};
 
 export function getTrezorManifest(): Manifest {

@@ -3,6 +3,10 @@
 import TrezorConnect from 'trezor-connect-flow';
 import { getTrezorManifest, TREZOR_CONNECT_REQUEST_TYPE } from '../../../app/stores/lib/TrezorWrapper';
 
+declare var chrome: any;
+
+/* eslint-disable no-restricted-properties */
+
 const supportedMethods = new Set(['cardanoGetPublicKey', 'cardanoGetAddress', 'cardanoSignMessage', 'cardanoSignTransaction']);
 
 const callTrezorMethod = (method: string, params: any): Promise<any> => {
