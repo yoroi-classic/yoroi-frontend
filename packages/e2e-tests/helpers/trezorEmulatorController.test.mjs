@@ -116,11 +116,7 @@ test('waits for a real device screen before confirming the address', async () =>
 
   const contents = await controller.fullConfirmAndGetContent();
 
-  assert.deepEqual(contents, [
-    'Path: m/1852/1815/0/0/0',
-    'Staking key: abc123',
-    'addr1test',
-  ]);
+  assert.deepEqual(contents, ['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
   assert.equal(confirmed.length, 3);
 });
 
@@ -147,11 +143,7 @@ test('waits through transient screens after swiping device pages', async () => {
 
   const contents = await controller.fullConfirmAndGetContent();
 
-  assert.deepEqual(contents, [
-    'Path: m/1852/1815/0/0/0',
-    'Staking key: abc123',
-    'addr1test',
-  ]);
+  assert.deepEqual(contents, ['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
   assert.equal(confirmed.length, 3);
   assert.equal(swipes.length, 3);
 });

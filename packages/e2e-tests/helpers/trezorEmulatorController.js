@@ -489,8 +489,7 @@ export class TrezorEmulatorController {
    */
   async fullConfirmAndGetContent() {
     const result = [];
-    const isNoMainComponent = content =>
-      content.body.trim().toLowerCase() === 'no main component';
+    const isNoMainComponent = content => content.body.trim().toLowerCase() === 'no main component';
     const waitForScreenContent = async (waitForPrompt = false) => {
       let screen = await this.getScreenContent();
       const endTime = Date.now() + fiveSeconds;
