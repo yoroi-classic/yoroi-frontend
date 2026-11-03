@@ -106,11 +106,13 @@ for (const model in TrezorModels) {
       // call verification on HW
       await verifyAddressModal.clickVerifyOnHWW();
       await windowManager.findNewWindowAndSwitchTo(trezorConnectTabName);
-      await trezorPage.allowAddressExport();
-      // trezor page is displayed
-      const exportPageIsDisplayed = await trezorPage.exportAddressPageIsDisplayed();
-      expect(exportPageIsDisplayed, 'The Trezor Export Address page is not displayed').to.be.true;
-      await trezorPage.confirmExportAddress();
+      const addressVerificationStarted = await trezorPage.allowAddressExport();
+      if (!addressVerificationStarted) {
+        // Legacy Trezor Connect asks for a separate confirmation after the device request.
+        const exportPageIsDisplayed = await trezorPage.exportAddressPageIsDisplayed();
+        expect(exportPageIsDisplayed, 'The Trezor Export Address page is not displayed').to.be.true;
+        await trezorPage.confirmExportAddress();
+      }
       const trezorScreensContent = await trezorController.fullConfirmAndGetContent();
       await windowManager.waitForClosingAndSwitchTo(trezorConnectTabName, extensionTabName);
 

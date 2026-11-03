@@ -47,6 +47,10 @@ class TrezorConnect extends BasePage {
     locator: 'button[data-testid^="@connect-address-confirmation/verify-button/"]',
     method: 'css',
   };
+  exportAddressVerificationSpinnerLocator = {
+    locator: '[data-testid^="@connect-address-confirmation/verify-button/"][data-testid$="/spinner"]',
+    method: 'css',
+  };
   exportAddressTitleTextLocator = {
     locator: '#container > div > div:nth-child(1) > h3',
     method: 'css',
@@ -144,7 +148,7 @@ class TrezorConnect extends BasePage {
     const addressPermissionButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
     if (addressPermissionButtons.length === 0) {
       await this.allowPubKeysExport();
-      return;
+      return false;
     }
 
     await this.click(this.connectPermissionsConfirmButtonLocator);
@@ -152,25 +156,9 @@ class TrezorConnect extends BasePage {
     await this.click(this.exportAccountsConfirmButtonLocator);
     await this.waitForElement(this.exportedAccountVerifyButtonLocator);
     await this.click(this.exportedAccountVerifyButtonLocator);
+    await this.waitForElement(this.exportAddressVerificationSpinnerLocator);
 
-    const nextPromptLoaded = await this.customWaiter(
-      async () => {
-        const permissionButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
-        if (permissionButtons.length > 0) return true;
-        const exportAddressTitles = await this.findElements(this.exportAddressTitleTextLocator);
-        return exportAddressTitles.length === 1;
-      },
-      defaultWaitTimeout,
-      halfSecond
-    );
-    if (!nextPromptLoaded) {
-      throw new Error('Trezor address export prompt did not continue');
-    }
-
-    const permissionButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
-    if (permissionButtons.length > 0) {
-      await this.click(this.connectPermissionsConfirmButtonLocator);
-    }
+    return true;
   }
   async exportAddressPageIsDisplayed() {
     this.logger.info(`TrezorConnect::exportAddressPageIsDisplayed is called`);
