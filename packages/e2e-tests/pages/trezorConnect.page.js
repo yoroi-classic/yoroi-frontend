@@ -136,6 +136,12 @@ class TrezorConnect extends BasePage {
     await this.waitForElement(this.connectPermissionsConfirmButtonLocator);
     await this.click(this.connectPermissionsConfirmButtonLocator);
   }
+  async confirmAddressPermissionsIfDisplayed() {
+    const confirmationButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
+    if (confirmationButtons.length > 0) {
+      await this.click(this.connectPermissionsConfirmButtonLocator);
+    }
+  }
   async exportAddressPageIsDisplayed() {
     this.logger.info(`TrezorConnect::exportAddressPageIsDisplayed is called`);
     return await this.customWaitIsPresented(this.exportAddressTitleTextLocator);
