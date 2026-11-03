@@ -489,30 +489,35 @@ export class TrezorEmulatorController {
    */
   async fullConfirmAndGetContent() {
     const result = [];
-    let content = await this.getScreenContent();
-    const endTime = Date.now() + fiveSeconds;
-    while (content.body === this.label) {
-      if (Date.now() <= endTime) {
-        sleep(halfSecond);
-        content = await this.getScreenContent();
-        continue;
-      } else {
-        throw new TrezorEmulatorControllerError('The Trezor device is not ready');
+    const isNoMainComponent = content =>
+      content.body.trim().toLowerCase() === 'no main component';
+    const waitForScreenContent = async (waitForPrompt = false) => {
+      let screen = await this.getScreenContent();
+      const endTime = Date.now() + fiveSeconds;
+      while (isNoMainComponent(screen) || (waitForPrompt && screen.body === this.label)) {
+        if (Date.now() > endTime) {
+          throw new TrezorEmulatorControllerError('The Trezor device is not ready');
+        }
+        await sleep(halfSecond);
+        screen = await this.getScreenContent();
       }
-    }
+      return screen;
+    };
+
+    let content = await waitForScreenContent(true);
     while (content.body !== this.label) {
       result.push(content.body);
       if (this.isModelT() || this.isSafe3()) {
         await this.emulatorSwipeUp();
         const prevContent = result[result.length - 1];
-        const afterSwipeContent = (await this.getScreenContent()).body;
+        const afterSwipeContent = (await waitForScreenContent()).body;
         if (afterSwipeContent !== prevContent) {
           const newContent = prevContent + afterSwipeContent;
           result[result.length - 1] = newContent;
         }
       }
       await this.emulatorPressYes();
-      content = await this.getScreenContent();
+      content = await waitForScreenContent();
     }
 
     return result;

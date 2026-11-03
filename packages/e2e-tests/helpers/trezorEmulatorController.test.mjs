@@ -96,6 +96,66 @@ test('starts the current user-env bridge by default', async () => {
   controller.closeWsConnection();
 });
 
+test('waits for a real device screen before confirming the address', async () => {
+  const controller = makeController();
+  controller.label = 'Home';
+  controller.isModelT = () => false;
+  controller.isSafe3 = () => false;
+  const screens = [
+    { body: 'Home' },
+    { body: 'no main component' },
+    { body: 'Path: m/1852/1815/0/0/0' },
+    { body: 'no main component' },
+    { body: 'Staking key: abc123' },
+    { body: 'addr1test' },
+    { body: 'Home' },
+  ];
+  const confirmed = [];
+  controller.getScreenContent = async () => screens.shift();
+  controller.emulatorPressYes = async () => confirmed.push(true);
+
+  const contents = await controller.fullConfirmAndGetContent();
+
+  assert.deepEqual(contents, [
+    'Path: m/1852/1815/0/0/0',
+    'Staking key: abc123',
+    'addr1test',
+  ]);
+  assert.equal(confirmed.length, 3);
+});
+
+test('waits through transient screens after swiping device pages', async () => {
+  const controller = makeController();
+  controller.label = 'Home';
+  controller.isModelT = () => true;
+  controller.isSafe3 = () => false;
+  const screens = [
+    { body: 'Path: m/1852/1815/0/0/0' },
+    { body: 'no main component' },
+    { body: 'Path: m/1852/1815/0/0/0' },
+    { body: 'Staking key: abc123' },
+    { body: 'Staking key: abc123' },
+    { body: 'addr1test' },
+    { body: 'addr1test' },
+    { body: 'Home' },
+  ];
+  const confirmed = [];
+  const swipes = [];
+  controller.getScreenContent = async () => screens.shift();
+  controller.emulatorSwipeUp = async () => swipes.push(true);
+  controller.emulatorPressYes = async () => confirmed.push(true);
+
+  const contents = await controller.fullConfirmAndGetContent();
+
+  assert.deepEqual(contents, [
+    'Path: m/1852/1815/0/0/0',
+    'Staking key: abc123',
+    'addr1test',
+  ]);
+  assert.equal(confirmed.length, 3);
+  assert.equal(swipes.length, 3);
+});
+
 test('ignores background and wrong-id messages until the matching response arrives', async () => {
   const controller = makeController();
   const socket = await connect(controller);
