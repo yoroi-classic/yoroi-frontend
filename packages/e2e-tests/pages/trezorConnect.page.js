@@ -136,6 +136,36 @@ class TrezorConnect extends BasePage {
     await this.waitForElement(this.connectPermissionsConfirmButtonLocator);
     await this.click(this.connectPermissionsConfirmButtonLocator);
   }
+  async allowAddressExport() {
+    const addressPermissionButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
+    if (addressPermissionButtons.length === 0) {
+      await this.allowPubKeysExport();
+      return;
+    }
+
+    await this.click(this.connectPermissionsConfirmButtonLocator);
+    await this.waitForElement(this.exportAccountsConfirmButtonLocator);
+    await this.click(this.exportAccountsConfirmButtonLocator);
+
+    const nextPromptLoaded = await this.customWaiter(
+      async () => {
+        const permissionButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
+        if (permissionButtons.length > 0) return true;
+        const exportAddressTitles = await this.findElements(this.exportAddressTitleTextLocator);
+        return exportAddressTitles.length === 1;
+      },
+      defaultWaitTimeout,
+      halfSecond
+    );
+    if (!nextPromptLoaded) {
+      throw new Error('Trezor address export prompt did not continue');
+    }
+
+    const permissionButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
+    if (permissionButtons.length > 0) {
+      await this.click(this.connectPermissionsConfirmButtonLocator);
+    }
+  }
   async exportAddressPageIsDisplayed() {
     this.logger.info(`TrezorConnect::exportAddressPageIsDisplayed is called`);
     return await this.customWaitIsPresented(this.exportAddressTitleTextLocator);

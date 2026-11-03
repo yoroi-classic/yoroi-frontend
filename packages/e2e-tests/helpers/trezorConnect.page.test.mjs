@@ -92,3 +92,42 @@ test('uses real clicks through the v10 device prompt to account confirmation', a
     page.connectPermissionsConfirmButtonLocator,
   ]);
 });
+
+test('confirms the address permission and complete account-export prompt flow', async () => {
+  const page = new TrezorConnect({}, { info() {} });
+  const state = { prompt: 'permissions' };
+  const clicks = [];
+
+  page.findElements = async locator => {
+    if (
+      locator === page.connectPermissionsConfirmButtonLocator &&
+      (state.prompt === 'permissions' || state.prompt === 'final-permissions')
+    )
+      return [{}];
+    if (locator === page.exportAccountsConfirmButtonLocator && state.prompt === 'accounts') return [{}];
+    if (locator === page.exportAddressTitleTextLocator && state.prompt === 'address') return [{}];
+    return [];
+  };
+  page.waitForElement = async locator => {
+    assert.equal(locator, page.exportAccountsConfirmButtonLocator);
+  };
+  page.customWaiter = async condition => condition();
+  page.click = async locator => {
+    clicks.push(locator);
+    if (locator === page.connectPermissionsConfirmButtonLocator) {
+      state.prompt = state.prompt === 'permissions' ? 'accounts' : 'address';
+    }
+    if (locator === page.exportAccountsConfirmButtonLocator) state.prompt = 'final-permissions';
+  };
+  page.allowPubKeysExport = async () => {
+    throw new Error('The address permission flow must be handled directly');
+  };
+
+  await page.allowAddressExport();
+
+  assert.deepEqual(clicks, [
+    page.connectPermissionsConfirmButtonLocator,
+    page.exportAccountsConfirmButtonLocator,
+    page.connectPermissionsConfirmButtonLocator,
+  ]);
+});

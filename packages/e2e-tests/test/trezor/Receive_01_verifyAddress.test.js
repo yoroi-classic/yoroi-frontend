@@ -106,7 +106,7 @@ for (const model in TrezorModels) {
       // call verification on HW
       await verifyAddressModal.clickVerifyOnHWW();
       await windowManager.findNewWindowAndSwitchTo(trezorConnectTabName);
-      await trezorPage.allowPubKeysExport();
+      await trezorPage.allowAddressExport();
       // trezor page is displayed
       const exportPageIsDisplayed = await trezorPage.exportAddressPageIsDisplayed();
       expect(exportPageIsDisplayed, 'The Trezor Export Address page is not displayed').to.be.true;
