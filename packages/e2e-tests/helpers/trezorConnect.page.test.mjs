@@ -105,11 +105,14 @@ test('confirms the address permission and complete account-export prompt flow', 
     )
       return [{}];
     if (locator === page.exportAccountsConfirmButtonLocator && state.prompt === 'accounts') return [{}];
+    if (locator === page.exportedAccountVerifyButtonLocator && state.prompt === 'exported') return [{}];
     if (locator === page.exportAddressTitleTextLocator && state.prompt === 'address') return [{}];
     return [];
   };
   page.waitForElement = async locator => {
-    assert.equal(locator, page.exportAccountsConfirmButtonLocator);
+    const expectedLocator =
+      state.prompt === 'accounts' ? page.exportAccountsConfirmButtonLocator : page.exportedAccountVerifyButtonLocator;
+    assert.equal(locator, expectedLocator);
   };
   page.customWaiter = async condition => condition();
   page.click = async locator => {
@@ -117,7 +120,8 @@ test('confirms the address permission and complete account-export prompt flow', 
     if (locator === page.connectPermissionsConfirmButtonLocator) {
       state.prompt = state.prompt === 'permissions' ? 'accounts' : 'address';
     }
-    if (locator === page.exportAccountsConfirmButtonLocator) state.prompt = 'final-permissions';
+    if (locator === page.exportAccountsConfirmButtonLocator) state.prompt = 'exported';
+    if (locator === page.exportedAccountVerifyButtonLocator) state.prompt = 'final-permissions';
   };
   page.allowPubKeysExport = async () => {
     throw new Error('The address permission flow must be handled directly');
@@ -128,6 +132,7 @@ test('confirms the address permission and complete account-export prompt flow', 
   assert.deepEqual(clicks, [
     page.connectPermissionsConfirmButtonLocator,
     page.exportAccountsConfirmButtonLocator,
+    page.exportedAccountVerifyButtonLocator,
     page.connectPermissionsConfirmButtonLocator,
   ]);
 });

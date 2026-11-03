@@ -43,6 +43,10 @@ class TrezorConnect extends BasePage {
     locator: 'button[data-testid="@connect-address-confirmation/confirm-button"]',
     method: 'css',
   };
+  exportedAccountVerifyButtonLocator = {
+    locator: 'button[data-testid^="@connect-address-confirmation/verify-button/"]',
+    method: 'css',
+  };
   exportAddressTitleTextLocator = {
     locator: '#container > div > div:nth-child(1) > h3',
     method: 'css',
@@ -146,6 +150,8 @@ class TrezorConnect extends BasePage {
     await this.click(this.connectPermissionsConfirmButtonLocator);
     await this.waitForElement(this.exportAccountsConfirmButtonLocator);
     await this.click(this.exportAccountsConfirmButtonLocator);
+    await this.waitForElement(this.exportedAccountVerifyButtonLocator);
+    await this.click(this.exportedAccountVerifyButtonLocator);
 
     const nextPromptLoaded = await this.customWaiter(
       async () => {
