@@ -132,3 +132,26 @@ test('confirms the address permission and complete account-export prompt flow', 
     page.exportedAccountVerifyButtonLocator,
   ]);
 });
+
+test('confirms the legacy address-export prompt after exporting account keys', async () => {
+  const page = new TrezorConnect({}, { info() {} });
+  let legacyExportPromptDisplayed = false;
+  let confirmed = false;
+
+  page.findElements = async locator => {
+    assert.equal(locator, page.connectPermissionsConfirmButtonLocator);
+    return [];
+  };
+  page.allowPubKeysExport = async () => {
+    legacyExportPromptDisplayed = true;
+  };
+  page.exportAddressPageIsDisplayed = async () => legacyExportPromptDisplayed;
+  page.confirmExportAddress = async () => {
+    confirmed = true;
+  };
+
+  const addressVerificationStarted = await page.allowAddressExport();
+
+  assert.equal(addressVerificationStarted, false);
+  assert.equal(confirmed, true);
+});

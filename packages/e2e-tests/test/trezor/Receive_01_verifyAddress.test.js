@@ -107,14 +107,13 @@ for (const model in TrezorModels) {
       await verifyAddressModal.clickVerifyOnHWW();
       await windowManager.findNewWindowAndSwitchTo(trezorConnectTabName);
       const addressVerificationStarted = await trezorPage.allowAddressExport();
-      if (!addressVerificationStarted) {
-        // Legacy Trezor Connect asks for a separate confirmation after the device request.
-        const exportPageIsDisplayed = await trezorPage.exportAddressPageIsDisplayed();
-        expect(exportPageIsDisplayed, 'The Trezor Export Address page is not displayed').to.be.true;
-        await trezorPage.confirmExportAddress();
-      }
       const trezorScreensContent = await trezorController.fullConfirmAndGetContent();
-      await windowManager.waitForClosingAndSwitchTo(trezorConnectTabName, extensionTabName);
+      if (addressVerificationStarted) {
+        // Trezor Connect v10 leaves the completed account-export popup open.
+        await windowManager.switchTo(extensionTabName);
+      } else {
+        await windowManager.waitForClosingAndSwitchTo(trezorConnectTabName, extensionTabName);
+      }
 
       const trezorContentCleaned = convertExportResponse(trezorScreensContent);
       const convertedStakeKeyAddress = getStakeBeck32KeyFromKeyHash(verifyModalInfo.stakingKeyHash);

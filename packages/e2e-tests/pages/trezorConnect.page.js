@@ -148,6 +148,11 @@ class TrezorConnect extends BasePage {
     const addressPermissionButtons = await this.findElements(this.connectPermissionsConfirmButtonLocator);
     if (addressPermissionButtons.length === 0) {
       await this.allowPubKeysExport();
+      const exportPageIsDisplayed = await this.exportAddressPageIsDisplayed();
+      if (!exportPageIsDisplayed) {
+        throw new Error('Trezor Export Address page is not displayed');
+      }
+      await this.confirmExportAddress();
       return false;
     }
 
