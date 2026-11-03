@@ -17,34 +17,6 @@ test('grants Trezor connection permission with a user click', async () => {
   assert.deepEqual(clicks, [page.confirmUsingTrezorButtonLocator]);
 });
 
-test('confirms an address permission prompt with a user click when it appears', async () => {
-  const page = new TrezorConnect({}, { info() {} });
-  const clicks = [];
-
-  page.findElements = async locator =>
-    locator === page.connectPermissionsConfirmButtonLocator ? [{}] : [];
-  page.click = async locator => clicks.push(locator);
-  page.clickByScript = async () => {
-    throw new Error('Address permission must be granted with a user click');
-  };
-
-  await page.confirmAddressPermissionsIfDisplayed();
-
-  assert.deepEqual(clicks, [page.connectPermissionsConfirmButtonLocator]);
-});
-
-test('does not click a missing address permission prompt', async () => {
-  const page = new TrezorConnect({}, { info() {} });
-  let clickCount = 0;
-
-  page.findElements = async () => [];
-  page.click = async () => clickCount++;
-
-  await page.confirmAddressPermissionsIfDisplayed();
-
-  assert.equal(clickCount, 0);
-});
-
 test('waits for the v10 account export confirmation and confirms with a user click', async () => {
   const page = new TrezorConnect({}, { info() {} });
   let state = 'waiting';
