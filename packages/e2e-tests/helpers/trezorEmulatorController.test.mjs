@@ -96,6 +96,20 @@ test('starts the current user-env bridge by default', async () => {
   controller.closeWsConnection();
 });
 
+const assertConfirmationsFollowReadyScreens = events => {
+  const readyPrompts = new Set(['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
+  let currentScreen;
+
+  for (const event of events) {
+    if (event.type === 'screen') {
+      currentScreen = event.body;
+    } else if (event.type === 'confirm') {
+      assert.ok(readyPrompts.has(currentScreen), `confirmed while screen was ${currentScreen}`);
+      currentScreen = undefined;
+    }
+  }
+};
+
 test('waits for a real device screen before confirming the address', async () => {
   const controller = makeController();
   controller.label = 'Home';
@@ -110,14 +124,19 @@ test('waits for a real device screen before confirming the address', async () =>
     { body: 'addr1test' },
     { body: 'Home' },
   ];
-  const confirmed = [];
-  controller.getScreenContent = async () => screens.shift();
-  controller.emulatorPressYes = async () => confirmed.push(true);
+  const events = [];
+  controller.getScreenContent = async () => {
+    const screen = screens.shift();
+    events.push({ type: 'screen', body: screen.body });
+    return screen;
+  };
+  controller.emulatorPressYes = async () => events.push({ type: 'confirm' });
 
   const contents = await controller.fullConfirmAndGetContent();
 
   assert.deepEqual(contents, ['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
-  assert.equal(confirmed.length, 3);
+  assertConfirmationsFollowReadyScreens(events);
+  assert.equal(events.filter(event => event.type === 'confirm').length, 3);
 });
 
 test('waits through transient screens after swiping device pages', async () => {
@@ -135,16 +154,21 @@ test('waits through transient screens after swiping device pages', async () => {
     { body: 'addr1test' },
     { body: 'Home' },
   ];
-  const confirmed = [];
+  const events = [];
   const swipes = [];
-  controller.getScreenContent = async () => screens.shift();
+  controller.getScreenContent = async () => {
+    const screen = screens.shift();
+    events.push({ type: 'screen', body: screen.body });
+    return screen;
+  };
   controller.emulatorSwipeUp = async () => swipes.push(true);
-  controller.emulatorPressYes = async () => confirmed.push(true);
+  controller.emulatorPressYes = async () => events.push({ type: 'confirm' });
 
   const contents = await controller.fullConfirmAndGetContent();
 
   assert.deepEqual(contents, ['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
-  assert.equal(confirmed.length, 3);
+  assertConfirmationsFollowReadyScreens(events);
+  assert.equal(events.filter(event => event.type === 'confirm').length, 3);
   assert.equal(swipes.length, 3);
 });
 
