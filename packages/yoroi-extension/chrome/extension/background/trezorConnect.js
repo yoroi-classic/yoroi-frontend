@@ -58,7 +58,7 @@ export async function handleTrezorConnectMessage(message: any, sender: any): Pro
   }
 
   try {
-    await TrezorConnect.init({ manifest: getTrezorManifest(), coreMode: 'suite-web' });
+    await TrezorConnect.init({ manifest: getTrezorManifest() });
     try {
       return await callTrezorMethod(message.method, message.params);
     } finally {

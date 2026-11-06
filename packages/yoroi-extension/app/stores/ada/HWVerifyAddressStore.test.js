@@ -18,6 +18,9 @@ jest.mock('../../api/ada/lib/storage/database/prepackaged/networks', () => ({
 jest.mock('../../api/ada/transactions/shelley/trezorTx', () => ({
   toTrezorAddressParameters: jest.fn(() => ({})),
 }));
+jest.mock('../stateless/addressStores', () => ({
+  genAddressingLookup: jest.fn(),
+}));
 jest.mock('../../domain/TrezorLocalizedError', () => ({
   convertToLocalizableError: error => ({ message: String(error) }),
 }));

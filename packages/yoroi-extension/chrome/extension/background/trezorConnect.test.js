@@ -36,10 +36,7 @@ describe('handleTrezorConnectMessage', () => {
       handleTrezorConnectMessage({ type: TREZOR_CONNECT_REQUEST_TYPE, method: 'cardanoGetAddress', params }, sender)
     ).resolves.toBe(response);
 
-    expect(init).toHaveBeenCalledWith({
-      manifest: expect.objectContaining({ appName: expect.any(String) }),
-      coreMode: 'suite-web',
-    });
+    expect(init).toHaveBeenCalledWith({ manifest: expect.objectContaining({ appName: expect.any(String) }) });
     expect(getAddress).toHaveBeenCalledWith(params);
     expect(dispose).toHaveBeenCalledTimes(1);
   });
