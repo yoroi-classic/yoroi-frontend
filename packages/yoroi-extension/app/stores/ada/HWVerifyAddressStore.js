@@ -81,6 +81,7 @@ export default class HWVerifyAddressStore extends Store<StoresMap> {
         trezor.cardanoGetAddress({
           protocolMagic: config.ByronNetworkId,
           networkId: Number.parseInt(config.ChainNetworkId, 10),
+          address,
           addressParameters: addressParams,
           showOnTrezor: true,
         })
