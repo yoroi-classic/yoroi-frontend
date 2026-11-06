@@ -5,6 +5,7 @@ import { TrezorEmulatorController } from '../../helpers/trezorEmulatorController
 import {
   convertExportResponse,
   getStakeBeck32KeyFromKeyHash,
+  logTrezorWalletCreationError,
   runAndPrepareTrezor,
   TrezorModels,
 } from '../../helpers/trezorHelper.js';
@@ -105,12 +106,14 @@ for (const model in TrezorModels) {
       // call verification on HW
       await verifyAddressModal.clickVerifyOnHWW();
       await windowManager.findNewWindowAndSwitchTo(trezorConnectTabName);
-      // trezor page is displayed
-      const exportPageIsDisplayed = await trezorPage.exportAddressPageIsDisplayed();
-      expect(exportPageIsDisplayed, 'The Trezor Export Address page is not displayed').to.be.true;
-      await trezorPage.confirmExportAddress();
+      const addressVerificationStarted = await trezorPage.allowAddressExport();
       const trezorScreensContent = await trezorController.fullConfirmAndGetContent();
-      await windowManager.waitForClosingAndSwitchTo(trezorConnectTabName, extensionTabName);
+      if (addressVerificationStarted) {
+        // Trezor Connect v10 leaves the completed account-export popup open.
+        await windowManager.switchTo(extensionTabName);
+      } else {
+        await windowManager.waitForClosingAndSwitchTo(trezorConnectTabName, extensionTabName);
+      }
 
       const trezorContentCleaned = convertExportResponse(trezorScreensContent);
       const convertedStakeKeyAddress = getStakeBeck32KeyFromKeyHash(verifyModalInfo.stakingKeyHash);
@@ -120,6 +123,9 @@ for (const model in TrezorModels) {
     });
 
     afterEach(async function () {
+      if (this.currentTest.isFailed() && this.currentTest.title === 'Wait the wallet is loaded') {
+        await logTrezorWalletCreationError(webdriver, logger);
+      }
       await customAfterEach(this, webdriver, logger);
     });
 

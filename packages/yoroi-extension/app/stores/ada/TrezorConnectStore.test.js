@@ -1,5 +1,6 @@
 import TrezorConnectStore from './TrezorConnectStore';
-import { wrapWithFrame } from '../lib/TrezorWrapper';
+import { withTrezorConnect } from '../lib/TrezorWrapper';
+import { Logger } from '../../utils/logging';
 
 jest.mock('../../components/widgets/ProgressSteps', () => ({ StepState: { PROCESS: 'PROCESS', ERROR: 'ERROR', LOAD: 'LOAD' } }));
 jest.mock('../../utils/logging', () => ({
@@ -10,7 +11,7 @@ jest.mock('../../api/thunk', () => ({ createHardwareWallet: jest.fn() }));
 jest.mock('../../../posthog', () => ({ captureEvent: jest.fn() }));
 
 jest.mock('../lib/TrezorWrapper', () => ({
-  wrapWithFrame: jest.fn(),
+  withTrezorConnect: jest.fn(),
 }));
 
 describe('TrezorConnectStore', () => {
@@ -23,9 +24,14 @@ describe('TrezorConnectStore', () => {
   });
 
   it('stores device features returned by Trezor Connect', async () => {
-    wrapWithFrame.mockImplementation(async callback =>
+    const publicKey = 'b'.repeat(64);
+    const chainCode = 'a'.repeat(64);
+    withTrezorConnect.mockImplementation(async callback =>
       callback({
-        cardanoGetPublicKey: async () => ({ success: true, payload: { publicKey: 'pubkey' } }),
+        cardanoGetPublicKey: async () => ({
+          success: true,
+          payload: { publicKey, node: { public_key: publicKey, chain_code: chainCode } },
+        }),
         getFeatures: async () => ({
           success: true,
           payload: { vendor: 'Vendor', model: 'Model', device_id: 'DeviceId', label: 'Wallet' },
@@ -36,15 +42,65 @@ describe('TrezorConnectStore', () => {
     await store._checkAndStoreHWDeviceInfo();
 
     expect(store.hwDeviceInfo).toEqual({
-      publicMasterKey: 'pubkey',
+      publicMasterKey: `${publicKey}${chainCode}`,
       hwFeatures: { Vendor: 'Vendor', Model: 'Model', DeviceId: 'DeviceId' },
       defaultName: 'Wallet',
     });
   });
 
+  it('preserves an already serialized extended public key', () => {
+    const publicMasterKey = 'c'.repeat(128);
+
+    expect(
+      store._normalizeHWResponse({
+        trezorResp: {
+          success: true,
+          payload: { publicKey: publicMasterKey, node: { public_key: 'b'.repeat(64), chain_code: 'a'.repeat(64) } },
+        },
+        trezorFeatures: undefined,
+      }).publicMasterKey
+    ).toBe(publicMasterKey);
+  });
+
+  it('accepts a node-only public key and chain code', () => {
+    const publicKey = 'b'.repeat(64);
+    const chainCode = 'a'.repeat(64);
+
+    expect(
+      store._normalizeHWResponse({
+        trezorResp: {
+          success: true,
+          payload: { node: { public_key: publicKey, chain_code: chainCode } },
+        },
+        trezorFeatures: undefined,
+      }).publicMasterKey
+    ).toBe(`${publicKey}${chainCode}`);
+  });
+
+  it('rejects malformed extended public keys before entering the save step', async () => {
+    const getFeatures = jest.fn(async () => ({ success: true, payload: {} }));
+    withTrezorConnect.mockImplementation(async callback =>
+      callback({
+        cardanoGetPublicKey: async () => ({
+          success: true,
+          payload: { publicKey: 'not-an-extended-key', node: { public_key: 'bad', chain_code: 'bad' } },
+        }),
+        getFeatures,
+      })
+    );
+
+    await store._checkAndStoreHWDeviceInfo();
+
+    expect(getFeatures).toHaveBeenCalled();
+    expect(Logger.error).toHaveBeenCalledWith(expect.stringContaining('Invalid extended public key received from Trezor device'));
+    expect(store.hwDeviceInfo).toBeUndefined();
+    expect(store.progressInfo.currentStep).toBe(1);
+    expect(store.progressInfo.stepState).toBe('ERROR');
+  });
+
   it('does not request features when public-key export fails', async () => {
     const getFeatures = jest.fn();
-    wrapWithFrame.mockImplementation(async callback =>
+    withTrezorConnect.mockImplementation(async callback =>
       callback({
         cardanoGetPublicKey: async () => ({ success: false, payload: { error: 'rejected' } }),
         getFeatures,

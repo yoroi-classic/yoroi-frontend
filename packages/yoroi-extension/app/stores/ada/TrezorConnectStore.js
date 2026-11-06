@@ -3,12 +3,11 @@
 
 import { action, observable } from 'mobx';
 import type { CardanoPublicKey, Success, TrezorFeatures, Unsuccessful } from 'trezor-connect-flow';
-import TrezorConnect from 'trezor-connect-flow';
 import Store from '../base/Store';
 import globalMessages from '../../i18n/global-messages';
 import LocalizableError, { UnexpectedError } from '../../i18n/LocalizableError';
 import { CheckAddressesInUseApiError } from '../../api/common/errors';
-import { wrapWithFrame } from '../lib/TrezorWrapper';
+import { withTrezorConnect } from '../lib/TrezorWrapper';
 import { ROUTES } from '../../routes-config';
 import Config from '../../config';
 // This is actually just an interface
@@ -28,6 +27,30 @@ type TrezorConnectionResponse = {|
   trezorResp: Success<CardanoPublicKey> | Unsuccessful,
   trezorFeatures: ?TrezorFeatures,
 |};
+
+const isHexStringOfLength = (value: mixed, length: number): boolean =>
+  typeof value === 'string' && value.length === length && /^[0-9a-f]+$/i.test(value);
+
+const normalizeTrezorPublicKey = (payload: CardanoPublicKey): string => {
+  const chainCode = payload.node?.chain_code;
+
+  if (isHexStringOfLength(payload.publicKey, 128)) {
+    return payload.publicKey;
+  }
+
+  if (isHexStringOfLength(payload.publicKey, 64) && isHexStringOfLength(chainCode, 64)) {
+    return `${payload.publicKey}${chainCode}`;
+  }
+
+  if (isHexStringOfLength(payload.node?.public_key, 64) && isHexStringOfLength(chainCode, 64)) {
+    return `${payload.node.public_key}${chainCode}`;
+  }
+
+  throw new Error(
+    `Invalid extended public key received from Trezor device (public key: ${payload.publicKey?.length ?? 0} characters, ` +
+      `node public key: ${payload.node?.public_key?.length ?? 0} characters, chain code: ${chainCode?.length ?? 0} characters)`
+  );
+};
 
 export default class TrezorConnectStore extends Store<StoresMap> implements HWConnectStoreTypes<TrezorConnectionResponse> {
   // =================== VIEW RELATED =================== //
@@ -126,7 +149,7 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     try {
       this.hwDeviceInfo = undefined;
 
-      const trezorConnection = await wrapWithFrame(async trezor => {
+      const trezorConnection = await withTrezorConnect(async trezor => {
         const trezorResp = await trezor.cardanoGetPublicKey({
           path: this.getPath(),
           showOnTrezor: false,
@@ -163,7 +186,7 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     const { trezorResp, trezorFeatures } = resp;
 
     return {
-      publicMasterKey: trezorResp.payload.publicKey,
+      publicMasterKey: normalizeTrezorPublicKey(trezorResp.payload),
       hwFeatures: {
         Vendor: trezorFeatures?.vendor ?? Config.wallets.hardwareWallet.trezorT.VENDOR,
         Model: trezorFeatures?.model ?? Config.wallets.hardwareWallet.trezorT.MODEL,
@@ -191,12 +214,9 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
       }
     }
 
-    if (
-      trezorResp == null ||
-      trezorResp.payload == null ||
-      trezorResp.payload.publicKey == null ||
-      trezorResp.payload.publicKey.length <= 0
-    ) {
+    // The key itself is validated by normalizeTrezorPublicKey, which also
+    // accepts a payload carrying only node.public_key and node.chain_code.
+    if (trezorResp == null || trezorResp.payload == null) {
       throw new Error('Invalid public key received from Trezor device');
     }
 
@@ -327,14 +347,5 @@ export default class TrezorConnectStore extends Store<StoresMap> implements HWCo
     this.isCreateHWActive = active;
   };
 
-  // this is used to inject test data
-  // prettier-ignore
-  setSelectedMockWallet: string => Promise<void> = async serial => {
-    // $FlowExpectedError[prop-missing] only added in tests
-    if (TrezorConnect.setSelectedWallet != null) { // eslint-disable-line no-restricted-properties
-      // $FlowExpectedError[not-a-function] only added in tests
-      await TrezorConnect.setSelectedWallet(serial); // eslint-disable-line no-restricted-properties
-    }
-  };
   // =================== API =================== //
 }

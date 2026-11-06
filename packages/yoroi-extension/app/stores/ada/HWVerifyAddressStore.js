@@ -2,7 +2,7 @@
 import { observable, action, toJS } from 'mobx';
 import Store from '../base/Store';
 import { LedgerConnect } from '../../utils/hwConnectHandler';
-import { wrapWithFrame } from '../lib/TrezorWrapper';
+import { withTrezorConnect } from '../lib/TrezorWrapper';
 
 import LocalizableError from '../../i18n/LocalizableError';
 
@@ -77,13 +77,18 @@ export default class HWVerifyAddressStore extends Store<StoresMap> {
     }
     const addressParams = toTrezorAddressParameters(addressHex, path);
     try {
-      await wrapWithFrame(trezor =>
+      const response = await withTrezorConnect(trezor =>
         trezor.cardanoGetAddress({
           protocolMagic: config.ByronNetworkId,
           networkId: Number.parseInt(config.ChainNetworkId, 10),
+          address,
           addressParameters: addressParams,
+          showOnTrezor: true,
         })
       );
+      if (!response?.success) {
+        throw new Error(response?.payload?.error ?? 'Trezor address verification failed');
+      }
     } catch (error) {
       Logger.error(`${nameof(HWVerifyAddressStore)}::${nameof(this.trezorVerifyAddress)}::error: ` + stringifyError(error));
       this._setError(trezorErrorToLocalized(error));

@@ -1776,6 +1776,29 @@ describe('CML connector transaction construction', () => {
     };
   };
 
+  it('maps a below-minimum connector output to the wallet error', async () => {
+    const change = genSampleAdaAddresses()[3];
+    const utxo = genAddressedUtxos()[3];
+    if (change == null || utxo == null) throw new Error('Missing connector output fixtures');
+
+    await expect(
+      newAdaUnsignedTxForConnector(
+        [makeOutput(change.address, '500000')],
+        [],
+        { metadata: {}, nativeScripts: [] },
+        change,
+        [[utxo, undefined]],
+        [],
+        new BigNumber(5000000),
+        null,
+        null,
+        [],
+        { ...getProtocolParams(), coinsPerUtxoByte: '4310' },
+        network.NetworkId
+      )
+    ).rejects.toThrow(CannotSendBelowMinimumValueError);
+  });
+
   it('builds a required native-script spend with mint, metadata, signer hashes, and serializable body bytes', async () => {
     const utxo = genAddressedUtxos()[3];
     const change = genSampleAdaAddresses()[3];

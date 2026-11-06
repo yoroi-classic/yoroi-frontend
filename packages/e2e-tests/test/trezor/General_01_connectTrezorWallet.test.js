@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { customAfterEach } from '../../utils/customHooks.js';
 import { getTestLogger } from '../../utils/utils.js';
 import { TrezorEmulatorController } from '../../helpers/trezorEmulatorController.js';
-import { runAndPrepareTrezor, TrezorModels } from '../../helpers/trezorHelper.js';
+import { logTrezorWalletCreationError, runAndPrepareTrezor, TrezorModels } from '../../helpers/trezorHelper.js';
 import { WindowManager, extensionTabName, trezorConnectTabName } from '../../helpers/windowManager.js';
 import { testWalletTrezor } from '../../utils/testWallets.js';
 import AddNewWallet from '../../pages/addNewWallet.page.js';
@@ -84,6 +84,9 @@ for (const model in TrezorModels) {
     });
 
     afterEach(async function () {
+      if (this.currentTest.isFailed() && this.currentTest.title === 'Check new wallet') {
+        await logTrezorWalletCreationError(webdriver, logger);
+      }
       await customAfterEach(this, webdriver, logger);
     });
 

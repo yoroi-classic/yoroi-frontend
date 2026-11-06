@@ -6,4 +6,5 @@ it('allows Trezor Suite to connect to the extension', () => {
     geckoKey: 'test@example.com', version: '1.0.0', enableProtocolHandlers: false, shouldInjectConnector: false,
   });
   expect(manifest.externally_connectable.matches).toContain('https://suite.trezor.io/*');
+  expect(manifest.host_permissions).toContain('https://suite.trezor.io/*');
 });

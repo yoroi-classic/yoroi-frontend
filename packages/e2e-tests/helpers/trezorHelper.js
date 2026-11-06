@@ -52,3 +52,38 @@ export const convertExportResponse = trezorScreensContent => {
 };
 
 export const getStakeBeck32KeyFromKeyHash = stakeKeyHash => CML.Ed25519KeyHash.from_hex(stakeKeyHash).to_bech32('stake_vkh');
+
+/**
+ * Log only the error message for failed Trezor wallet creation. The background
+ * log also contains a stack, which is unnecessary in test artifacts.
+ * @param {import('selenium-webdriver').WebDriver} webdriver
+ * @param {import('simple-node-logger').Logger} logger
+ */
+export const logTrezorWalletCreationError = async (webdriver, logger) => {
+  const errorMessage = await webdriver.executeAsyncScript(done => {
+    chrome.storage.local.get('yoroi-logs-background', result => {
+      const logs = result['yoroi-logs-background'] || [];
+      const entry = logs
+        .slice()
+        .reverse()
+        .find(log => typeof log.message === 'string' && log.message.includes('AdaApi::createHardwareWallet error:'));
+      if (!entry) {
+        done('No background wallet-creation error was recorded');
+        return;
+      }
+
+      const messageMatch = entry.message.match(/"message"\s*:\s*("(?:\\.|[^"\\])*")/);
+      if (!messageMatch) {
+        done('Background wallet creation failed without an error message');
+        return;
+      }
+
+      try {
+        done(JSON.parse(messageMatch[1]));
+      } catch {
+        done('Background wallet creation failed; error details could not be parsed');
+      }
+    });
+  });
+  logger.error(`Trezor wallet creation diagnostic: ${errorMessage}`);
+};

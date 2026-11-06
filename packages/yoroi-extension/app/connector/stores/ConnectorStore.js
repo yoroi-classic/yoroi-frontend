@@ -46,7 +46,7 @@ import {
   unknownAddressError,
   unsupportedTransactionError,
 } from '../../domain/HardwareWalletLocalizedError';
-import { wrapWithFrame } from '../../stores/lib/TrezorWrapper';
+import { withTrezorConnect } from '../../stores/lib/TrezorWrapper';
 import { hexToBytes, noop, purify } from '../../coreUtils';
 import {
   broadcastTransaction,
@@ -397,7 +397,7 @@ export default class ConnectorStore extends Store<StoresMap> {
         }
 
         try {
-          const signResult = await wrapWithFrame(trezor =>
+          const signResult = await withTrezorConnect(trezor =>
             trezor.cardanoSignMessage({
               path: [...signingPath], // convert mobx array to native array
               payload,
@@ -1227,7 +1227,7 @@ export default class ConnectorStore extends Store<StoresMap> {
 
     let trezorSignTxResp;
     try {
-      const signResult = await wrapWithFrame(trezor =>
+      const signResult = await withTrezorConnect(trezor =>
         trezor.cardanoSignTransaction({
           ...purify(trezorSignTxPayload),
           allowSeedlessDevice: true,

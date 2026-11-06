@@ -84,6 +84,94 @@ test('queues the initial event and correlates a successful response by id', asyn
   controller.closeWsConnection();
 });
 
+test('starts the current user-env bridge by default', async () => {
+  const controller = makeController();
+  const socket = await connect(controller);
+
+  const response = controller.bridgeStart();
+  assert.deepEqual(socket.sent, [{ type: 'bridge-start', id: 0 }]);
+  socket.message({ id: 0, success: true });
+  assert.deepEqual(await response, { id: 0, success: true });
+
+  controller.closeWsConnection();
+});
+
+const assertConfirmationsFollowReadyScreens = events => {
+  const readyPrompts = new Set(['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
+  let currentScreen;
+
+  for (const event of events) {
+    if (event.type === 'screen') {
+      currentScreen = event.body;
+    } else if (event.type === 'confirm') {
+      assert.ok(readyPrompts.has(currentScreen), `confirmed while screen was ${currentScreen}`);
+      currentScreen = undefined;
+    }
+  }
+};
+
+test('waits for a real device screen before confirming the address', async () => {
+  const controller = makeController();
+  controller.label = 'Home';
+  controller.isModelT = () => false;
+  controller.isSafe3 = () => false;
+  const screens = [
+    { body: 'Home' },
+    { body: 'no main component' },
+    { body: 'Path: m/1852/1815/0/0/0' },
+    { body: 'no main component' },
+    { body: 'Staking key: abc123' },
+    { body: 'addr1test' },
+    { body: 'Home' },
+  ];
+  const events = [];
+  controller.getScreenContent = async () => {
+    const screen = screens.shift();
+    events.push({ type: 'screen', body: screen.body });
+    return screen;
+  };
+  controller.emulatorPressYes = async () => events.push({ type: 'confirm' });
+
+  const contents = await controller.fullConfirmAndGetContent();
+
+  assert.deepEqual(contents, ['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
+  assertConfirmationsFollowReadyScreens(events);
+  assert.equal(events.filter(event => event.type === 'confirm').length, 3);
+});
+
+test('waits through transient screens after swiping device pages', async () => {
+  const controller = makeController();
+  controller.label = 'Home';
+  controller.isModelT = () => true;
+  controller.isSafe3 = () => false;
+  const screens = [
+    { body: 'Path: m/1852/1815/0/0/0' },
+    { body: 'no main component' },
+    { body: 'Path: m/1852/1815/0/0/0' },
+    { body: 'Staking key: abc123' },
+    { body: 'Staking key: abc123' },
+    { body: 'addr1test' },
+    { body: 'addr1test' },
+    { body: 'Home' },
+  ];
+  const events = [];
+  const swipes = [];
+  controller.getScreenContent = async () => {
+    const screen = screens.shift();
+    events.push({ type: 'screen', body: screen.body });
+    return screen;
+  };
+  controller.emulatorSwipeUp = async () => swipes.push(true);
+  controller.emulatorPressYes = async () => events.push({ type: 'confirm' });
+
+  const contents = await controller.fullConfirmAndGetContent();
+
+  assert.deepEqual(contents, ['Path: m/1852/1815/0/0/0', 'Staking key: abc123', 'addr1test']);
+  assertConfirmationsFollowReadyScreens(events);
+  assert.equal(events.filter(event => event.type === 'confirm').length, 3);
+  assert.equal(swipes.length, 3);
+});
+
 test('ignores background and wrong-id messages until the matching response arrives', async () => {
   const controller = makeController();
   const socket = await connect(controller);
