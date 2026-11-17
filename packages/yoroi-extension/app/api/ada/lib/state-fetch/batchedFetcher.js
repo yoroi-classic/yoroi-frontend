@@ -178,10 +178,17 @@ function batchUTXOsForAddresses(getUTXOsForAddresses: AddressUtxoFunc): AddressU
         })
       );
 
-      // Sum up all the utxo
-      return Promise.all(promises).then(groupsOfUTXOs =>
-        groupsOfUTXOs.reduce((acc, groupOfUTXOs) => acc.concat(groupOfUTXOs), [])
-      );
+      // A wallet's stake-account query can overlap a credential-only query when the request
+      // chunks separate its stake address from its payment credentials. Merge by output reference
+      // so chunk boundaries never double-count the same UTxO.
+      return Promise.all(promises).then(groupsOfUTXOs => {
+        const unique = new Map();
+        for (const utxo of groupsOfUTXOs.flat()) {
+          const reference = `${utxo.tx_hash}#${utxo.tx_index}`;
+          if (!unique.has(reference)) unique.set(reference, utxo);
+        }
+        return [...unique.values()];
+      });
     } catch (error) {
       Logger.error(`batchedFetcher:::${nameof(batchUTXOsForAddresses)} error: ` + stringifyError(error));
       if (error instanceof LocalizableError) throw error;
