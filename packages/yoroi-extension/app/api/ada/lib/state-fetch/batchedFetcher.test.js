@@ -3,7 +3,7 @@
 import '../test-config.forTests';
 import { RustModule } from '../cardanoCrypto/rustLoader';
 
-import { batchGetTransactionsHistoryForAddresses } from './batchedFetcher';
+import { batchGetTransactionsHistoryForAddresses, BatchedFetcher } from './batchedFetcher';
 import { genGetTransactionsHistoryForAddresses } from './mockNetwork.forTests';
 import { generateWalletRootKey } from '../cardanoCrypto/cryptoWallet';
 import { HARD_DERIVATION_START, WalletTypePurpose, CoinTypes, ChainDerivations } from '../../../../config/numbersConfig';
@@ -15,6 +15,32 @@ import { networks } from '../storage/database/prepackaged/networks';
 declare var CONFIG: ConfigType;
 
 const network = networks.CardanoMainnet;
+
+test('Batched UTxO reads deduplicate outputs returned by overlapping address and stake chunks', async () => {
+  const output = {
+    utxo_id: 'aa00',
+    tx_hash: 'aa',
+    tx_index: 0,
+    receiver: 'address',
+    amount: '2000000',
+    assets: [],
+  };
+  const calls = [];
+  const fetcher = new BatchedFetcher(
+    ({
+      getUTXOsForAddresses: async body => {
+        calls.push(body.addresses);
+        return [output];
+      },
+    }: any)
+  );
+  const addresses = [...Array(CONFIG.app.addressRequestSize).fill('addr_vkh1fixture'), 'stake1fixture'];
+
+  await expect(fetcher.getUTXOsForAddresses({ network, addresses })).resolves.toEqual([output]);
+  expect(calls).toHaveLength(2);
+  expect(calls[0]).toHaveLength(CONFIG.app.addressRequestSize);
+  expect(calls[1]).toEqual(['stake1fixture']);
+});
 
 beforeAll(async () => {
   await RustModule.load();

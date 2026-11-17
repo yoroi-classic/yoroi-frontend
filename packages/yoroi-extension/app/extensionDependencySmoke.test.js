@@ -276,6 +276,38 @@ describe('extension dependency smoke', () => {
     }
   });
 
+  test('loads credential-only address history through cardano-wallet-backend', async () => {
+    const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
+    (global: any).CONFIG.cardanoWalletBackend = {
+      enabled: true,
+      mainnet: 'http://localhost:3010/',
+      preprod: 'http://localhost:3011/',
+    };
+    (global: any).fetch = jest.fn(() => successfulJsonResponse([]));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
+
+    try {
+      const fetcher = new AdaRemoteFetcher(
+        () => '5.23.200',
+        () => 'en-US',
+        () => 'chrome'
+      );
+      await expect(
+        fetcher.getTransactionsHistoryForAddresses({
+          network: backendNetwork(),
+          addresses: ['addr_vkh1fixture'],
+          untilBlock: 'block-hash',
+        })
+      ).resolves.toEqual([]);
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/addresses/txs',
+        expect.objectContaining({ body: JSON.stringify({ addresses: ['addr_vkh1fixture'] }) })
+      );
+    } finally {
+      (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
+    }
+  });
+
   test('fails closed when backend history pagination supplies a block hash cursor', async () => {
     const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
     (global: any).CONFIG.cardanoWalletBackend = {
@@ -572,7 +604,7 @@ describe('extension dependency smoke', () => {
     }
   });
 
-  test('fails closed for payment-credential UTxO reads without a stake account', async () => {
+  test('loads credential-only UTxOs by payment credential without a stake account', async () => {
     const originalCardanoWalletBackend = { ...(global: any).CONFIG.cardanoWalletBackend };
     (global: any).CONFIG.cardanoWalletBackend = {
       enabled: true,
@@ -580,6 +612,7 @@ describe('extension dependency smoke', () => {
       preprod: 'http://localhost:3011/',
     };
     (global: any).fetch = jest.fn(() => successfulJsonResponse([]));
+    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
     try {
       const fetcher = new AdaRemoteFetcher(
@@ -587,10 +620,13 @@ describe('extension dependency smoke', () => {
         () => 'en-US',
         () => 'chrome'
       );
-      await expect(
-        fetcher.getUTXOsForAddresses({ network: backendNetwork(), addresses: ['addr_vkh1fixture'] })
-      ).rejects.toThrow();
-      expect((global: any).fetch).not.toHaveBeenCalled();
+      await expect(fetcher.getUTXOsForAddresses({ network: backendNetwork(), addresses: ['addr_vkh1fixture'] })).resolves.toEqual(
+        []
+      );
+      expect((global: any).fetch).toHaveBeenCalledWith(
+        'http://localhost:3010/v1/addresses/utxos',
+        expect.objectContaining({ body: JSON.stringify({ addresses: ['addr_vkh1fixture'] }) })
+      );
     } finally {
       (global: any).CONFIG.cardanoWalletBackend = originalCardanoWalletBackend;
     }
