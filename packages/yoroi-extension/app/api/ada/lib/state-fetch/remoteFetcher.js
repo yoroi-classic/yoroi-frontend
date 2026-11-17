@@ -224,21 +224,16 @@ const splitCardanoWalletBackendAddresses = (
   network: $ReadOnly<NetworkRow>
 ): {|
   paymentAddresses: Array<string>,
+  paymentCredentials: Array<string>,
   stakeAddresses: Array<string>,
 |} => {
   const backendAddresses = addresses.map(address => toCardanoWalletBackendAddress(address, network));
   const stakeAddresses = backendAddresses.filter(address => address.startsWith('stake'));
   const paymentCredentials = backendAddresses.filter(address => address.startsWith('addr_vkh'));
 
-  // A stake-account read covers every payment credential in this wallet. The backend accepts
-  // addr_vkh for discovery, but its UTxO/history endpoints require full payment addresses. Do
-  // not turn a credential-only request into a successful empty wallet snapshot.
-  if (paymentCredentials.length !== 0 && stakeAddresses.length === 0) {
-    throw new Error('cardano-wallet-backend UTxO/history reads require a stake address for payment credentials');
-  }
-
   return {
     paymentAddresses: backendAddresses.filter(address => !address.startsWith('stake') && !address.startsWith('addr_vkh')),
+    paymentCredentials,
     stakeAddresses,
   };
 };
@@ -254,15 +249,16 @@ const ensureCardanoWalletBackendHistoryIsEmpty = async ({
   addresses: Array<string>,
   headers: { [string]: string },
 |}): Promise<void> => {
-  const { paymentAddresses, stakeAddresses } = splitCardanoWalletBackendAddresses(addresses, network);
+  const { paymentAddresses, paymentCredentials, stakeAddresses } = splitCardanoWalletBackendAddresses(addresses, network);
+  const addressKeys = stakeAddresses.length === 0 ? [...paymentAddresses, ...paymentCredentials] : paymentAddresses;
   const requests = [
-    ...(paymentAddresses.length === 0
+    ...(addressKeys.length === 0
       ? []
       : [
           fetchAndEnsureSuccess(`${withoutTrailingSlash(service)}/v1/addresses/txs`, {
             method: 'POST',
             signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-            body: JSON.stringify({ addresses: paymentAddresses }),
+            body: JSON.stringify({ addresses: addressKeys }),
             headers: { ...headers, 'content-type': 'application/json' },
           }).then(response => response.json()),
         ]),
@@ -348,9 +344,13 @@ export class RemoteFetcher implements IFetcher {
       throw new GetUtxosForAddressesApiError();
     }
     let paymentAddresses;
+    let paymentCredentials;
     let stakeAddresses;
     try {
-      ({ paymentAddresses, stakeAddresses } = splitCardanoWalletBackendAddresses(body.addresses, body.network));
+      ({ paymentAddresses, paymentCredentials, stakeAddresses } = splitCardanoWalletBackendAddresses(
+        body.addresses,
+        body.network
+      ));
     } catch (error) {
       Logger.error(`${nameof(RemoteFetcher)}::${nameof(this.getUTXOsForAddresses)} v1 error: ` + stringifyError(error));
       throw new GetUtxosForAddressesApiError();
@@ -359,14 +359,15 @@ export class RemoteFetcher implements IFetcher {
       'yoroi-version': this.getLastLaunchVersion(),
       'yoroi-locale': this.getCurrentLocale(),
     };
+    const addressKeys = stakeAddresses.length === 0 ? [...paymentAddresses, ...paymentCredentials] : paymentAddresses;
     const result: Array<CardanoWalletBackendUtxo> = await Promise.all([
-      ...(paymentAddresses.length === 0
+      ...(addressKeys.length === 0
         ? []
         : [
             fetchAndEnsureSuccess(`${withoutTrailingSlash(cardanoWalletBackendService)}/v1/addresses/utxos`, {
               method: 'POST',
               signal: makeTimeoutAbortSignal(2 * CONFIG.app.walletRefreshInterval),
-              body: JSON.stringify({ addresses: paymentAddresses }),
+              body: JSON.stringify({ addresses: addressKeys }),
               headers: { 'content-type': 'application/json', ...headers },
             }).then(response => response.json()),
           ]),
