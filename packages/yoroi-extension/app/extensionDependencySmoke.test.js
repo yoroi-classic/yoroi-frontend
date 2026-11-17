@@ -296,6 +296,7 @@ describe('extension dependency smoke', () => {
         fetcher.getTransactionsHistoryForAddresses({
           network: backendNetwork(),
           addresses: ['addr_vkh1fixture'],
+          untilBlock: 'block-hash',
         })
       ).resolves.toEqual([]);
       expect((global: any).fetch).toHaveBeenCalledWith(
