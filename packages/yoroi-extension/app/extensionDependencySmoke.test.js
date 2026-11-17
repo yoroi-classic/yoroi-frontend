@@ -315,7 +315,6 @@ describe('extension dependency smoke', () => {
       preprod: 'http://localhost:3011/',
     };
     (global: any).fetch = jest.fn(() => successfulJsonResponse([]));
-    (AbortSignal: any).timeout = jest.fn(() => new AbortController().signal);
 
     try {
       const fetcher = new AdaRemoteFetcher(
